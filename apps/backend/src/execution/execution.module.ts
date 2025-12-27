@@ -14,7 +14,12 @@ import { WhatsappSenderService } from './whatsapp-sender.service';
     ContextService,
     WhatsappSenderService,
   ],
-  exports: [ExecutionService, ExecutionEngineService, WhatsappSenderService],
+  exports: [
+    ExecutionService,
+    ExecutionEngineService,
+    NodeExecutorService,
+    WhatsappSenderService,
+  ],
 })
 export class ExecutionModule {}
 

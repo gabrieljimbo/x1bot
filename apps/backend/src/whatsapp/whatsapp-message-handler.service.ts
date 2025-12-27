@@ -88,7 +88,11 @@ export class WhatsappMessageHandler {
       // Match message against trigger pattern
       let matches = false;
 
-      if (config.matchType === 'exact') {
+      // If no pattern is configured, accept all messages
+      if (!config.pattern || config.pattern.trim() === '') {
+        console.log('[TRIGGER] No pattern configured, accepting all messages');
+        matches = true;
+      } else if (config.matchType === 'exact') {
         matches = message.toLowerCase() === config.pattern.toLowerCase();
       } else if (config.matchType === 'contains') {
         matches = message.toLowerCase().includes(config.pattern.toLowerCase());

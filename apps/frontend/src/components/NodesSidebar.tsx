@@ -41,6 +41,42 @@ export default function NodesSidebar({ onAddNode, onClose }: NodesSidebarProps) 
         description: 'Envia uma mensagem no WhatsApp'
       },
       {
+        type: 'SEND_BUTTONS' as WorkflowNodeType,
+        label: 'Enviar Botões',
+        icon: '🔘',
+        color: 'from-emerald-500 to-emerald-600',
+        bgColor: 'bg-[#1a2e2a]',
+        borderColor: 'border-[#3b7d5b]',
+        description: 'Envia uma mensagem com botões interativos'
+      },
+      {
+        type: 'SEND_LIST' as WorkflowNodeType,
+        label: 'Enviar Lista',
+        icon: '📋',
+        color: 'from-teal-500 to-teal-600',
+        bgColor: 'bg-[#1a2e2e]',
+        borderColor: 'border-[#3b7d7d]',
+        description: 'Envia uma mensagem com lista de opções'
+      },
+      {
+        type: 'HTTP_REQUEST' as WorkflowNodeType,
+        label: 'HTTP Request',
+        icon: '🌐',
+        color: 'from-cyan-500 to-cyan-600',
+        bgColor: 'bg-[#1a2a2e]',
+        borderColor: 'border-[#3b7d7d]',
+        description: 'Faz uma requisição HTTP para uma API externa'
+      },
+      {
+        type: 'MANAGE_LABELS' as WorkflowNodeType,
+        label: 'Gerenciar Etiquetas',
+        icon: '🏷️',
+        color: 'from-pink-500 to-pink-600',
+        bgColor: 'bg-[#2e1a2a]',
+        borderColor: 'border-[#7d3b5b]',
+        description: 'Adiciona ou remove etiquetas do WhatsApp'
+      },
+      {
         type: 'WAIT_REPLY' as WorkflowNodeType,
         label: 'Aguardar Resposta',
         icon: '⏳',

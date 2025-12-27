@@ -27,6 +27,38 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#3b7d3b]',
     iconBg: 'bg-gradient-to-br from-green-500 to-green-600',
   },
+  'SEND_BUTTONS': {
+    label: 'Enviar Botões',
+    subtitle: 'AÇÃO',
+    icon: '🔘',
+    bgColor: 'bg-[#1a2e2a]',
+    borderColor: 'border-[#3b7d5b]',
+    iconBg: 'bg-gradient-to-br from-emerald-500 to-emerald-600',
+  },
+  'SEND_LIST': {
+    label: 'Enviar Lista',
+    subtitle: 'AÇÃO',
+    icon: '📋',
+    bgColor: 'bg-[#1a2e2e]',
+    borderColor: 'border-[#3b7d7d]',
+    iconBg: 'bg-gradient-to-br from-teal-500 to-teal-600',
+  },
+  'HTTP_REQUEST': {
+    label: 'HTTP Request',
+    subtitle: 'AÇÃO',
+    icon: '🌐',
+    bgColor: 'bg-[#1a2a2e]',
+    borderColor: 'border-[#3b7d7d]',
+    iconBg: 'bg-gradient-to-br from-cyan-500 to-cyan-600',
+  },
+  'MANAGE_LABELS': {
+    label: 'Gerenciar Etiquetas',
+    subtitle: 'AÇÃO',
+    icon: '🏷️',
+    bgColor: 'bg-[#2e1a2a]',
+    borderColor: 'border-[#7d3b5b]',
+    iconBg: 'bg-gradient-to-br from-pink-500 to-pink-600',
+  },
   'CONDITION': {
     label: 'Condição',
     subtitle: 'LÓGICA',
@@ -119,6 +151,13 @@ function CustomNode({ data }: CustomNodeProps) {
         ? data.config.message.substring(0, 30) + '...' 
         : data.config.message
     }
+    if (data.type === 'TRIGGER_MESSAGE') {
+      if (data.config.pattern && data.config.pattern.trim() !== '') {
+        return `Ao receber: ${data.config.pattern}`
+      } else {
+        return '📨 Todas as mensagens'
+      }
+    }
     if (data.config.pattern) {
       return `Ao receber: ${data.config.pattern}`
     }
@@ -133,6 +172,10 @@ function CustomNode({ data }: CustomNodeProps) {
     if (data.config.rules && Array.isArray(data.config.rules)) {
       const count = data.config.rules.length
       return `${count} ${count === 1 ? 'regra' : 'regras'} configurada${count === 1 ? '' : 's'}`
+    }
+    if (data.config.url) {
+      const method = data.config.method || 'GET'
+      return `${method} ${data.config.url.length > 25 ? data.config.url.substring(0, 25) + '...' : data.config.url}`
     }
     return null
   }

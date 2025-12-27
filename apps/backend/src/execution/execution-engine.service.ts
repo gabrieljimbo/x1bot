@@ -256,12 +256,41 @@ export class ExecutionEngineService {
       // Send message if node produced one
       if (result.messageToSend) {
         try {
-          console.log(`Sending message to ${result.messageToSend.contactId}: ${result.messageToSend.message}`);
-          await this.whatsappSender.sendMessage(
-            result.messageToSend.sessionId,
-            result.messageToSend.contactId,
-            result.messageToSend.message,
-          );
+          const { sessionId, contactId, message } = result.messageToSend;
+          
+          // Check if message is a special type (buttons or list)
+          try {
+            const parsed = JSON.parse(message);
+            
+            if (parsed.type === 'buttons') {
+              console.log(`Sending buttons to ${contactId}`);
+              await this.whatsappSender.sendButtons(
+                sessionId,
+                contactId,
+                parsed.message,
+                parsed.buttons,
+                parsed.footer,
+              );
+            } else if (parsed.type === 'list') {
+              console.log(`Sending list to ${contactId}`);
+              await this.whatsappSender.sendList(
+                sessionId,
+                contactId,
+                parsed.message,
+                parsed.buttonText,
+                parsed.sections,
+                parsed.footer,
+              );
+            } else {
+              // Regular message
+              console.log(`Sending message to ${contactId}: ${message}`);
+              await this.whatsappSender.sendMessage(sessionId, contactId, message);
+            }
+          } catch (e) {
+            // Not JSON, send as regular message
+            console.log(`Sending message to ${contactId}: ${message}`);
+            await this.whatsappSender.sendMessage(sessionId, contactId, message);
+          }
         } catch (error) {
           console.error('Error sending WhatsApp message:', error);
         }

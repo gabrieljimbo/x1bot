@@ -2,6 +2,10 @@ export enum WorkflowNodeType {
   TRIGGER_MESSAGE = 'TRIGGER_MESSAGE',
   TRIGGER_SCHEDULE = 'TRIGGER_SCHEDULE',
   SEND_MESSAGE = 'SEND_MESSAGE',
+  SEND_BUTTONS = 'SEND_BUTTONS',
+  SEND_LIST = 'SEND_LIST',
+  HTTP_REQUEST = 'HTTP_REQUEST',
+  MANAGE_LABELS = 'MANAGE_LABELS',
   CONDITION = 'CONDITION',
   SWITCH = 'SWITCH',
   WAIT_REPLY = 'WAIT_REPLY',
@@ -103,6 +107,31 @@ export interface SendMessageConfig {
   delay?: number; // milliseconds
 }
 
+export interface SendButtonsConfig {
+  message: string; // supports {{variables.name}} syntax
+  buttons: Array<{
+    id: string;
+    text: string;
+  }>;
+  footer?: string;
+  delay?: number;
+}
+
+export interface SendListConfig {
+  message: string; // supports {{variables.name}} syntax
+  buttonText: string; // text on the button that opens the list
+  sections: Array<{
+    title: string;
+    rows: Array<{
+      id: string;
+      title: string;
+      description?: string;
+    }>;
+  }>;
+  footer?: string;
+  delay?: number;
+}
+
 export interface ConditionConfig {
   expression: string; // e.g., "variables.selectedOption === '2'"
   branches: {
@@ -134,5 +163,33 @@ export interface SwitchConfig {
   mode: 'rules' | 'expression';
   rules: SwitchRule[];
   fallbackOutput?: string; // default output if no rules match
+}
+
+export interface HttpRequestConfig {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
+  url: string; // supports {{variables.name}} syntax
+  authentication?: 'none' | 'basic' | 'bearer' | 'header';
+  authConfig?: {
+    username?: string;
+    password?: string;
+    token?: string;
+    headerName?: string;
+    headerValue?: string;
+  };
+  headers?: Array<{ key: string; value: string }>;
+  queryParams?: Array<{ key: string; value: string }>;
+  body?: string; // JSON string, supports {{variables.name}} syntax
+  bodyType?: 'json' | 'form' | 'raw';
+  timeout?: number; // milliseconds, default 30000
+  saveResponseAs?: string; // variable name to save response, default 'httpResponse'
+  followRedirects?: boolean;
+  ignoreSSLIssues?: boolean;
+}
+
+export interface ManageLabelsConfig {
+  action: 'add' | 'remove' | 'list';
+  labelIds?: string[]; // IDs of labels to add/remove
+  labelNames?: string[]; // Names of labels to add/remove (will be created if don't exist)
+  saveLabelsAs?: string; // variable name to save current labels, default 'chatLabels'
 }
 

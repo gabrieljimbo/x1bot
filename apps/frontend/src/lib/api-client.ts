@@ -60,6 +60,11 @@ export const apiClient = {
     return data
   },
 
+  getSessionLabels: async (sessionId: string) => {
+    const { data } = await client.get(`/api/whatsapp/sessions/${sessionId}/labels`)
+    return data
+  },
+
   sendWhatsappMessage: async (sessionId: string, contactId: string, message: string) => {
     const { data } = await client.post(`/api/whatsapp/sessions/${sessionId}/send`, {
       contactId,

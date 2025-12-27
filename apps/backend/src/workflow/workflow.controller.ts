@@ -150,6 +150,17 @@ export class WorkflowController {
     await this.whatsappService.deleteSession(tenantId, id);
   }
 
+  @Get('whatsapp/sessions/:id/labels')
+  async getSessionLabels(@Param('id') sessionId: string) {
+    try {
+      const labels = await this.whatsappSessionManager.getAllLabels(sessionId);
+      return labels;
+    } catch (error) {
+      console.error('Error getting session labels:', error);
+      return [];
+    }
+  }
+
   @Post('whatsapp/sessions/:id/send')
   async sendMessage(
     @Param('id') sessionId: string,
