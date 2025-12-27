@@ -68,8 +68,8 @@ export class WorkflowService {
       isActive: boolean;
     }>,
   ): Promise<Workflow> {
-    // Validate workflow if nodes/edges are being updated
-    if (data.nodes || data.edges) {
+    // Validate workflow structure only when activating
+    if (data.isActive === true) {
       const workflow = await this.getWorkflow(tenantId, workflowId);
       if (!workflow) {
         throw new Error('Workflow not found');
@@ -79,6 +79,19 @@ export class WorkflowService {
       const edges = data.edges || workflow.edges;
 
       this.validateWorkflow(nodes, edges);
+    }
+
+    // Validate edges reference existing nodes when updating structure
+    if (data.nodes || data.edges) {
+      const workflow = await this.getWorkflow(tenantId, workflowId);
+      if (!workflow) {
+        throw new Error('Workflow not found');
+      }
+
+      const nodes = data.nodes || workflow.nodes;
+      const edges = data.edges || workflow.edges;
+
+      this.validateEdges(nodes, edges);
     }
 
     const workflow = await this.prisma.workflow.update({
@@ -110,9 +123,14 @@ export class WorkflowService {
   }
 
   /**
-   * Validate workflow structure
+   * Validate workflow structure (for activation)
    */
   private validateWorkflow(nodes: WorkflowNode[], edges: WorkflowEdge[]): void {
+    // Allow empty workflows (under construction)
+    if (nodes.length === 0) {
+      throw new Error('Cannot activate an empty workflow');
+    }
+
     // Check for at least one trigger node
     const hasTrigger = nodes.some(
       (n) =>
@@ -132,6 +150,13 @@ export class WorkflowService {
     }
 
     // Validate edges reference existing nodes
+    this.validateEdges(nodes, edges);
+  }
+
+  /**
+   * Validate edges reference existing nodes (for editing)
+   */
+  private validateEdges(nodes: WorkflowNode[], edges: WorkflowEdge[]): void {
     const nodeIds = new Set(nodes.map((n) => n.id));
 
     for (const edge of edges) {

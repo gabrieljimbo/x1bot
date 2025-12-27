@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import ReactFlow, {
   Node,
   Edge,
@@ -12,6 +12,7 @@ import ReactFlow, {
   addEdge,
   Connection,
   NodeTypes,
+  useReactFlow,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { WorkflowNode, WorkflowEdge, WorkflowNodeType } from '@n9n/shared'
@@ -29,6 +30,9 @@ interface WorkflowCanvasProps {
   currentNodeId?: string | null
   executionStatus?: 'idle' | 'running' | 'waiting' | 'completed' | 'failed'
   onNodeDoubleClick?: (node: WorkflowNode) => void
+  onAddNode?: (type: WorkflowNodeType, position?: { x: number; y: number }) => void
+  executedNodes?: Set<string>
+  failedNodes?: Set<string>
 }
 
 export default function WorkflowCanvas({
@@ -39,9 +43,13 @@ export default function WorkflowCanvas({
   currentNodeId,
   executionStatus = 'idle',
   onNodeDoubleClick,
+  onAddNode,
+  executedNodes = new Set(),
+  failedNodes = new Set(),
 }: WorkflowCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const reactFlowWrapper = useRef<HTMLDivElement>(null)
 
   // Convert to React Flow format
   useEffect(() => {
@@ -54,6 +62,8 @@ export default function WorkflowCanvas({
         config: node.config,
         isActive: currentNodeId === node.id,
         executionStatus,
+        hasExecuted: executedNodes.has(node.id),
+        executionSuccess: executedNodes.has(node.id) && !failedNodes.has(node.id),
       },
     }))
 
@@ -61,14 +71,21 @@ export default function WorkflowCanvas({
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      label: edge.label,
+      sourceHandle: edge.condition || undefined, // Use condition as sourceHandle for CONDITION nodes
+      label: edge.label || (edge.condition === 'true' ? 'True' : edge.condition === 'false' ? 'False' : undefined),
       animated: currentNodeId === edge.source,
-      style: currentNodeId === edge.source ? { stroke: '#00FF88', strokeWidth: 2 } : undefined,
+      style: currentNodeId === edge.source 
+        ? { stroke: '#00FF88', strokeWidth: 2 }
+        : edge.condition === 'true'
+        ? { stroke: '#4ade80', strokeWidth: 2 } // Green for True
+        : edge.condition === 'false'
+        ? { stroke: '#f87171', strokeWidth: 2 } // Red for False
+        : undefined,
     }))
 
     setNodes(flowNodes)
     setEdges(flowEdges)
-  }, [initialNodes, initialEdges, currentNodeId, executionStatus])
+  }, [initialNodes, initialEdges, currentNodeId, executionStatus, executedNodes, failedNodes])
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -78,19 +95,35 @@ export default function WorkflowCanvas({
         ...connection,
         id: `edge-${Date.now()}`,
       }
-      setEdges((eds) => addEdge(newEdge, eds))
-
-      if (onChange) {
-        const workflowEdges: WorkflowEdge[] = [...edges, newEdge as any].map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          label: e.label,
-        }))
-        onChange(initialNodes, workflowEdges)
-      }
+      
+      setEdges((eds) => {
+        const updatedEdges = addEdge(newEdge, eds)
+        
+        if (onChange) {
+          // Convert current nodes to WorkflowNode format
+          const workflowNodes: WorkflowNode[] = nodes.map((node) => ({
+            id: node.id,
+            type: node.data.type,
+            config: node.data.config,
+            position: node.position,
+          }))
+          
+          // Convert updated edges to WorkflowEdge format
+          const workflowEdges: WorkflowEdge[] = updatedEdges.map((e) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            label: typeof e.label === 'string' ? e.label : undefined,
+            condition: e.sourceHandle || undefined, // Save sourceHandle as condition (for CONDITION nodes)
+          }))
+          
+          onChange(workflowNodes, workflowEdges)
+        }
+        
+        return updatedEdges
+      })
     },
-    [readonly, edges, initialNodes, onChange]
+    [readonly, nodes, onChange]
   )
 
   const handleNodesChange = useCallback(
@@ -98,28 +131,43 @@ export default function WorkflowCanvas({
       onNodesChange(changes)
 
       if (onChange && !readonly) {
-        // Update positions
-        const updatedNodes: WorkflowNode[] = nodes.map((node) => {
-          const change = changes.find((c: any) => c.id === node.id && c.type === 'position')
-          if (change && change.position) {
+        // Only save on position changes (when user stops dragging)
+        const hasPositionChange = changes.some((c: any) => c.type === 'position' && c.dragging === false)
+        
+        if (hasPositionChange) {
+          // Update positions
+          const updatedNodes: WorkflowNode[] = nodes.map((node) => {
+            const change = changes.find((c: any) => c.id === node.id && c.type === 'position')
+            if (change && change.position) {
+              return {
+                id: node.id,
+                type: node.data.type,
+                config: node.data.config,
+                position: change.position,
+              }
+            }
             return {
               id: node.id,
               type: node.data.type,
               config: node.data.config,
-              position: change.position,
+              position: node.position,
             }
-          }
-          return {
-            id: node.id,
-            type: node.data.type,
-            config: node.data.config,
-            position: node.position,
-          }
-        })
-        onChange(updatedNodes, initialEdges)
+          })
+          
+          // Convert current edges to WorkflowEdge format
+          const workflowEdges: WorkflowEdge[] = edges.map((e) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            label: typeof e.label === 'string' ? e.label : undefined,
+            condition: e.sourceHandle || undefined, // Save sourceHandle as condition (for CONDITION nodes)
+          }))
+          
+          onChange(updatedNodes, workflowEdges)
+        }
       }
     },
-    [nodes, initialEdges, onChange, readonly, onNodesChange]
+    [nodes, edges, onChange, readonly, onNodesChange]
   )
 
   const handleNodeDoubleClick = useCallback(
@@ -135,8 +183,36 @@ export default function WorkflowCanvas({
     [onNodeDoubleClick, initialNodes]
   )
 
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault()
+
+      const type = event.dataTransfer.getData('application/reactflow') as WorkflowNodeType
+      
+      if (typeof type === 'undefined' || !type || !reactFlowWrapper.current) {
+        return
+      }
+
+      const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect()
+      const position = {
+        x: event.clientX - reactFlowBounds.left,
+        y: event.clientY - reactFlowBounds.top,
+      }
+
+      if (onAddNode) {
+        onAddNode(type, position)
+      }
+    },
+    [onAddNode]
+  )
+
   return (
-    <div className="w-full h-full">
+    <div ref={reactFlowWrapper} className="w-full h-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -144,6 +220,8 @@ export default function WorkflowCanvas({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeDoubleClick={handleNodeDoubleClick}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
         nodeTypes={nodeTypes}
         fitView
       >

@@ -240,6 +240,10 @@ export class ExecutionEngineService {
 
       const startTime = Date.now();
 
+      console.log('[EXECUTION] About to execute node:', currentNode.id);
+      console.log('[EXECUTION] Node type:', currentNode.type);
+      console.log('[EXECUTION] Node object:', JSON.stringify(currentNode, null, 2));
+
       // Execute node
       const result = await this.nodeExecutor.executeNode(
         currentNode,

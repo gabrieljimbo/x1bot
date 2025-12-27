@@ -12,46 +12,152 @@ body {
 }
 
 .react-flow__node {
-  @apply bg-surface border-2 border-border rounded-lg;
+  @apply cursor-pointer;
 }
 
 .react-flow__node.selected {
-  @apply border-primary;
+  filter: drop-shadow(0 0 10px rgba(0, 255, 136, 0.5));
 }
 
 .react-flow__node.running {
-  @apply border-primary animate-pulse;
+  animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-.react-flow__node.waiting {
-  @apply border-yellow-500;
-}
-
-.react-flow__node.error {
-  @apply border-red-500;
+@keyframes pulse-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px rgba(0, 255, 136, 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 20px rgba(0, 255, 136, 0.8));
+  }
 }
 
 .react-flow__edge-path {
-  @apply stroke-border;
+  stroke: #3a3a3a;
+  stroke-width: 2;
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-  @apply stroke-primary;
+  stroke: #00ff88;
+  stroke-width: 3;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: #4a4a4a;
+}
+
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 5;
+  animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+  to {
+    stroke-dashoffset: -10;
+  }
 }
 
 .react-flow__controls {
-  @apply bg-surface border border-border;
+  @apply bg-[#1a1a1a] border border-gray-700 rounded-lg shadow-xl;
 }
 
 .react-flow__controls-button {
-  @apply bg-surface border-border text-white;
+  @apply bg-[#1a1a1a] border-b border-gray-700 text-white transition-all;
 }
 
 .react-flow__controls-button:hover {
   @apply bg-primary text-black;
 }
 
+.react-flow__controls-button:last-child {
+  @apply border-b-0;
+}
+
 .react-flow__minimap {
-  @apply bg-surface border border-border;
+  @apply bg-[#1a1a1a] border border-gray-700 rounded-lg shadow-xl;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(0, 255, 136, 0.1);
+}
+
+.react-flow__minimap-node {
+  fill: #2a2a2a;
+  stroke: #3a3a3a;
+}
+
+.react-flow__background {
+  background-color: #0a0a0a;
+}
+
+/* Custom handle styles */
+.react-flow__handle {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #0a0a0a;
+  transition: all 0.2s;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.3);
+}
+
+.react-flow__handle-connecting {
+  background: #00ff88 !important;
+  transform: scale(1.5);
+}
+
+.react-flow__handle-valid {
+  background: #00ff88 !important;
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-surface;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-600;
+}
+
+/* Sidebar Animation */
+@keyframes slide-in {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
 }
 

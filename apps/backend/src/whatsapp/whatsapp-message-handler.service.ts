@@ -48,6 +48,9 @@ export class WhatsappMessageHandler {
     contactId: string,
     message: string,
   ): Promise<void> {
+    console.log('[TRIGGER] Matching message:', message);
+    console.log('[TRIGGER] Tenant:', tenantId);
+    
     // Get active workflows for this tenant
     const workflows = await this.prisma.workflow.findMany({
       where: {
@@ -56,7 +59,11 @@ export class WhatsappMessageHandler {
       },
     });
 
+    console.log('[TRIGGER] Found active workflows:', workflows.length);
+
     for (const workflowData of workflows) {
+      console.log('[TRIGGER] Checking workflow:', workflowData.id, workflowData.name);
+      
       const workflow = {
         ...workflowData,
         description: workflowData.description || undefined,
@@ -69,11 +76,14 @@ export class WhatsappMessageHandler {
         (n: any) => n.type === WorkflowNodeType.TRIGGER_MESSAGE,
       );
 
+      console.log('[TRIGGER] Trigger node found:', !!triggerNode);
+      
       if (!triggerNode) {
         continue;
       }
 
       const config = triggerNode.config;
+      console.log('[TRIGGER] Trigger config:', config);
 
       // Match message against trigger pattern
       let matches = false;

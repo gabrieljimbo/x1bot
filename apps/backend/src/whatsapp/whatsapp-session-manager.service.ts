@@ -246,7 +246,13 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         });
 
         // Handle message
-        await this.messageHandler.handleMessage(tenantId, sessionId, contactId, message);
+        console.log('[SESSION_MANAGER] Calling handleMessage with:', { tenantId, sessionId, contactId, message });
+        try {
+          await this.messageHandler.handleMessage(tenantId, sessionId, contactId, message);
+          console.log('[SESSION_MANAGER] handleMessage completed successfully');
+        } catch (error) {
+          console.error('[SESSION_MANAGER] Error in handleMessage:', error);
+        }
       }
     });
 

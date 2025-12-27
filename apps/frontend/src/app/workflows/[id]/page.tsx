@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { apiClient } from '@/lib/api-client'
 import { wsClient } from '@/lib/websocket'
-import { WorkflowNode, WorkflowEdge, EventType } from '@n9n/shared'
+import { WorkflowNode, WorkflowEdge, EventType, WorkflowNodeType } from '@n9n/shared'
 import NodeConfigModal from '@/components/NodeConfigModal'
 import ExecutionHistory from '@/components/ExecutionHistory'
 import NodeExecutionPanel from '@/components/NodeExecutionPanel'
+import NodesSidebar from '@/components/NodesSidebar'
 
 const WorkflowCanvas = dynamic(() => import('@/components/WorkflowCanvas'), {
   ssr: false,
@@ -28,6 +29,15 @@ export default function WorkflowPage() {
   const [showHistory, setShowHistory] = useState(false)
   const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null)
   const [inspectedNode, setInspectedNode] = useState<WorkflowNode | null>(null)
+  const [showNodesSidebar, setShowNodesSidebar] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [executedNodes, setExecutedNodes] = useState<Set<string>>(new Set())
+  const [failedNodes, setFailedNodes] = useState<Set<string>>(new Set())
+  
+  // Refs to keep track of latest nodes and edges
+  const currentNodesRef = useRef<WorkflowNode[]>([])
+  const currentEdgesRef = useRef<WorkflowEdge[]>([])
 
   useEffect(() => {
     loadWorkflow()
@@ -41,12 +51,17 @@ export default function WorkflowPage() {
         setExecutionStatus('running')
         setCurrentNodeId(null)
         setCurrentExecutionId(event.executionId)
+        // Clear previous execution tracking
+        setExecutedNodes(new Set())
+        setFailedNodes(new Set())
       }
     }
 
     const handleNodeExecuted = (event: any) => {
       if (event.workflowId === workflowId) {
         setCurrentNodeId(event.nodeId)
+        // Mark node as executed successfully
+        setExecutedNodes(prev => new Set([...prev, event.nodeId]))
       }
     }
 
@@ -81,6 +96,10 @@ export default function WorkflowPage() {
     const handleExecutionError = (event: any) => {
       if (event.workflowId === workflowId) {
         setExecutionStatus('failed')
+        // Mark current node as failed
+        if (event.nodeId) {
+          setFailedNodes(prev => new Set([...prev, event.nodeId]))
+        }
         setTimeout(() => {
           setCurrentNodeId(null)
           setExecutionStatus('idle')
@@ -109,6 +128,10 @@ export default function WorkflowPage() {
     try {
       const data = await apiClient.getWorkflow(tenantId, workflowId)
       setWorkflow(data)
+      
+      // Initialize refs with loaded data
+      currentNodesRef.current = data.nodes || []
+      currentEdgesRef.current = data.edges || []
     } catch (error) {
       console.error('Error loading workflow:', error)
     } finally {
@@ -117,10 +140,19 @@ export default function WorkflowPage() {
   }
 
   const handleSave = async (nodes: WorkflowNode[], edges: WorkflowEdge[]) => {
+    // Update refs with latest data
+    currentNodesRef.current = nodes
+    currentEdgesRef.current = edges
+    
     try {
+      setSaveStatus('saving')
       await apiClient.updateWorkflow(tenantId, workflowId, { nodes, edges })
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2000)
     } catch (error) {
       console.error('Error saving workflow:', error)
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 3000)
     }
   }
 
@@ -141,13 +173,88 @@ export default function WorkflowPage() {
 
   const handleNodeConfigSave = async (nodeId: string, config: any) => {
     try {
-      const updatedNodes = workflow.nodes.map((node: WorkflowNode) =>
+      setSaveStatus('saving')
+      
+      // Use the latest nodes and edges from refs
+      const currentNodes = currentNodesRef.current.length > 0 ? currentNodesRef.current : workflow.nodes
+      const currentEdges = currentEdgesRef.current.length > 0 ? currentEdgesRef.current : workflow.edges
+      
+      const updatedNodes = currentNodes.map((node: WorkflowNode) =>
         node.id === nodeId ? { ...node, config } : node
       )
-      await apiClient.updateWorkflow(tenantId, workflowId, { nodes: updatedNodes, edges: workflow.edges })
-      setWorkflow({ ...workflow, nodes: updatedNodes })
+      
+      await apiClient.updateWorkflow(tenantId, workflowId, { nodes: updatedNodes, edges: currentEdges })
+      
+      // Update refs
+      currentNodesRef.current = updatedNodes
+      
+      // Update state
+      setWorkflow({ ...workflow, nodes: updatedNodes, edges: currentEdges })
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2000)
     } catch (error) {
       console.error('Error updating node config:', error)
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 3000)
+    }
+  }
+
+  const handleAddNode = async (type: WorkflowNodeType, position?: { x: number; y: number }) => {
+    console.log('[handleAddNode] Received type:', type);
+    console.log('[handleAddNode] Type of type:', typeof type);
+    
+    if (!type) {
+      console.error('[handleAddNode] ERROR: type is undefined!');
+      return;
+    }
+    
+    const newNode: WorkflowNode = {
+      id: `${String(type).toLowerCase()}-${Date.now()}`,
+      type,
+      position: position || { x: 250, y: 250 },
+      config: {},
+    }
+    
+    console.log('[handleAddNode] Created node:', newNode);
+
+    // Use the latest nodes and edges from refs (updated by React Flow)
+    const currentNodes = currentNodesRef.current.length > 0 ? currentNodesRef.current : workflow.nodes
+    const currentEdges = currentEdgesRef.current.length > 0 ? currentEdgesRef.current : workflow.edges
+    
+    const updatedNodes = [...currentNodes, newNode]
+    
+    console.log('[DEBUG] Adding node:', { type, position, newNode })
+    console.log('[DEBUG] Current nodes:', currentNodes)
+    console.log('[DEBUG] Current edges:', currentEdges)
+    console.log('[DEBUG] Updated nodes:', updatedNodes)
+    
+    try {
+      setSaveStatus('saving')
+      console.log('[DEBUG] Calling API to update workflow...')
+      
+      const result = await apiClient.updateWorkflow(tenantId, workflowId, { 
+        nodes: updatedNodes, 
+        edges: currentEdges // Use current edges from ref
+      })
+      
+      console.log('[DEBUG] API response:', result)
+      
+      // Update refs
+      currentNodesRef.current = updatedNodes
+      
+      // Update state
+      setWorkflow({ ...workflow, nodes: updatedNodes, edges: currentEdges })
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    } catch (error: any) {
+      console.error('[ERROR] Failed to add node:', error)
+      console.error('[ERROR] Error details:', error.response?.data || error.message)
+      setSaveStatus('error')
+      
+      // Show error message to user
+      alert(`Erro ao adicionar nó: ${error.response?.data?.message || error.message}`)
+      
+      setTimeout(() => setSaveStatus('idle'), 3000)
     }
   }
 
@@ -198,6 +305,30 @@ export default function WorkflowPage() {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Save Status Indicator */}
+          {saveStatus !== 'idle' && (
+            <div className={`flex items-center gap-2 px-4 py-2 rounded border ${
+              saveStatus === 'saving' ? 'bg-blue-500/10 border-blue-500' :
+              saveStatus === 'saved' ? 'bg-green-500/10 border-green-500' :
+              'bg-red-500/10 border-red-500'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${
+                saveStatus === 'saving' ? 'bg-blue-500 animate-pulse' :
+                saveStatus === 'saved' ? 'bg-green-500' :
+                'bg-red-500'
+              }`} />
+              <span className={`text-sm ${
+                saveStatus === 'saving' ? 'text-blue-400' :
+                saveStatus === 'saved' ? 'text-green-400' :
+                'text-red-400'
+              }`}>
+                {saveStatus === 'saving' ? 'Salvando...' :
+                 saveStatus === 'saved' ? 'Salvo!' :
+                 'Erro ao salvar'}
+              </span>
+            </div>
+          )}
+
           {/* Execution Status Indicator */}
           {executionStatus !== 'idle' && (
             <div className="flex items-center gap-2 px-4 py-2 bg-surface border border-border rounded">
@@ -227,6 +358,14 @@ export default function WorkflowPage() {
           )}
 
           <button
+            onClick={() => setShowNodesSidebar(!showNodesSidebar)}
+            className="px-4 py-2 bg-surface border border-border rounded hover:border-primary transition flex items-center gap-2"
+          >
+            <span>➕</span>
+            <span>Add Node</span>
+          </button>
+
+          <button
             onClick={() => setShowHistory(true)}
             className="px-4 py-2 bg-surface border border-border rounded hover:border-primary transition"
           >
@@ -246,16 +385,44 @@ export default function WorkflowPage() {
         </div>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1">
-        <WorkflowCanvas
-          initialNodes={workflow.nodes}
-          initialEdges={workflow.edges}
-          onChange={handleSave}
-          currentNodeId={currentNodeId}
-          executionStatus={executionStatus}
-          onNodeDoubleClick={handleNodeDoubleClick}
-        />
+      {/* Canvas with Sidebar */}
+      <div className="flex-1 flex relative">
+        {/* Sidebar Overlay */}
+        {showNodesSidebar && (
+          <>
+            {/* Backdrop */}
+            <div 
+              className="absolute inset-0 bg-black/50 z-40 backdrop-blur-sm"
+              onClick={() => setShowNodesSidebar(false)}
+            />
+            
+            {/* Sidebar */}
+            <div className="absolute right-0 top-0 bottom-0 z-50 animate-slide-in-right">
+              <NodesSidebar 
+                onAddNode={(type: WorkflowNodeType, position?: { x: number; y: number }) => {
+                  handleAddNode(type, position)
+                  setShowNodesSidebar(false)
+                }} 
+                onClose={() => setShowNodesSidebar(false)}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Canvas */}
+        <div className="flex-1">
+          <WorkflowCanvas
+            initialNodes={workflow.nodes}
+            initialEdges={workflow.edges}
+            onChange={handleSave}
+            currentNodeId={currentNodeId}
+            executionStatus={executionStatus}
+            onNodeDoubleClick={handleNodeDoubleClick}
+            onAddNode={handleAddNode}
+            executedNodes={executedNodes}
+            failedNodes={failedNodes}
+          />
+        </div>
       </div>
 
       {/* Modals & Panels */}

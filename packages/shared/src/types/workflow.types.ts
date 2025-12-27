@@ -3,6 +3,7 @@ export enum WorkflowNodeType {
   TRIGGER_SCHEDULE = 'TRIGGER_SCHEDULE',
   SEND_MESSAGE = 'SEND_MESSAGE',
   CONDITION = 'CONDITION',
+  SWITCH = 'SWITCH',
   WAIT_REPLY = 'WAIT_REPLY',
   END = 'END',
 }
@@ -119,5 +120,19 @@ export interface WaitReplyConfig {
 
 export interface EndConfig {
   outputVariables?: string[]; // variables to include in final output
+}
+
+export interface SwitchRule {
+  id: string;
+  value1: string; // e.g., "variables.opcao"
+  operator: string; // ==, !=, >, <, >=, <=, .includes(, etc.
+  value2: string; // e.g., "1"
+  outputKey: string; // e.g., "0", "1", "2" - used as sourceHandle
+}
+
+export interface SwitchConfig {
+  mode: 'rules' | 'expression';
+  rules: SwitchRule[];
+  fallbackOutput?: string; // default output if no rules match
 }
 

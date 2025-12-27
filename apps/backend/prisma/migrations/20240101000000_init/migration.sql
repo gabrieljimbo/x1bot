@@ -123,3 +123,4 @@ ALTER TABLE "workflow_executions" ADD CONSTRAINT "workflow_executions_sessionId_
 -- AddForeignKey
 ALTER TABLE "whatsapp_sessions" ADD CONSTRAINT "whatsapp_sessions_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+
