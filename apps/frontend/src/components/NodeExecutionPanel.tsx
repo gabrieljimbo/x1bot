@@ -706,17 +706,45 @@ export default function NodeExecutionPanel({
                   </button>
                 </div>
               </div>
-              <div className="flex-1 overflow-auto p-3 bg-[#111111]">
+              <div className="flex-1 overflow-auto bg-[#111111]">
                 {loading ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-gray-400 text-xs">Loading...</div>
                   </div>
                 ) : (
-                  <>
-                    {viewModeInput === 'json' && renderJsonView(inputData, true)}
-                    {viewModeInput === 'table' && renderTableView(inputData)}
-                    {viewModeInput === 'schema' && renderSchemaView(inputData)}
-                  </>
+                  <div className="space-y-0">
+                    {/* INPUT DATA */}
+                    <div className="border-b border-gray-800">
+                      <div className="px-3 py-2 bg-[#0d0d0d] border-b border-gray-800">
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase">Input Data</span>
+                      </div>
+                      <div className="p-3">
+                        {viewModeInput === 'json' && renderJsonView(inputData, true)}
+                        {viewModeInput === 'table' && renderTableView(inputData)}
+                        {viewModeInput === 'schema' && renderSchemaView(inputData)}
+                      </div>
+                    </div>
+                    
+                    {/* VARIABLES */}
+                    {(() => {
+                      const nodeData = getCurrentNodeData()
+                      const variables = nodeData?.variables || executionData?.context?.variables || {}
+                      
+                      if (Object.keys(variables).length > 0) {
+                        return (
+                          <div>
+                            <div className="px-3 py-2 bg-[#0d0d0d] border-b border-gray-800">
+                              <span className="text-[10px] font-semibold text-green-400 uppercase">💾 Available Variables</span>
+                            </div>
+                            <div className="p-3">
+                              {renderJsonView(variables, true)}
+                            </div>
+                          </div>
+                        )
+                      }
+                      return null
+                    })()}
+                  </div>
                 )}
               </div>
               

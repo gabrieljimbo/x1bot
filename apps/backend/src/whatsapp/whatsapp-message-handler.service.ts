@@ -85,6 +85,12 @@ export class WhatsappMessageHandler {
       const config = triggerNode.config;
       console.log('[TRIGGER] Trigger config:', config);
 
+      // Check if this trigger is for a specific session
+      if (config.sessionId && config.sessionId !== sessionId) {
+        console.log('[TRIGGER] Session mismatch. Expected:', config.sessionId, 'Got:', sessionId);
+        continue; // Skip this workflow, it's for a different session
+      }
+
       // Match message against trigger pattern
       let matches = false;
 

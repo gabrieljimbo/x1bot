@@ -372,8 +372,37 @@ export class NodeExecutorService {
   ): NodeExecutionResult {
     const config = node.config as ConditionConfig;
 
-    // Evaluate expression
-    const result = this.contextService.evaluateExpression(config.expression, context);
+    // Check if expression uses string methods with multiple values
+    let result = false;
+    const expression = config.expression || '';
+    
+    console.log('[executeCondition] Expression:', expression);
+    
+    // Match patterns like: value.toLowerCase().includes("word1, word2, word3".toLowerCase())
+    // or: value.includes("word1, word2, word3")
+    const multiValueMatch = expression.match(/(.+?)\.(includes|startsWith|endsWith)\("([^"]+)"(?:\.toLowerCase\(\))?\)/);
+    
+    console.log('[executeCondition] Regex match:', multiValueMatch);
+    
+    if (multiValueMatch && multiValueMatch[3].includes(',')) {
+      // Multiple values detected - check each one
+      const [, value1, operator, value2String] = multiValueMatch;
+      const values = value2String.split(',').map(v => v.trim());
+      
+      console.log('[executeCondition] Multiple values detected:', values);
+      
+      for (const value of values) {
+        const singleExpression = `${value1}.${operator}("${value}")`;
+        console.log('[executeCondition] Testing:', singleExpression);
+        result = this.contextService.evaluateExpression(singleExpression, context);
+        console.log('[executeCondition] Result:', result);
+        if (result) break; // Stop at first match
+      }
+    } else {
+      // Single value or non-string operator - evaluate normally
+      console.log('[executeCondition] Single value, evaluating normally');
+      result = this.contextService.evaluateExpression(expression, context);
+    }
 
     this.contextService.setOutput(context, { conditionResult: result });
 
@@ -406,14 +435,23 @@ export class NodeExecutorService {
     for (let i = 0; i < rules.length; i++) {
       const rule = rules[i];
       
-      let expression = '';
+      let result = false;
+      
       if (rule.operator.includes('(')) {
-        expression = `${rule.value1}${rule.operator}"${rule.value2}")`;
+        // For string methods like includes(), support multiple values separated by comma
+        const values = rule.value2.split(',').map((v: string) => v.trim().toLowerCase());
+        
+        // Check if any of the values match
+        for (const value of values) {
+          const expression = `${rule.value1}.toLowerCase()${rule.operator}"${value}")`;
+          result = this.contextService.evaluateExpression(expression, context);
+          if (result) break; // Stop at first match
+        }
       } else {
-        expression = `${rule.value1} ${rule.operator} ${rule.value2}`;
+        // For comparison operators, use single value
+        const expression = `${rule.value1} ${rule.operator} ${rule.value2}`;
+        result = this.contextService.evaluateExpression(expression, context);
       }
-
-      const result = this.contextService.evaluateExpression(expression, context);
 
       if (result) {
         const nextEdge = edges.find(

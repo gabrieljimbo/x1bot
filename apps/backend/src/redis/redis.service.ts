@@ -14,6 +14,14 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       port: this.configService.get('REDIS_PORT', 6379),
       password: this.configService.get('REDIS_PASSWORD'),
     });
+
+    // Wait for connection
+    await new Promise((resolve, reject) => {
+      this.client.on('ready', resolve);
+      this.client.on('error', reject);
+    });
+
+    console.log('✅ Redis connected successfully');
   }
 
   async onModuleDestroy() {
@@ -28,6 +36,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Acquire distributed lock
    */
   async acquireLock(key: string, ttlSeconds: number = 30): Promise<boolean> {
+    if (!this.client) {
+      console.error('[REDIS] Client not initialized');
+      return false;
+    }
     const result = await this.client.set(key, '1', 'EX', ttlSeconds, 'NX');
     return result === 'OK';
   }

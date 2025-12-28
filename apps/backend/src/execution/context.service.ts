@@ -20,29 +20,46 @@ export class ContextService {
    */
   evaluateExpression(expression: string, context: ExecutionContext): boolean {
     try {
-      // Create safe evaluation context
+      // Create safe evaluation context with all variables available at root level
       const safeContext = {
-        variables: context.variables,
-        globals: context.globals,
-        input: context.input,
-        output: context.output,
+        variables: context.variables || {},
+        globals: context.globals || {},
+        input: context.input || {},
+        output: context.output || {},
+        // Spread variables to root level so they can be accessed directly
+        ...(context.variables || {}),
       };
 
+      console.log('[evaluateExpression] Expression:', expression);
+      console.log('[evaluateExpression] Variables:', JSON.stringify(safeContext.variables, null, 2));
+
       // Use Function constructor for safe evaluation
+      // Pass context as 'this' and individual properties as parameters
+      const generatedCode = `
+        // Make all variables available at root level
+        ${Object.keys(safeContext.variables).map(key => `const ${key} = variables.${key};`).join('\n')}
+        return ${expression};
+      `;
+      
+      console.log('[evaluateExpression] Generated code:', generatedCode);
+
       const func = new Function(
         'variables',
         'globals',
         'input',
         'output',
-        `return ${expression}`,
+        generatedCode,
       );
 
-      return func(
+      const result = func(
         safeContext.variables,
         safeContext.globals,
         safeContext.input,
         safeContext.output,
       );
+
+      console.log('[evaluateExpression] Result:', result);
+      return result;
     } catch (error) {
       console.error('Expression evaluation error:', error);
       return false;

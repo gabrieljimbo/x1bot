@@ -1179,11 +1179,19 @@ export default function NodeConfigModal({
           for (const op of operators) {
             if (expr.includes(op)) {
               const parts = expr.split(op)
-              if (parts.length === 2) {
+              if (parts.length >= 2) {
+                // Remove .toLowerCase() from parsed values to avoid duplication
+                let value1 = parts[0].trim().replace(/\.toLowerCase\(\)/g, '')
+                // For value2, remove everything after the closing quote/parenthesis
+                let value2Raw = parts[1].trim()
+                // Extract the actual value between quotes
+                const match = value2Raw.match(/"([^"]*)"/)
+                let value2 = match ? match[1] : value2Raw.replace(/[()'"]/g, '').replace(/\.toLowerCase\(\)/g, '')
+                
                 return {
-                  value1: parts[0].trim(),
+                  value1,
                   operator: op,
-                  value2: parts[1].trim().replace(/[()'"]/g, '')
+                  value2
                 }
               }
             }
@@ -1192,15 +1200,23 @@ export default function NodeConfigModal({
           return { value1: expr, operator: '==', value2: '' }
         }
 
-        const conditionParts = parseExpression(config.expression || '')
+        // Use state to manage condition parts independently
+        const [conditionParts, setConditionParts] = useState(() => parseExpression(config.expression || ''))
+        
+        // Update parts when config.expression changes externally
+        useEffect(() => {
+          setConditionParts(parseExpression(config.expression || ''))
+        }, [config.expression])
         
         const updateCondition = (field: string, value: string) => {
           const parts = { ...conditionParts, [field]: value }
+          setConditionParts(parts)
+          
           let expression = ''
           
           if (parts.operator.includes('(')) {
-            // For methods like includes, startsWith, endsWith
-            expression = `${parts.value1}${parts.operator}"${parts.value2}")`
+            // For methods like includes, startsWith, endsWith - use lowercase for case-insensitive comparison
+            expression = `${parts.value1}.toLowerCase()${parts.operator}"${parts.value2}".toLowerCase())`
           } else {
             expression = `${parts.value1} ${parts.operator} ${parts.value2}`
           }
@@ -1265,9 +1281,14 @@ export default function NodeConfigModal({
                     type="text"
                     value={conditionParts.value2}
                     onChange={(e) => updateCondition('value2', e.target.value)}
-                    placeholder="2"
+                    placeholder={conditionParts.operator.includes('(') ? "sim, s, ok (separe por vírgula)" : "2"}
                     className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
                   />
+                  {conditionParts.operator.includes('(') && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      💡 Dica: Use vírgulas para múltiplas opções (ex: sim, s, ok, talvez)
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1277,8 +1298,21 @@ export default function NodeConfigModal({
                   Expression Preview
                 </label>
                 <div className="px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-sm text-primary font-mono">
-                  {config.expression || 'No expression set'}
+                  {(() => {
+                    const expr = config.expression || 'No expression set'
+                    // Show how multiple values will be processed
+                    if (conditionParts.operator.includes('(') && conditionParts.value2.includes(',')) {
+                      const values = conditionParts.value2.split(',').map(v => v.trim())
+                      return `${conditionParts.value1}.toLowerCase()${conditionParts.operator}"${values[0]}".toLowerCase()) OR ... OR ${conditionParts.operator}"${values[values.length - 1]}".toLowerCase())`
+                    }
+                    return expr
+                  })()}
                 </div>
+                {conditionParts.operator.includes('(') && conditionParts.value2.includes(',') && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    ℹ️ O backend vai testar cada valor separadamente: {conditionParts.value2.split(',').map(v => `"${v.trim()}"`).join(', ')}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1395,9 +1429,14 @@ export default function NodeConfigModal({
                           type="text"
                           value={rule.value2}
                           onChange={(e) => updateRule(index, 'value2', e.target.value)}
-                          placeholder="1"
+                          placeholder={rule.operator.includes('(') ? "sim, s, ok (separe por vírgula)" : "1"}
                           className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
                         />
+                        {rule.operator.includes('(') && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            💡 Dica: Use vírgulas para múltiplas opções (ex: sim, s, ok, talvez)
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
