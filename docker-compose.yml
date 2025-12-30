@@ -48,7 +48,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3040
-      - NEXT_PUBLIC_API_URL=http://localhost:3040
+      - NEXT_PUBLIC_API_URL=https://n9n.archcode.space
     ports:
       - "3040:3040"
     depends_on:
