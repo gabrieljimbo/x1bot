@@ -1,8 +1,5 @@
 node_modules
-**/node_modules
-**/dist
-**/.next
-**/out
+dist
 *.log
 .env
 .env.local
@@ -13,5 +10,4 @@ coverage
 *.tsbuildinfo
 .vscode
 .idea
-.git
-.gitignore
+

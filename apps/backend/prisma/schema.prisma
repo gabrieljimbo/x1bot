@@ -101,6 +101,20 @@ model ExecutionLog {
   @@map("execution_logs")
 }
 
+model Tag {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  color       String?  @default("#8b5cf6")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("tags")
+}
+
 model ContactTag {
   id        String   @id @default(uuid())
   tenantId  String

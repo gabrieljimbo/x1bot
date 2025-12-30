@@ -17,6 +17,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - n9n-network
 
   redis:
     image: redis:7-alpine
@@ -30,9 +32,65 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - n9n-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: n9n-backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/n9n
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - FRONTEND_URL=http://localhost:3000
+      - CORS_ORIGIN=http://localhost:3000
+      - WHATSAPP_SESSION_PATH=/app/apps/backend/.wwebjs_auth
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - whatsapp_sessions:/app/apps/backend/.wwebjs_auth
+      - whatsapp_sessions_data:/app/apps/backend/.wwebjs_cache
+    networks:
+      - n9n-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    container_name: n9n-frontend
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - n9n-network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
+  whatsapp_sessions:
+  whatsapp_sessions_data:
+
+networks:
+  n9n-network:
+    driver: bridge
+
+
 
 

@@ -30,10 +30,20 @@ export default function Home() {
     <div className="min-h-screen p-8">
       <div className="max-w-7xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">
-            N9N
-          </h1>
-          <p className="text-gray-400">Conversation Workflow Engine</p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-4xl font-bold mb-2">
+                N9N
+              </h1>
+              <p className="text-gray-400">Conversation Workflow Engine</p>
+            </div>
+            <Link
+              href="/tags"
+              className="px-4 py-2 bg-surface border border-border rounded hover:border-primary transition flex items-center gap-2"
+            >
+              🏷️ Gerenciar Tags
+            </Link>
+          </div>
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

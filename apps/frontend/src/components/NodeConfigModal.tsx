@@ -13,6 +13,173 @@ interface NodeConfigModalProps {
   embedded?: boolean
 }
 
+// Component for SET_TAGS configuration
+function SetTagsConfig({ config, setConfig, tenantId }: any) {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+  const [availableTags, setAvailableTags] = useState<any[]>([])
+  const [loadingTags, setLoadingTags] = useState(false)
+
+  useEffect(() => {
+    loadAvailableTags()
+  }, [])
+
+  // Ensure action is always set
+  useEffect(() => {
+    if (!config.action) {
+      console.log('[SetTagsConfig] Setting default action to "add"')
+      setConfig({ ...config, action: 'add' })
+    }
+  }, [config.action])
+
+  const loadAvailableTags = async () => {
+    try {
+      setLoadingTags(true)
+      const response = await fetch(`${API_URL}/api/tags?tenantId=${tenantId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setAvailableTags(data)
+      }
+    } catch (error) {
+      console.error('Error loading tags:', error)
+    } finally {
+      setLoadingTags(false)
+    }
+  }
+
+  const toggleTag = (tagName: string) => {
+    const currentTags = config.tags || []
+    const newTags = currentTags.includes(tagName)
+      ? currentTags.filter((t: string) => t !== tagName)
+      : [...currentTags, tagName]
+    setConfig({ ...config, tags: newTags })
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <label className="block text-sm font-medium mb-2 text-gray-200">
+          Ação
+        </label>
+        <select
+          value={config.action || 'add'}
+          onChange={(e) => setConfig({ ...config, action: e.target.value })}
+          className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+        >
+          <option value="add">Adicionar Tags</option>
+          <option value="remove">Remover Tags</option>
+          <option value="set">Substituir Todas as Tags</option>
+          <option value="clear">Limpar Todas as Tags</option>
+        </select>
+        <p className="text-xs text-gray-500 mt-1.5">
+          {config.action === 'add' && 'Adiciona novas tags sem remover as existentes'}
+          {config.action === 'remove' && 'Remove apenas as tags especificadas'}
+          {config.action === 'set' && 'Substitui todas as tags pelas especificadas'}
+          {config.action === 'clear' && 'Remove todas as tags do contato'}
+        </p>
+      </div>
+
+      {config.action !== 'clear' && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-200">
+              Selecione as Tags
+            </label>
+            <button
+              onClick={loadAvailableTags}
+              className="text-xs text-primary hover:text-primary/80"
+            >
+              🔄 Recarregar
+            </button>
+          </div>
+
+          {loadingTags ? (
+            <div className="text-center py-8 text-gray-500">
+              Carregando tags...
+            </div>
+          ) : availableTags.length === 0 ? (
+            <div className="text-center py-8 border border-gray-700 rounded-lg">
+              <p className="text-gray-500 mb-2">Nenhuma tag criada ainda</p>
+              <a
+                href="/tags"
+                target="_blank"
+                className="text-primary hover:text-primary/80 text-sm"
+              >
+                Criar tags →
+              </a>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto p-2 bg-[#0a0a0a] border border-gray-700 rounded">
+              {availableTags.map((tag) => {
+                const isSelected = (config.tags || []).includes(tag.name)
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => toggleTag(tag.name)}
+                    className={`
+                      flex items-center gap-2 px-3 py-2 rounded transition text-left
+                      ${isSelected
+                        ? 'bg-purple-500/20 border-2 border-purple-500'
+                        : 'bg-[#151515] border border-gray-700 hover:border-gray-600'
+                      }
+                    `}
+                  >
+                    <div
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: tag.color || '#8b5cf6' }}
+                    />
+                    <span className="text-sm truncate">{tag.name}</span>
+                    {isSelected && <span className="ml-auto text-purple-400">✓</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {(config.tags || []).length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs text-gray-500 mb-2">Tags selecionadas:</p>
+              <div className="flex flex-wrap gap-2">
+                {(config.tags || []).map((tagName: string) => {
+                  const tag = availableTags.find(t => t.name === tagName)
+                  return (
+                    <span
+                      key={tagName}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs"
+                      style={{
+                        backgroundColor: tag?.color ? tag.color + '20' : '#8b5cf620',
+                        color: tag?.color || '#8b5cf6',
+                      }}
+                    >
+                      {tagName}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">🏷️</span>
+          <div className="flex-1">
+            <p className="text-sm text-purple-300 font-medium mb-2">
+              Tags Internas
+            </p>
+            <p className="text-xs text-purple-200/80 mb-2">
+              As tags são armazenadas internamente e ficam disponíveis em todos os nodes através da variável <code className="bg-purple-500/20 px-1 py-0.5 rounded">contactTags</code>.
+            </p>
+            <p className="text-xs text-purple-200/80">
+              Exemplo: Use em condições como <code className="bg-purple-500/20 px-1 py-0.5 rounded">contactTags.includes("vip")</code>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Editor de código Monaco (VS Code)
 function CodeEditor({ value, onChange, language = 'javascript' }: any) {
   const handleEditorChange = (newValue: string | undefined) => {
@@ -170,6 +337,7 @@ export default function NodeConfigModal({
   onSave,
   embedded = false,
 }: NodeConfigModalProps) {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
   const [activeTab, setActiveTab] = useState<'parameters' | 'settings'>('parameters')
   const [config, setConfig] = useState<any>({})
   const [sessions, setSessions] = useState<any[]>([])
@@ -1122,93 +1290,7 @@ export default function NodeConfigModal({
         )
 
       case 'SET_TAGS':
-        return (
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-200">
-                Ação
-              </label>
-              <select
-                value={config.action || 'add'}
-                onChange={(e) => setConfig({ ...config, action: e.target.value })}
-                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
-              >
-                <option value="add">Adicionar Tags</option>
-                <option value="remove">Remover Tags</option>
-                <option value="set">Substituir Todas as Tags</option>
-                <option value="clear">Limpar Todas as Tags</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1.5">
-                {config.action === 'add' && 'Adiciona novas tags sem remover as existentes'}
-                {config.action === 'remove' && 'Remove apenas as tags especificadas'}
-                {config.action === 'set' && 'Substitui todas as tags pelas especificadas'}
-                {config.action === 'clear' && 'Remove todas as tags do contato'}
-              </p>
-            </div>
-
-            {config.action !== 'clear' && (
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-200">
-                  Tags
-                </label>
-                <div className="space-y-2">
-                  {(config.tags || []).map((tag: string, index: number) => (
-                    <div key={index} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={tag}
-                        onChange={(e) => {
-                          const newTags = [...(config.tags || [])]
-                          newTags[index] = e.target.value
-                          setConfig({ ...config, tags: newTags })
-                        }}
-                        placeholder="nome-da-tag"
-                        className="flex-1 px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white font-mono"
-                      />
-                      <button
-                        onClick={() => {
-                          const newTags = (config.tags || []).filter((_: string, i: number) => i !== index)
-                          setConfig({ ...config, tags: newTags })
-                        }}
-                        className="px-3 py-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    onClick={() => {
-                      setConfig({ ...config, tags: [...(config.tags || []), ''] })
-                    }}
-                    className="w-full px-4 py-2.5 bg-[#1a1a1a] border border-gray-700 rounded hover:border-primary transition text-sm text-gray-400 hover:text-white"
-                  >
-                    + Adicionar Tag
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-1.5">
-                  Use tags para categorizar e segmentar seus contatos (ex: "novo-lead", "interessado", "vip")
-                </p>
-              </div>
-            )}
-
-            <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <span className="text-2xl">🏷️</span>
-                <div className="flex-1">
-                  <p className="text-sm text-purple-300 font-medium mb-2">
-                    Tags Internas
-                  </p>
-                  <p className="text-xs text-purple-200/80 mb-2">
-                    As tags são armazenadas internamente e ficam disponíveis em todos os nodes através da variável <code className="bg-purple-500/20 px-1 py-0.5 rounded">contactTags</code>.
-                  </p>
-                  <p className="text-xs text-purple-200/80">
-                    Use em condições: <code className="bg-purple-500/20 px-1 py-0.5 rounded">contactTags.includes("vip")</code>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )
+        return <SetTagsConfig config={config} setConfig={setConfig} tenantId={tenantId} />
 
       case 'WAIT':
         return (
@@ -1263,6 +1345,52 @@ export default function NodeConfigModal({
         const parseExpression = (expr: string) => {
           if (!expr) return { value1: '', operator: '==', value2: '' }
           
+          // Check for array operators first
+          if (expr.includes('.includes(') && !expr.includes('.toLowerCase()')) {
+            // Array contains: contactTags.includes("vendas")
+            const match = expr.match(/(.+?)\.includes\("([^"]+)"\)/)
+            if (match) {
+              return { value1: match[1].replace(/^!/, ''), operator: expr.startsWith('!') ? '.array_not_contains(' : '.array_contains(', value2: match[2] }
+            }
+          }
+          
+          if (expr.includes('.length === 0')) {
+            const value1 = expr.replace('.length === 0', '').trim()
+            return { value1, operator: '.array_is_empty', value2: '' }
+          }
+          
+          if (expr.includes('.length > 0')) {
+            const value1 = expr.replace('.length > 0', '').trim()
+            return { value1, operator: '.array_is_not_empty', value2: '' }
+          }
+          
+          // Check for array contains any/all (multiple OR/AND conditions)
+          if (expr.includes(' || ') && expr.includes('.includes(')) {
+            const parts = expr.split(' || ')
+            const firstMatch = parts[0].match(/(.+?)\.includes\("([^"]+)"\)/)
+            if (firstMatch) {
+              const value1 = firstMatch[1]
+              const values = parts.map(p => {
+                const m = p.match(/\.includes\("([^"]+)"\)/)
+                return m ? m[1] : ''
+              }).filter(Boolean)
+              return { value1, operator: '.array_contains_any(', value2: values.join(', ') }
+            }
+          }
+          
+          if (expr.includes(' && ') && expr.includes('.includes(')) {
+            const parts = expr.split(' && ')
+            const firstMatch = parts[0].match(/(.+?)\.includes\("([^"]+)"\)/)
+            if (firstMatch) {
+              const value1 = firstMatch[1]
+              const values = parts.map(p => {
+                const m = p.match(/\.includes\("([^"]+)"\)/)
+                return m ? m[1] : ''
+              }).filter(Boolean)
+              return { value1, operator: '.array_contains_all(', value2: values.join(', ') }
+            }
+          }
+          
           // Try to parse expressions like "variables.opcao == 2"
           const operators = ['===', '!==', '==', '!=', '>=', '<=', '>', '<', '.includes(', '.startsWith(', '.endsWith(']
           for (const op of operators) {
@@ -1303,8 +1431,23 @@ export default function NodeConfigModal({
           
           let expression = ''
           
-          if (parts.operator.includes('(')) {
-            // For methods like includes, startsWith, endsWith - use lowercase for case-insensitive comparison
+          // Array operators
+          if (parts.operator === '.array_contains(') {
+            expression = `${parts.value1}.includes("${parts.value2}")`
+          } else if (parts.operator === '.array_not_contains(') {
+            expression = `!${parts.value1}.includes("${parts.value2}")`
+          } else if (parts.operator === '.array_contains_any(') {
+            const values = parts.value2.split(',').map(v => v.trim())
+            expression = values.map(v => `${parts.value1}.includes("${v}")`).join(' || ')
+          } else if (parts.operator === '.array_contains_all(') {
+            const values = parts.value2.split(',').map(v => v.trim())
+            expression = values.map(v => `${parts.value1}.includes("${v}")`).join(' && ')
+          } else if (parts.operator === '.array_is_empty') {
+            expression = `${parts.value1}.length === 0`
+          } else if (parts.operator === '.array_is_not_empty') {
+            expression = `${parts.value1}.length > 0`
+          } else if (parts.operator.includes('(')) {
+            // For string methods like includes, startsWith, endsWith - use lowercase for case-insensitive comparison
             expression = `${parts.value1}.toLowerCase()${parts.operator}"${parts.value2}".toLowerCase())`
           } else {
             expression = `${parts.value1} ${parts.operator} ${parts.value2}`
@@ -1328,7 +1471,7 @@ export default function NodeConfigModal({
                     type="text"
                     value={conditionParts.value1}
                     onChange={(e) => updateCondition('value1', e.target.value)}
-                    placeholder="variables.opcao"
+                    placeholder={conditionParts.operator.startsWith('.array_') ? "contactTags" : "variables.opcao"}
                     className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
                   />
                 </div>
@@ -1358,27 +1501,50 @@ export default function NodeConfigModal({
                       <option value=".startsWith(">starts with (.startsWith)</option>
                       <option value=".endsWith(">ends with (.endsWith)</option>
                     </optgroup>
+                    <optgroup label="Array">
+                      <option value=".array_contains(">array contains</option>
+                      <option value=".array_not_contains(">array not contains</option>
+                      <option value=".array_contains_any(">array contains any</option>
+                      <option value=".array_contains_all(">array contains all</option>
+                      <option value=".array_is_empty">array is empty</option>
+                      <option value=".array_is_not_empty">array is not empty</option>
+                    </optgroup>
                   </select>
                 </div>
 
                 {/* Value 2 */}
-                <div>
-                  <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                    Value 2
-                  </label>
-                  <input
-                    type="text"
-                    value={conditionParts.value2}
-                    onChange={(e) => updateCondition('value2', e.target.value)}
-                    placeholder={conditionParts.operator.includes('(') ? "sim, s, ok (separe por vírgula)" : "2"}
-                    className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
-                  />
-                  {conditionParts.operator.includes('(') && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      💡 Dica: Use vírgulas para múltiplas opções (ex: sim, s, ok, talvez)
-                    </p>
-                  )}
-                </div>
+                {!conditionParts.operator.includes('_is_empty') && !conditionParts.operator.includes('_is_not_empty') && (
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                      Value 2
+                    </label>
+                    <input
+                      type="text"
+                      value={conditionParts.value2}
+                      onChange={(e) => updateCondition('value2', e.target.value)}
+                      placeholder={
+                        conditionParts.operator.includes('array_contains_any') || conditionParts.operator.includes('array_contains_all')
+                          ? "vendas, vip, premium (separe por vírgula)"
+                          : conditionParts.operator.startsWith('.array_')
+                          ? "vendas"
+                          : conditionParts.operator.includes('(')
+                          ? "sim, s, ok (separe por vírgula)"
+                          : "2"
+                      }
+                      className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+                    />
+                    {(conditionParts.operator.includes('array_contains_any') || conditionParts.operator.includes('array_contains_all')) && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        💡 Dica: Use vírgulas para múltiplas tags (ex: vendas, vip, premium)
+                      </p>
+                    )}
+                    {conditionParts.operator.includes('(') && !conditionParts.operator.startsWith('.array_') && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        💡 Dica: Use vírgulas para múltiplas opções (ex: sim, s, ok, talvez)
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Preview */}

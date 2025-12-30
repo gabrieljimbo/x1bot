@@ -31,7 +31,14 @@ export interface NodeExecutionResult {
   messageToSend?: {
     sessionId: string;
     contactId: string;
-    message: string;
+    message?: string;
+    media?: {
+      type: 'image' | 'video' | 'audio' | 'document';
+      url: string;
+      caption?: string;
+      fileName?: string;
+      sendAudioAsVoice?: boolean;
+    };
   };
 }
 
@@ -941,6 +948,7 @@ export class NodeExecutorService {
     contactId?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as SetTagsConfig;
+    console.log('[SET_TAGS] Node config:', JSON.stringify(config, null, 2));
 
     if (!sessionId || !contactId) {
       console.error('[SET_TAGS] Missing sessionId or contactId');
@@ -956,6 +964,7 @@ export class NodeExecutorService {
     let resultTags: string[] = [];
 
     try {
+      console.log('[SET_TAGS] Action:', config.action, 'Tags:', config.tags);
       switch (config.action) {
         case 'add':
           resultTags = await this.contactTagsService.addTags(

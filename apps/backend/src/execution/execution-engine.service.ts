@@ -37,6 +37,7 @@ export class ExecutionEngineService {
     contactId: string,
     triggerMessage?: string,
   ): Promise<WorkflowExecution> {
+    console.log('🚀 [ExecutionEngine] startExecution called!', { tenantId, workflowId, sessionId, contactId });
     // Acquire lock to prevent duplicate executions
     const lockKey = `execution:lock:${tenantId}:${sessionId}:${contactId}`;
     const lockAcquired = await this.redis.acquireLock(lockKey, 30);
@@ -92,6 +93,7 @@ export class ExecutionEngineService {
         sessionId,
         contactId,
       );
+      console.log('[ExecutionEngine] Loaded contactTags:', { tenantId, sessionId, contactId, contactTags });
 
       // Create execution
       const execution = await this.executionService.createExecution(
@@ -106,6 +108,7 @@ export class ExecutionEngineService {
           },
         },
       );
+      console.log('[ExecutionEngine] Created execution with context:', execution.context);
 
       // Emit started event
       await this.eventBus.emit({
@@ -319,7 +322,7 @@ export class ExecutionEngineService {
 
       const duration = Date.now() - startTime;
 
-      // Emit node executed event with context data
+      // Emit node executed event
       await this.eventBus.emit({
         type: EventType.NODE_EXECUTED,
         tenantId: execution.tenantId,
@@ -330,12 +333,6 @@ export class ExecutionEngineService {
         nodeId: currentNode.id,
         nodeType: currentNode.type,
         duration,
-        data: {
-          nodeType: currentNode.type,
-          input: nodeInput, // Output from previous node
-          output: result.output || execution.context.output,
-          variables: execution.context.variables,
-        },
         timestamp: new Date(),
       });
 
@@ -410,6 +407,7 @@ export class ExecutionEngineService {
                   workflowId: updatedExecution.workflowId,
                   sessionId: updatedExecution.sessionId,
                   contactId: updatedExecution.contactId,
+                  previousStatus: ExecutionStatus.WAITING,
                   timestamp: new Date(),
                 });
                 

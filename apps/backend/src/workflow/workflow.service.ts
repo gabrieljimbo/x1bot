@@ -237,7 +237,7 @@ export class WorkflowService {
     const contactId = `manual-${workflowId}-${timestamp}`;
 
     // Start execution
-    const executionId = await this.executionEngine.startExecution(
+    const execution = await this.executionEngine.startExecution(
       tenantId,
       workflowId,
       sessionId,
@@ -245,9 +245,9 @@ export class WorkflowService {
       undefined, // no trigger message for manual executions
     );
 
-    console.log(`[MANUAL TRIGGER] Started execution ${executionId} for workflow ${workflowId}`);
+    console.log(`[MANUAL TRIGGER] Started execution ${execution.id} for workflow ${workflowId}`);
 
-    return { executionId };
+    return { executionId: execution.id };
   }
 }
 

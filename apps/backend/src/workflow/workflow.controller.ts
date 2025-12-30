@@ -11,6 +11,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { WorkflowService } from './workflow.service';
+import { TagService, CreateTagDto, UpdateTagDto } from './tag.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { WhatsappSessionManager } from '../whatsapp/whatsapp-session-manager.service';
 import { ExecutionService } from '../execution/execution.service';
@@ -20,6 +21,7 @@ import { EventBusService } from '../event-bus/event-bus.service';
 export class WorkflowController {
   constructor(
     private workflowService: WorkflowService,
+    private tagService: TagService,
     private whatsappService: WhatsappService,
     private whatsappSessionManager: WhatsappSessionManager,
     private executionService: ExecutionService,
@@ -220,6 +222,47 @@ export class WorkflowController {
   @Get('executions/:id/logs')
   async getExecutionLogs(@Query('tenantId') tenantId: string, @Param('id') id: string) {
     return this.eventBus.getExecutionLogs(tenantId, id);
+  }
+
+  // ==================== TAG ENDPOINTS ====================
+
+  @Get('tags')
+  async getTags(@Query('tenantId') tenantId: string) {
+    return this.tagService.getTags(tenantId);
+  }
+
+  @Get('tags/:id')
+  async getTag(@Query('tenantId') tenantId: string, @Param('id') id: string) {
+    return this.tagService.getTag(tenantId, id);
+  }
+
+  @Post('tags')
+  async createTag(@Query('tenantId') tenantId: string, @Body() data: CreateTagDto) {
+    return this.tagService.createTag(tenantId, data);
+  }
+
+  @Put('tags/:id')
+  async updateTag(
+    @Query('tenantId') tenantId: string,
+    @Param('id') id: string,
+    @Body() data: UpdateTagDto,
+  ) {
+    return this.tagService.updateTag(tenantId, id, data);
+  }
+
+  @Delete('tags/:id')
+  async deleteTag(@Query('tenantId') tenantId: string, @Param('id') id: string) {
+    return this.tagService.deleteTag(tenantId, id);
+  }
+
+  @Get('tags/:id/usage')
+  async getTagUsage(@Query('tenantId') tenantId: string, @Param('id') id: string) {
+    const tag = await this.tagService.getTag(tenantId, id);
+    if (!tag) {
+      return { count: 0 };
+    }
+    const count = await this.tagService.getTagUsageCount(tenantId, tag.name);
+    return { count };
   }
 }
 

@@ -13,6 +13,7 @@ export class ContactTagsService {
     sessionId: string,
     contactId: string,
   ): Promise<string[]> {
+    console.log('[ContactTagsService] getTags called with:', { tenantId, sessionId, contactId });
     const record = await this.prisma.contactTag.findUnique({
       where: {
         tenantId_sessionId_contactId: {
@@ -22,6 +23,7 @@ export class ContactTagsService {
         },
       },
     });
+    console.log('[ContactTagsService] Found record:', record);
 
     return record?.tags || [];
   }

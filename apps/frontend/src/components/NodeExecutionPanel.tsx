@@ -62,6 +62,8 @@ export default function NodeExecutionPanel({
       const executionResponse = await fetch(executionUrl)
       if (executionResponse.ok) {
         const data = await executionResponse.json()
+        console.log('[NodeExecutionPanel] Loaded execution data:', data)
+        console.log('[NodeExecutionPanel] Context variables:', data?.context?.variables)
         setExecutionData(data)
       } else {
         console.error('[loadExecutionData] Failed to load execution:', executionResponse.status)
@@ -112,13 +114,22 @@ export default function NodeExecutionPanel({
       }
     )
     
+    console.log('[getCurrentNodeData] selectedNodeId:', selectedNodeId)
+    console.log('[getCurrentNodeData] nodeExecutedLog:', nodeExecutedLog)
+    
     if (nodeExecutedLog?.data) {
       // The backend saves the entire event in the 'data' field
       // So event.data (which contains input, output, variables) is at log.data.data
       const eventData = nodeExecutedLog.data.data || nodeExecutedLog.data
+      console.log('[getCurrentNodeData] eventData:', eventData)
+      console.log('[getCurrentNodeData] eventData.variables:', eventData?.variables)
+      console.log('[getCurrentNodeData] contactTags value:', eventData?.variables?.contactTags)
+      console.log('[getCurrentNodeData] contactTags type:', typeof eventData?.variables?.contactTags)
+      console.log('[getCurrentNodeData] contactTags isArray:', Array.isArray(eventData?.variables?.contactTags))
       return eventData
     }
     
+    console.log('[getCurrentNodeData] Fallback to executionData.context:', executionData?.context)
     return executionData?.context || {}
   }
 
@@ -472,7 +483,30 @@ export default function NodeExecutionPanel({
               )}
             </div>
             {isObject && renderDraggableJson(value, currentPath, level + 1)}
-            {isArray && value.length > 0 && typeof value[0] === 'object' && renderDraggableJson(value[0], `${currentPath}[0]`, level + 1)}
+            {isArray && value.length > 0 && (
+              <div className="ml-4">
+                {value.map((item: any, index: number) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <span className="text-gray-500">{index}:</span>
+                    {typeof item === 'object' ? (
+                      renderDraggableJson(item, `${currentPath}[${index}]`, level + 1)
+                    ) : (
+                      <span 
+                        className="text-gray-300 cursor-move hover:bg-gray-700/30 px-1 rounded"
+                        draggable={true}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/plain', `{{${currentPath}[${index}]}}`)
+                          e.dataTransfer.effectAllowed = 'copy'
+                        }}
+                        title={`Drag to use: {{${currentPath}[${index}]}}`}
+                      >
+                        {typeof item === 'string' ? `"${item}"` : String(item)}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             {(isObject || isArray) && (
               <span className="text-gray-500 ml-4">{isArray ? ']' : '}'}</span>
             )}

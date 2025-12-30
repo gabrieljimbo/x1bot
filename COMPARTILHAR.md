@@ -164,3 +164,5 @@ Se precisar de algo mais permanente:
 - Dashboard Ngrok: https://dashboard.ngrok.com/
 - Status Ngrok: https://status.ngrok.com/
 
+
+
