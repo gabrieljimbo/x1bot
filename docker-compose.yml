@@ -1,85 +1,80 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: n9n-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: n9n
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - n9n-network
-
-  redis:
-    image: redis:7-alpine
-    container_name: n9n-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - n9n-network
-
-  backend:
+  backend-n9n:
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
     container_name: n9n-backend
     environment:
       - NODE_ENV=production
-      - PORT=3001
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/n9n
-      - REDIS_HOST=redis
+      - PORT=3041
+      - DATABASE_URL=postgresql://n9n:n9npassWd*@postgres_vps:5432/n9n
+      - REDIS_HOST=redis_vps
       - REDIS_PORT=6379
-      - FRONTEND_URL=http://localhost:3000
-      - CORS_ORIGIN=http://localhost:3000
+      - REDIS_PASSWORD=tYCkGHWdFJmfKQI9nZb5pRvghDeMCLiY
+      - FRONTEND_URL=https://n9n.archcode.space
+      - CORS_ORIGIN=https://n9n.archcode.space
       - WHATSAPP_SESSION_PATH=/app/apps/backend/.wwebjs_auth
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
     ports:
-      - "3001:3001"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - "3041:3041"
     volumes:
       - whatsapp_sessions:/app/apps/backend/.wwebjs_auth
       - whatsapp_sessions_data:/app/apps/backend/.wwebjs_cache
     networks:
+      - internal
+      - traefik-public
       - n9n-network
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.backend-n9n.rule=Host(`api.n9n.archcode.space`)"
+      - "traefik.http.routers.backend-n9n.entrypoints=websecure"
+      - "traefik.http.routers.backend-n9n.tls=true"
+      - "traefik.http.routers.backend-n9n.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.backend-n9n.loadbalancer.server.port=3041"
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS,PATCH"
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.routers.backend-n9n.middlewares=backend-cors@docker"
 
-  frontend:
+  frontend-n9n:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
     container_name: n9n-frontend
     environment:
       - NODE_ENV=production
-      - PORT=3000
-      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - PORT=3040
+      - NEXT_PUBLIC_API_URL=http://localhost:3040
     ports:
-      - "3000:3000"
+      - "3040:3040"
     depends_on:
-      - backend
+      - backend-n9n
     networks:
+      - internal
+      - traefik-public
       - n9n-network
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.frontend-n9n.rule=Host(`n9n.archcode.space`)"
+      - "traefik.http.routers.frontend-n9n.entrypoints=websecure"
+      - "traefik.http.routers.frontend-n9n.tls=true"
+      - "traefik.http.routers.frontend-n9n.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.frontend-n9n.loadbalancer.server.port=3040"
+
+      - "traefik.http.middlewares.frontend-n9n-headers.headers.sslredirect=true"
+      - "traefik.http.middlewares.frontend-n9n-headers.headers.stsseconds=31536000"
+      - "traefik.http.middlewares.frontend-n9n-headers.headers.stsincludesubdomains=true"
+      - "traefik.http.middlewares.frontend-n9n-headers.headers.stspreload=true"
+      - "traefik.http.middlewares.frontend-n9n-headers.headers.browserxssfilter=true"
+      - "traefik.http.middlewares.frontend-n9n-headers.headers.contenttypenosniff=true"
+
+      - "traefik.http.routers.frontend-n9n.middlewares=frontend-n9n-headers@docker"
 
 volumes:
   postgres_data:
@@ -88,8 +83,12 @@ volumes:
   whatsapp_sessions_data:
 
 networks:
-  n9n-network:
+  internal:
     driver: bridge
+  n9n-network:
+    external: true
+  traefik-public:
+    external: true
 
 
 

@@ -79,7 +79,7 @@ COPY apps/backend/docker-entrypoint.sh /app/apps/backend/docker-entrypoint.sh
 RUN chmod +x /app/apps/backend/docker-entrypoint.sh
 
 # Expose port
-EXPOSE 3001
+EXPOSE 3041
 
 # Use entrypoint script
 ENTRYPOINT ["/app/apps/backend/docker-entrypoint.sh"]

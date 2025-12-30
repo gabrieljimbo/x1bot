@@ -150,6 +150,7 @@ interface CustomNodeProps {
     executionStatus?: 'idle' | 'running' | 'waiting' | 'completed' | 'failed'
     hasExecuted?: boolean
     executionSuccess?: boolean
+    onManualTrigger?: (nodeId: string) => void
   }
 }
 

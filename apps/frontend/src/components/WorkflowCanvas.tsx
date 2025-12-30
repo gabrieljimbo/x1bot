@@ -15,7 +15,6 @@ import ReactFlow, {
   EdgeTypes,
   useReactFlow,
   Panel,
-  ConnectionLineType,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { WorkflowNode, WorkflowEdge, WorkflowNodeType } from '@n9n/shared'
@@ -366,7 +365,6 @@ export default function WorkflowCanvas({
           type: 'custom',
           animated: true,
         }}
-        connectionLineType="bezier"
       >
         <Controls />
         <Background />
