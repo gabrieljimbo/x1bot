@@ -27,5 +27,16 @@ prisma migrate deploy || echo "⚠️ Migration failed or already applied"
 
 # Start the application
 echo "🚀 Starting application..."
+# Ensure we're in the correct directory
+cd /app/apps/backend
+# Verify main.js exists
+if [ ! -f "dist/apps/backend/src/main.js" ]; then
+  echo "❌ ERROR: dist/apps/backend/src/main.js not found!"
+  echo "Contents of /app/apps/backend:"
+  ls -la /app/apps/backend/
+  echo "Looking for main.js:"
+  find /app/apps/backend/dist -name "main.js" || echo "main.js not found"
+  exit 1
+fi
 exec pnpm start
 

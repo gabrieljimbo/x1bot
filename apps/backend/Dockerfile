@@ -44,7 +44,9 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    postgresql-client
+    postgresql-client \
+    openssl \
+    openssl-dev
 
 # Set Puppeteer to use installed Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
@@ -63,6 +65,8 @@ RUN pnpm install --frozen-lockfile
 # Copy built files from build stage
 COPY --from=base /app/packages/shared/dist ./packages/shared/dist
 COPY --from=base /app/apps/backend/dist ./apps/backend/dist
+# Verify main.js exists in the correct location
+RUN test -f /app/apps/backend/dist/apps/backend/src/main.js || (echo "ERROR: main.js not found!" && find /app/apps/backend/dist -name "main.js" && exit 1)
 
 WORKDIR /app/apps/backend
 
