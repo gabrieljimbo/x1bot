@@ -23,7 +23,12 @@
       "@n9n/shared": ["../../packages/shared/src"]
     }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test"]
+  "include": ["src/**/*", "prisma/**/*"],
+  "exclude": ["node_modules", "dist", "test"],
+  "ts-node": {
+    "compilerOptions": {
+      "types": ["node"]
+    }
+  }
 }
 

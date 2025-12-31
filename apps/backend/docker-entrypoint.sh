@@ -75,13 +75,8 @@ fi
 # Run seeds
 echo "🌱 Running database seeds..."
 if [ -f "prisma/seed.ts" ]; then
-  if command -v ts-node &> /dev/null; then
-    echo "✅ ts-node found: $(which ts-node)"
-    ts-node prisma/seed.ts
-  else
-    echo "⚠️ ts-node not found, trying with npx..."
-    npx ts-node prisma/seed.ts
-  fi
+  echo "Running seeds using pnpm db:seed..."
+  pnpm db:seed
   SEED_EXIT_CODE=$?
   
   if [ $SEED_EXIT_CODE -eq 0 ]; then
