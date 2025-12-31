@@ -52,8 +52,8 @@ RUN apk add --no-cache \
     ttf-liberation \
     && rm -rf /var/cache/apk/*
 
-# Create symlink for chromium-browser (some tools expect this name)
-RUN ln -s /usr/bin/chromium /usr/bin/chromium-browser
+# Ensure chromium-browser symlink exists (Alpine may already provide it)
+RUN rm -f /usr/bin/chromium-browser && ln -s /usr/bin/chromium /usr/bin/chromium-browser
 
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
