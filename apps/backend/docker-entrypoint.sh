@@ -72,6 +72,28 @@ else
   fi
 fi
 
+# Run seeds
+echo "🌱 Running database seeds..."
+if [ -f "prisma/seed.ts" ]; then
+  if command -v ts-node &> /dev/null; then
+    echo "✅ ts-node found: $(which ts-node)"
+    ts-node prisma/seed.ts
+  else
+    echo "⚠️ ts-node not found, trying with npx..."
+    npx ts-node prisma/seed.ts
+  fi
+  SEED_EXIT_CODE=$?
+  
+  if [ $SEED_EXIT_CODE -eq 0 ]; then
+    echo "✅ Seeds completed successfully!"
+  else
+    echo "⚠️ Seed exit code: $SEED_EXIT_CODE"
+    echo "This might be normal if seeds were already applied."
+  fi
+else
+  echo "⚠️ prisma/seed.ts not found, skipping seeds..."
+fi
+
 # Start the application
 echo "🚀 Starting application..."
 # Ensure we're in the correct directory
