@@ -45,8 +45,15 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
+    ttf-opensans \
     postgresql-client \
-    openssl
+    openssl \
+    udev \
+    ttf-liberation \
+    && rm -rf /var/cache/apk/*
+
+# Create symlink for chromium-browser (some tools expect this name)
+RUN ln -s /usr/bin/chromium /usr/bin/chromium-browser
 
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
