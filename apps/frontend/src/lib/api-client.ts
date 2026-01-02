@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://api.n9n.archcode.space').replace(/\/$/, '')
 
 const client = axios.create({
   baseURL: API_URL,

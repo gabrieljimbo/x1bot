@@ -94,7 +94,7 @@ export default function NodeExecutionPanel({
     }
 
     try {
-      const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+      const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://api.n9n.archcode.space').replace(/\/$/, '')
       const workflowUrl = `${API_URL}/api/workflows/${executionData.workflowId}?tenantId=${tenantId}`
       const response = await fetch(workflowUrl)
       if (response.ok) {
