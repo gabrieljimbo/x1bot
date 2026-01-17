@@ -245,4 +245,3 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
     </AuthGuard>
   )
 }
-

@@ -277,4 +277,3 @@ export default function NewSessionPage() {
     </AuthGuard>
   )
 }
-
