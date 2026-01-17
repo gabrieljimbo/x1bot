@@ -1,11 +1,5 @@
-/*
-  Warnings:
-
-  - You are about to drop the column `tags` on the `workflows` table. All the data in the column will be lost.
-
-*/
--- AlterTable
-ALTER TABLE "workflows" DROP COLUMN "tags";
+-- CreateEnum
+CREATE TYPE "UserRole" AS ENUM ('SUPERADMIN', 'ADMIN');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -15,6 +9,7 @@ CREATE TABLE "users" (
     "password" TEXT NOT NULL,
     "name" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "role" "UserRole" NOT NULL DEFAULT 'ADMIN',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -52,6 +47,9 @@ CREATE INDEX "users_tenantId_idx" ON "users"("tenantId");
 
 -- CreateIndex
 CREATE INDEX "users_email_idx" ON "users"("email");
+
+-- CreateIndex
+CREATE INDEX "users_role_idx" ON "users"("role");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_tenantId_email_key" ON "users"("tenantId", "email");
