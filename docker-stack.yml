@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   backend-n9n:
-    image: ghcr.io/joaopauloqueiroz/n9n-backend:85bfd749e7295b0ecd75298b49157cecd21d512a
+    image: ghcr.io/joaopauloqueiroz/n9n-backend:e4f46acd1bcf12af8764a95ed9f0c7b30e55ac86
 
     environment:
       NODE_ENV: production
@@ -40,18 +40,17 @@ services:
           cpus: "0.5"
           memory: 512M
       labels:
-        - traefik.enable=true
-        - traefik.docker.network=traefik-public
-        - traefik.http.routers.backend-n9n.rule=Host(`api.n9n.archcode.space`)
-        - traefik.http.routers.backend-n9n.entrypoints=websecure
-        - traefik.http.routers.backend-n9n.tls=true
-        - traefik.http.routers.backend-n9n.tls.certresolver=mytlschallenge
-        - traefik.http.services.backend-n9n.loadbalancer.server.port=3041
-        - traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist=*
-        - traefik.http.routers.backend-n9n.middlewares=backend-cors@docker
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+      - traefik.http.routers.backend-n9n.rule=Host(`api.n9n.archcode.space`) && PathPrefix(`/api`)
+      - traefik.http.routers.backend-n9n.entrypoints=websecure
+      - traefik.http.routers.backend-n9n.tls=true
+      - traefik.http.routers.backend-n9n.tls.certresolver=letsencryptresolver
+      - traefik.http.services.backend-n9n.loadbalancer.server.port=3041
+
 
   frontend-n9n:
-    image: ghcr.io/joaopauloqueiroz/n9n-frontend:85bfd749e7295b0ecd75298b49157cecd21d512a
+    image: ghcr.io/joaopauloqueiroz/n9n-frontend:e4f46acd1bcf12af8764a95ed9f0c7b30e55ac86
 
     environment:
       NODE_ENV: production
@@ -72,11 +71,11 @@ services:
           memory: 256M
       labels:
         - traefik.enable=true
-        - traefik.docker.network=traefik-public
+        - traefik.docker.network=merendinhanet
         - traefik.http.routers.frontend-n9n.rule=Host(`n9n.archcode.space`)
         - traefik.http.routers.frontend-n9n.entrypoints=websecure
         - traefik.http.routers.frontend-n9n.tls=true
-        - traefik.http.routers.frontend-n9n.tls.certresolver=mytlschallenge
+        - traefik.http.routers.frontend-n9n.tls.certresolver=letsencryptresolver
         - traefik.http.services.frontend-n9n.loadbalancer.server.port=3040
 
 volumes:

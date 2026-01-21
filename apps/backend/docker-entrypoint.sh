@@ -76,7 +76,7 @@ fi
 echo "🌱 Running database seeds..."
 if [ -f "prisma/seed.ts" ]; then
   echo "Running seeds using pnpm db:seed..."
-  # pnpm db:seed
+  pnpm db:seed
   SEED_EXIT_CODE=$?
   
   if [ $SEED_EXIT_CODE -eq 0 ]; then
