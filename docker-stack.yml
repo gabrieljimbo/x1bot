@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   backend-n9n:
-    image: ghcr.io/archcode/n9n-backend:latest
+    image: ghcr.io/joaopauloqueiroz/n9n-backend:85bfd749e7295b0ecd75298b49157cecd21d512a
 
     environment:
       NODE_ENV: production
@@ -28,7 +28,6 @@ services:
 
     networks:
       - traefik-public
-      - n9n-network
       - merendinhanet
 
     deploy:
@@ -52,7 +51,7 @@ services:
         - traefik.http.routers.backend-n9n.middlewares=backend-cors@docker
 
   frontend-n9n:
-    image: ghcr.io/archcode/n9n-frontend:latest
+    image: ghcr.io/joaopauloqueiroz/n9n-frontend:85bfd749e7295b0ecd75298b49157cecd21d512a
 
     environment:
       NODE_ENV: production
@@ -86,8 +85,6 @@ volumes:
 
 networks:
   traefik-public:
-    external: true
-  n9n-network:
     external: true
   merendinhanet:
     external: true
