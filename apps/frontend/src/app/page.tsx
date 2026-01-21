@@ -8,17 +8,17 @@ import { isSuperAdmin } from '@/lib/permissions'
 
 function HomeContent() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, tenant } = useAuth()
 
   useEffect(() => {
-    // Redirect to workspaces if SUPERADMIN, otherwise redirect to a default page
+    // Redirect to workspaces if SUPERADMIN, otherwise redirect to user's workspace
     if (isSuperAdmin(user?.role)) {
       router.replace('/workspaces')
-    } else {
-      // For ADMIN users, redirect to workflows or sessions
-      router.replace('/workflows')
+    } else if (tenant?.id) {
+      // For ADMIN users, redirect to their workspace
+      router.replace(`/workspaces/${tenant.id}`)
     }
-  }, [user, router])
+  }, [user, tenant, router])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">

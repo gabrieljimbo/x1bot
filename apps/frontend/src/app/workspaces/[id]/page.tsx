@@ -7,6 +7,8 @@ import { ArrowLeft, Building2, Users, Workflow, MessageSquare, UserCog, Edit2, T
 import { apiClient } from '@/lib/api-client'
 import { SuperAdminGuardWrapper } from '@/components/SuperAdminGuard'
 import { useAuth } from '@/contexts/AuthContext'
+import { AuthGuard } from '@/components/AuthGuard'
+import { isSuperAdmin } from '@/lib/permissions'
 import AppHeader from '@/components/AppHeader'
 
 interface Workspace {
@@ -925,11 +927,78 @@ function WorkspaceDetailsPageContent() {
   )
 }
 
+function WorkspaceAccessGuard({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const params = useParams()
+  const { user, tenant, isLoading } = useAuth()
+  const workspaceId = params.id as string
+
+  useEffect(() => {
+    if (!isLoading && user) {
+      // SUPERADMIN can access any workspace
+      if (isSuperAdmin(user.role)) {
+        return
+      }
+      
+      // ADMIN can only access their own workspace
+      if (user.role === 'ADMIN' && tenant?.id === workspaceId) {
+        return
+      }
+      
+      // Otherwise, redirect to home
+      router.push('/')
+    }
+  }, [user, tenant, workspaceId, isLoading, router])
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
+
+  // SUPERADMIN can access any workspace
+  if (isSuperAdmin(user.role)) {
+    return <>{children}</>
+  }
+
+  // ADMIN can only access their own workspace
+  if (user.role === 'ADMIN' && tenant?.id === workspaceId) {
+    return <>{children}</>
+  }
+
+  // Access denied
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold mb-4 text-red-400">Access Denied</h1>
+        <p className="text-gray-400 mb-4">You don't have permission to access this workspace.</p>
+        <button
+          onClick={() => router.push('/')}
+          className="px-4 py-2 bg-primary text-black rounded hover:bg-primary/80 transition"
+        >
+          Go Home
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function WorkspaceDetailsPage() {
   return (
-    <SuperAdminGuardWrapper>
-      <WorkspaceDetailsPageContent />
-    </SuperAdminGuardWrapper>
+    <AuthGuard>
+      <WorkspaceAccessGuard>
+        <WorkspaceDetailsPageContent />
+      </WorkspaceAccessGuard>
+    </AuthGuard>
   )
 }
 

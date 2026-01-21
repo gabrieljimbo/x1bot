@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   backend-n9n:
-    image: ghcr.io/joaopauloqueiroz/n9n-backend:e4f46acd1bcf12af8764a95ed9f0c7b30e55ac86
+    image: ghcr.io/joaopauloqueiroz/n9n-backend:latest
 
     environment:
       NODE_ENV: production
@@ -50,7 +50,7 @@ services:
 
 
   frontend-n9n:
-    image: ghcr.io/joaopauloqueiroz/n9n-frontend:e4f46acd1bcf12af8764a95ed9f0c7b30e55ac86
+    image: ghcr.io/joaopauloqueiroz/n9n-frontend:latest
 
     environment:
       NODE_ENV: production
