@@ -111,7 +111,13 @@ function WorkspaceDetailsPageContent() {
       setError(null)
 
       // Load workspace details
-      const workspaceData = await apiClient.getTenant(workspaceId)
+      // Use getMyTenant for ADMIN accessing their own workspace, otherwise use getTenant
+      let workspaceData
+      if (!isSuperAdmin(currentUser?.role) && currentUser?.tenantId === workspaceId) {
+        workspaceData = await apiClient.getMyTenant()
+      } else {
+        workspaceData = await apiClient.getTenant(workspaceId)
+      }
       setWorkspace(workspaceData)
 
       // Load users

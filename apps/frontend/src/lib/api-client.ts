@@ -203,6 +203,11 @@ export const apiClient = {
     return data
   },
 
+  getMyTenant: async () => {
+    const { data } = await client.get('/api/tenant/me')
+    return data
+  },
+
   createTenant: async (name: string, email: string) => {
     const { data } = await client.post('/api/admin/tenants', { name, email })
     return data
