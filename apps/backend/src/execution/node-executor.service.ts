@@ -20,6 +20,7 @@ import {
   SetTagsConfig,
   LoopConfig,
   CommandConfig,
+  PixRecognitionConfig,
 } from '@n9n/shared';
 import { ContextService } from './context.service';
 import { ContactTagsService } from './contact-tags.service';
@@ -121,6 +122,9 @@ export class NodeExecutorService {
       case WorkflowNodeType.COMMAND:
       case 'COMMAND':
         return await this.executeCommand(node, context, edges);
+
+      case WorkflowNodeType.PIX_RECOGNITION:
+        return await this.executePixRecognition(node, context, edges);
 
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
@@ -1792,7 +1796,145 @@ export class NodeExecutorService {
   }
 
   /**
-   * Sanitize result to remove non-serializable objects (DOM nodes, functions, etc.)
+   * Execute PIX_RECOGNITION node
+   */
+  private async executePixRecognition(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as PixRecognitionConfig;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createWorker } = require('tesseract.js');
+
+    // Default to triggering message media URL if not specified
+    const imageUrl = this.contextService.interpolate(config.imageUrl || '{{triggerMessage.media.url}}', context);
+
+    try {
+      if (!imageUrl || imageUrl.includes('{{')) {
+        throw new Error('No valid image URL provided for PIX recognition');
+      }
+
+      console.log(`[PIX_RECOGNITION] Processing image: ${imageUrl}`);
+
+      // Initialize Tesseract worker
+      // Note: This might download language data on first run
+      const worker = await createWorker('por'); // Portuguese
+      const { data: { text } } = await worker.recognize(imageUrl);
+      await worker.terminate();
+
+      // Parse OCR text to extract PIX information
+      const pixData = this.parsePixText(text);
+
+      // Validate amount if requested
+      if (config.validateAmount && config.expectedAmount) {
+        const expectedStr = this.contextService.interpolate(config.expectedAmount, context);
+        const expectedAmount = parseFloat(expectedStr.replace(',', '.'));
+
+        if (!isNaN(expectedAmount)) {
+          pixData.isAmountValid = Math.abs((pixData.amount || 0) - expectedAmount) < 0.01;
+        }
+      }
+
+      // Basic validity check: must have found some key PIX indicators
+      const hasPixKeywords = text.toLowerCase().includes('pix') || text.toLowerCase().includes('pagamento');
+      pixData.isValidComprovante = hasPixKeywords && (pixData.amount > 0 || !!pixData.transactionId);
+
+      const saveAs = config.saveResponseAs || 'pixResult';
+      const result = {
+        ...pixData,
+        rawText: text,
+        timestamp: new Date().toISOString(),
+      };
+
+      this.contextService.setVariable(context, saveAs, result);
+      this.contextService.setOutput(context, { [saveAs]: result });
+
+      const nextEdge = edges.find((e) => e.source === node.id);
+      const nextNodeId = nextEdge ? nextEdge.target : null;
+
+      return {
+        nextNodeId,
+        shouldWait: false,
+        output: { [saveAs]: result },
+      };
+    } catch (error: any) {
+      console.error('[PIX_RECOGNITION] Error:', error.message);
+      const saveAs = config.saveResponseAs || 'pixResult';
+      const errorResponse = {
+        error: true,
+        message: error.message,
+        timestamp: new Date().toISOString(),
+      };
+
+      this.contextService.setVariable(context, saveAs, errorResponse);
+      this.contextService.setOutput(context, { [saveAs]: errorResponse });
+
+      const nextEdge = edges.find((e) => e.source === node.id);
+      const nextNodeId = nextEdge ? nextEdge.target : null;
+
+      return {
+        nextNodeId,
+        shouldWait: false,
+        output: { [saveAs]: errorResponse },
+      };
+    }
+  }
+
+  /**
+   * Helper to parse text extracted from a PIX receipt
+   */
+  private parsePixText(text: string) {
+    const data: any = {
+      amount: 0,
+      date: null,
+      transactionId: null,
+      payer: null,
+      receiver: null,
+    };
+
+    // Normalize text: remove multiple spaces, handle line breaks
+    const cleanText = text.replace(/\s+/g, ' ');
+
+    // 1. Extract Amount (Value)
+    // Common formats: "R$ 100,00", "Valor: 100,00", "Valor Pago: 100.00"
+    const amountRegex = /(?:R\$|Valor|TOTAL)\s*:?\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[\.,]\d{2})/i;
+    const amountMatch = cleanText.match(amountRegex);
+    if (amountMatch) {
+      const amountStr = amountMatch[1].replace(/\./g, '').replace(',', '.');
+      data.amount = parseFloat(amountStr);
+    }
+
+    // 2. Extract Date
+    // Common formats: "16/02/2026", "16 FEV 2026"
+    const dateRegex = /(\d{2}\/\d{2}\/\d{4})/;
+    const dateMatch = cleanText.match(dateRegex);
+    if (dateMatch) {
+      data.date = dateMatch[1];
+    }
+
+    // 3. Extract Transaction ID (ID da Transação / Autenticação)
+    // PIX IDs usually start with E followed by numbers/letters or are long strings
+    const txIdRegex = /(?:ID|Transação|Autenticação|Código|Protocolo)\s*:?\s*([A-Z0-9]{15,})/i;
+    const txIdMatch = cleanText.match(txIdRegex);
+    if (txIdMatch) {
+      data.transactionId = txIdMatch[1];
+    }
+
+    // 4. Extract names (Heuristic)
+    // This is harder via OCR and simple regex, but we can try to look after "Pagador" or "De:"
+    const payerRegex = /(?:Pagador|De|Nome)\s*:?\s*([A-Z\s]{5,30})(?:\s[A-Z]|\n|$)/i;
+    const payerMatch = cleanText.match(payerRegex);
+    if (payerMatch) {
+      data.payer = payerMatch[1].trim();
+    }
+
+    return data;
+  }
+
+  /**
+   * Sanitize an object to make it safe for serialization (remove circular refs, etc.)
+functions, etc.)
    * This ensures the result can be safely stored in the database
    */
   private sanitizeForSerialization(value: any, visited = new WeakSet()): any {

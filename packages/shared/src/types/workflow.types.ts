@@ -18,6 +18,7 @@ export enum WorkflowNodeType {
   WAIT = 'WAIT',
   LOOP = 'LOOP',
   COMMAND = 'COMMAND',
+  PIX_RECOGNITION = 'PIX_RECOGNITION',
   END = 'END',
 }
 
@@ -303,5 +304,12 @@ export interface LoopConfig {
   indexVariableName?: string; // Variable name for index (default: "index")
   count?: number; // For loopMode === 'count'
   batchSize?: number; // Process in batches (optional)
+}
+
+export interface PixRecognitionConfig {
+  imageUrl?: string; // supports {{variables.name}} syntax
+  validateAmount?: boolean;
+  expectedAmount?: string; // supports {{variables.name}} syntax
+  saveResponseAs?: string; // default 'pixResult'
 }
 

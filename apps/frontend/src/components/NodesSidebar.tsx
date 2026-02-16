@@ -185,6 +185,15 @@ export default function NodesSidebar({ onAddNode, onClose }: NodesSidebarProps) 
         description: 'Roteia para múltiplos caminhos baseado em regras'
       },
       {
+        type: 'PIX_RECOGNITION' as WorkflowNodeType,
+        label: 'Reconhecer PIX',
+        icon: '💸',
+        color: 'from-emerald-400 to-emerald-500',
+        bgColor: 'bg-[#1a2e25]',
+        borderColor: 'border-[#3b7d63]',
+        description: 'Usa OCR para ler e validar comprovantes de PIX'
+      },
+      {
         type: 'END' as WorkflowNodeType,
         label: 'Finalizar',
         icon: '🏁',

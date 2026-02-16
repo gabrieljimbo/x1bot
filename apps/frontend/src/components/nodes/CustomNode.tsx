@@ -148,6 +148,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#3b5d8d]',
     iconBg: 'bg-gradient-to-br from-blue-500 to-blue-600',
   },
+  'PIX_RECOGNITION': {
+    label: 'Reconhecer PIX',
+    subtitle: 'AÇÃO',
+    icon: '💸',
+    bgColor: 'bg-[#1a2e25]',
+    borderColor: 'border-[#3b7d63]',
+    iconBg: 'bg-gradient-to-br from-emerald-400 to-emerald-500',
+  },
   'END': {
     label: 'Finalizar',
     subtitle: 'FIM',
@@ -334,6 +342,13 @@ function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
         const source = data.config.arraySource || 'array'
         return `🔁 Iterar: ${source.length > 20 ? source.substring(0, 20) + '...' : source}`
       }
+    }
+    if (data.type === 'PIX_RECOGNITION') {
+      const validate = data.config.validateAmount
+      const amount = data.config.expectedAmount
+      return validate
+        ? `💸 Validar R$ ${amount || '?'}`
+        : '💸 Ler comprovante PIX'
     }
     return null
   }

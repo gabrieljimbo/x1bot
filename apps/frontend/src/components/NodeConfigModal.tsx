@@ -364,14 +364,14 @@ export default function NodeConfigModal({
       setConfig(node.config || {})
 
       // Load sessions if it's a trigger node, manage labels node, or send message/media node
-      if (node.type === WorkflowNodeType.TRIGGER_MESSAGE || 
-          node.type === WorkflowNodeType.TRIGGER_SCHEDULE || 
-          node.type === 'TRIGGER_MANUAL' || 
-          node.type === 'MANAGE_LABELS' ||
-          node.type === WorkflowNodeType.SEND_MESSAGE ||
-          node.type === WorkflowNodeType.SEND_MEDIA ||
-          node.type === WorkflowNodeType.SEND_BUTTONS ||
-          node.type === WorkflowNodeType.SEND_LIST) {
+      if (node.type === WorkflowNodeType.TRIGGER_MESSAGE ||
+        node.type === WorkflowNodeType.TRIGGER_SCHEDULE ||
+        node.type === 'TRIGGER_MANUAL' ||
+        node.type === 'MANAGE_LABELS' ||
+        node.type === WorkflowNodeType.SEND_MESSAGE ||
+        node.type === WorkflowNodeType.SEND_MEDIA ||
+        node.type === WorkflowNodeType.SEND_BUTTONS ||
+        node.type === WorkflowNodeType.SEND_LIST) {
         loadSessions()
       }
     }
@@ -3038,6 +3038,84 @@ return produtos;`}
           </div>
         )
 
+      case 'PIX_RECOGNITION':
+        return (
+          <div className="space-y-6">
+            <div>
+              <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                URL da Imagem (ou variável)
+              </label>
+              <input
+                type="text"
+                value={config.imageUrl || ''}
+                onChange={(e) => setConfig({ ...config, imageUrl: e.target.value })}
+                placeholder="{{triggerMessage.media.url}}"
+                className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Deixe vazio para usar a mídia da última mensagem recebida automaticamente.
+              </p>
+            </div>
+
+            <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-gray-200 mb-3">Validação de Valor</h3>
+
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="validateAmount"
+                    checked={config.validateAmount || false}
+                    onChange={(e) => setConfig({ ...config, validateAmount: e.target.checked })}
+                    className="w-4 h-4 rounded border-gray-700 bg-[#1a1a1a] text-primary focus:ring-primary"
+                  />
+                  <label htmlFor="validateAmount" className="text-xs text-gray-300">
+                    Validar se o valor pago está correto
+                  </label>
+                </div>
+
+                {config.validateAmount && (
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                      Valor Esperado (R$)
+                    </label>
+                    <input
+                      type="text"
+                      value={config.expectedAmount || ''}
+                      onChange={(e) => setConfig({ ...config, expectedAmount: e.target.value })}
+                      placeholder="150.00 ou {{variables.total}}"
+                      className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-gray-200 mb-3">Opções de Saída</h3>
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                  Salvar resultado como
+                </label>
+                <input
+                  type="text"
+                  value={config.saveResponseAs || 'pixResult'}
+                  onChange={(e) => setConfig({ ...config, saveResponseAs: e.target.value })}
+                  placeholder="pixResult"
+                  className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+              <p className="text-xs text-blue-300 leading-relaxed">
+                💡 <strong>Como funciona:</strong> Este node processa a imagem usando OCR local para extrair Valor, Data e ID da Transação.
+                Ele funciona melhor com comprovantes nítidos do Nubank, Itaú, Banco do Brasil e outros bancos populares.
+              </p>
+            </div>
+          </div>
+        )
+
       case 'EDIT_FIELDS':
         return (
           <div className="space-y-6">
@@ -3274,10 +3352,10 @@ return produtos;`}
                       // Fetch execution logs to get the actual output
                       const logsResponse = await fetch(`${API_URL}/api/executions/${executionData.id}/logs?tenantId=${tenantId}`)
                       const logsData = await logsResponse.json()
-                      
+
                       // Find the log entry for this node execution
-                      const nodeLog = logsData.find((log: any) => 
-                        log.nodeId === node.id && 
+                      const nodeLog = logsData.find((log: any) =>
+                        log.nodeId === node.id &&
                         (log.eventType === 'node.executed' || log.type === 'node.executed')
                       )
 
