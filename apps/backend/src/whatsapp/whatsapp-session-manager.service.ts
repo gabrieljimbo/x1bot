@@ -1,23 +1,40 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Client, LocalAuth, Message } from 'whatsapp-web.js';
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  WASocket,
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
+  jidNormalizedUser,
+  WAMessage,
+  proto,
+  downloadContentFromMessage,
+  WAVersion
+} from '@whiskeysockets/baileys';
 import { WhatsappSessionStatus, EventType, TriggerMessagePayload } from '@n9n/shared';
 import { WhatsappService } from './whatsapp.service';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { WhatsappMessageHandler } from './whatsapp-message-handler.service';
 import { WhatsappSenderService } from '../execution/whatsapp-sender.service';
 import { StorageService } from '../storage/storage.service';
+import pino from 'pino';
+import { Boom } from '@hapi/boom';
+import * as path from 'path';
+import * as fs from 'fs/promises';
 
 interface SessionClient {
-  client: Client;
+  socket: WASocket;
   tenantId: string;
   sessionId: string;
   status: WhatsappSessionStatus;
+  qrCode?: string;
 }
 
 @Injectable()
 export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   private sessions: Map<string, SessionClient> = new Map();
+  private logger = pino({ level: 'silent' });
 
   constructor(
     private configService: ConfigService,
@@ -26,7 +43,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     private messageHandler: WhatsappMessageHandler,
     private whatsappSender: WhatsappSenderService,
     private storageService: StorageService,
-  ) {}
+  ) { }
 
   onModuleInit() {
     // Register send message callback
@@ -34,19 +51,19 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       (sessionId: string, contactId: string, message: string) =>
         this.sendMessage(sessionId, contactId, message)
     );
-    
+
     // Register send buttons callback
     this.whatsappSender.registerSendButtons(
       (sessionId: string, contactId: string, message: string, buttons: any[], footer?: string) =>
         this.sendButtons(sessionId, contactId, message, buttons, footer)
     );
-    
+
     // Register send list callback
     this.whatsappSender.registerSendList(
       (sessionId: string, contactId: string, message: string, buttonText: string, sections: any[], footer?: string) =>
         this.sendList(sessionId, contactId, message, buttonText, sections, footer)
     );
-    
+
     // Register send media callback
     this.whatsappSender.registerSendMedia(
       (sessionId: string, contactId: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) =>
@@ -56,7 +73,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy() {
     // Cleanup all sessions
-    for (const [sessionId, sessionClient] of this.sessions.entries()) {
+    for (const sessionId of this.sessions.keys()) {
       await this.disconnectSession(sessionId);
     }
   }
@@ -70,114 +87,40 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    console.log(`Initializing WhatsApp session ${sessionId} for tenant ${tenantId}`);
+    console.log(`Initializing Baileys session ${sessionId} for tenant ${tenantId}`);
 
-    const sessionPath = this.configService.get('WHATSAPP_SESSION_PATH', './.wwebjs_auth');
-    const executablePath = this.configService.get('PUPPETEER_EXECUTABLE_PATH');
+    const authPath = path.join(
+      this.configService.get('WHATSAPP_SESSION_PATH', './.baileys_auth'),
+      sessionId
+    );
 
-    // Validate executable path if provided
-    if (executablePath) {
-      const fs = await import('fs/promises');
-      try {
-        const stats = await fs.stat(executablePath);
-        if (!stats.isFile()) {
-          throw new Error(`Executable path ${executablePath} is not a file`);
-        }
-      } catch (error: any) {
-        console.error(`Invalid Puppeteer executable path: ${executablePath}`, error.message);
-        throw new Error(`Invalid Puppeteer executable path: ${error.message}`);
-      }
-    }
+    // Create directory if it doesn't exist
+    await fs.mkdir(authPath, { recursive: true });
 
-    const puppeteerConfig: any = {
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-extensions',
-        '--disable-background-networking',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-breakpad',
-        '--disable-client-side-phishing-detection',
-        '--disable-default-apps',
-        '--disable-features=TranslateUI',
-        '--disable-hang-monitor',
-        '--disable-ipc-flooding-protection',
-        '--disable-popup-blocking',
-        '--disable-prompt-on-repost',
-        '--disable-renderer-backgrounding',
-        '--disable-sync',
-        '--disable-translate',
-        '--metrics-recording-only',
-        '--mute-audio',
-        '--no-default-browser-check',
-        '--safebrowsing-disable-auto-update',
-        '--enable-automation',
-        '--password-store=basic',
-        '--use-mock-keychain',
-        '--disable-features=VizDisplayCompositor',
-      ],
-      timeout: 60000,
-      ignoreDefaultArgs: ['--disable-extensions'],
-    };
+    const { state, saveCreds } = await useMultiFileAuthState(authPath);
+    const { version } = await fetchLatestBaileysVersion();
 
-    if (executablePath) {
-      puppeteerConfig.executablePath = executablePath;
-    }
-
-    const client = new Client({
-      authStrategy: new LocalAuth({
-        clientId: sessionId,
-        dataPath: sessionPath,
-      }),
-      puppeteer: puppeteerConfig,
+    const socket = makeWASocket({
+      version,
+      printQRInTerminal: false,
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, this.logger),
+      },
+      logger: this.logger,
+      browser: ['n9n', 'Chrome', '1.0.0'],
     });
 
     // Store session
     this.sessions.set(sessionId, {
-      client,
+      socket,
       tenantId,
       sessionId,
       status: WhatsappSessionStatus.CONNECTING,
     });
 
     // Setup event handlers
-    this.setupEventHandlers(client, tenantId, sessionId);
-
-    // Initialize client
-    console.log(`Starting WhatsApp client for session ${sessionId}...`);
-    try {
-      await client.initialize();
-    } catch (error: any) {
-      // Clean up session on initialization failure
-      this.sessions.delete(sessionId);
-      
-      const errorMessage = error.message || String(error);
-      console.error(`Failed to initialize WhatsApp client for session ${sessionId}:`, errorMessage);
-      
-      // Check for ELOOP error specifically
-      if (errorMessage.includes('ELOOP') || error.code === 'ELOOP') {
-        const pathInfo = executablePath ? ` (executable path: ${executablePath})` : '';
-        throw new Error(`Symbolic link loop detected when launching Chromium${pathInfo}. Please ensure PUPPETEER_EXECUTABLE_PATH points to a direct file path, not a symlink.`);
-      }
-      
-      await this.whatsappService.updateSession(sessionId, {
-        status: WhatsappSessionStatus.ERROR,
-      });
-      
-      throw error;
-    }
-
-    // Update status
-    await this.whatsappService.updateSession(sessionId, {
-      status: WhatsappSessionStatus.CONNECTING,
-    });
+    this.setupEventHandlers(socket, tenantId, sessionId, saveCreds);
   }
 
   /**
@@ -191,9 +134,9 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      await sessionClient.client.destroy();
+      sessionClient.socket.end(undefined);
     } catch (error) {
-      console.error('Error destroying WhatsApp client:', error);
+      console.error('Error terminating Baileys socket:', error);
     }
 
     this.sessions.delete(sessionId);
@@ -224,10 +167,8 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       throw new Error('Session not connected');
     }
 
-    // Format phone number for WhatsApp
-    const chatId = contactId.includes('@') ? contactId : `${contactId}@c.us`;
-
-    await sessionClient.client.sendMessage(chatId, message);
+    const jid = this.formatJid(contactId);
+    await sessionClient.socket.sendMessage(jid, { text: message });
   }
 
   /**
@@ -244,23 +185,23 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       throw new Error('Session not connected');
     }
 
-    // Format phone number for WhatsApp
-    const chatId = contactId.includes('@') ? contactId : `${contactId}@c.us`;
+    const jid = this.formatJid(contactId);
 
-    // Simple formatted message
+    // Baileys button message format
+    // Note: Buttons are currently limited in many WhatsApp versions (official and unofficial)
+    // We'll use a formatted message as a fallback if needed, but here's the Baileys format:
+
+    // Fallback: formatted text (Baileys buttons are often not supported by WA anymore)
     let formattedMessage = `${message}\n\n`;
-    
     buttons.forEach((btn, index) => {
       formattedMessage += `${index + 1}. ${btn.text}\n`;
     });
-    
     if (footer) {
       formattedMessage += `\n_${footer}_`;
     }
-    
     formattedMessage += `\n\n_Responda com o número da opção desejada_`;
 
-    await sessionClient.client.sendMessage(chatId, formattedMessage);
+    await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
   }
 
   /**
@@ -277,12 +218,10 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       throw new Error('Session not connected');
     }
 
-    // Format phone number for WhatsApp
-    const chatId = contactId.includes('@') ? contactId : `${contactId}@c.us`;
+    const jid = this.formatJid(contactId);
 
-    // Lists are also deprecated, we'll send a formatted message with sections
+    // Fallback: formatted text
     let formattedMessage = `${message}\n\n`;
-    
     let optionNumber = 1;
     sections.forEach((section) => {
       formattedMessage += `*${section.title}*\n`;
@@ -296,22 +235,21 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       });
       formattedMessage += '\n';
     });
-    
+
     if (footer) {
       formattedMessage += `_${footer}_\n`;
     }
-    
     formattedMessage += `\n_Responda com o número da opção desejada_`;
 
-    await sessionClient.client.sendMessage(chatId, formattedMessage);
+    await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
   }
 
   /**
    * Send WhatsApp media (image, video, audio, document)
    */
   async sendMedia(
-    sessionId: string, 
-    contactId: string, 
+    sessionId: string,
+    contactId: string,
     mediaType: 'image' | 'video' | 'audio' | 'document',
     mediaUrl: string,
     options?: {
@@ -330,34 +268,34 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       throw new Error('Session not connected');
     }
 
-    // Format phone number for WhatsApp
-    const chatId = contactId.includes('@') ? contactId : `${contactId}@c.us`;
+    const jid = this.formatJid(contactId);
 
     try {
-      const { MessageMedia } = await import('whatsapp-web.js');
-      const axios = (await import('axios')).default;
-      
-      const response = await axios.get(mediaUrl, { 
-        responseType: 'arraybuffer',
-        timeout: 30000,
-        maxContentLength: 50 * 1024 * 1024,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      });
-      
-      const contentType = response.headers['content-type'] || '';
-      const base64Data = Buffer.from(response.data).toString('base64');
-      const mimetype = contentType || this.getMimetypeForMediaType(mediaType);
-      const media = new MessageMedia(mimetype, base64Data, options?.fileName);
+      const messageContent: any = {};
 
-      const sendOptions: any = { caption: options?.caption };
-      
-      if (mediaType === 'audio' && options?.sendAudioAsVoice) {
-        sendOptions.sendAudioAsVoice = true;
+      switch (mediaType) {
+        case 'image':
+          messageContent.image = { url: mediaUrl };
+          messageContent.caption = options?.caption;
+          break;
+        case 'video':
+          messageContent.video = { url: mediaUrl };
+          messageContent.caption = options?.caption;
+          break;
+        case 'audio':
+          messageContent.audio = { url: mediaUrl };
+          messageContent.mimetype = 'audio/mp4';
+          messageContent.ptt = options?.sendAudioAsVoice;
+          break;
+        case 'document':
+          messageContent.document = { url: mediaUrl };
+          messageContent.mimetype = this.getMimeTypeForMedia(mediaUrl);
+          messageContent.fileName = options?.fileName || 'document';
+          messageContent.caption = options?.caption;
+          break;
       }
 
-      await sessionClient.client.sendMessage(chatId, media, sendOptions);
+      await sessionClient.socket.sendMessage(jid, messageContent);
     } catch (error: any) {
       console.error(`Failed to send ${mediaType}:`, error.message);
       throw new Error(`Failed to send ${mediaType}: ${error.message}`);
@@ -365,203 +303,20 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Get default mimetype for media type
-   */
-  private getMimetypeForMediaType(mediaType: 'image' | 'video' | 'audio' | 'document'): string {
-    switch (mediaType) {
-      case 'image':
-        return 'image/jpeg';
-      case 'video':
-        return 'video/mp4';
-      case 'audio':
-        return 'audio/mpeg';
-      case 'document':
-        return 'application/pdf';
-      default:
-        return 'application/octet-stream';
-    }
-  }
-
-  /**
-   * Add labels to a chat
+   * Label management (Note: Baileys doesn't have a simple high-level API for this yet)
+   * We will implement it as stub or simple version if possible.
    */
   async addLabels(sessionId: string, contactId: string, labelIds: string[]): Promise<void> {
-    const sessionClient = this.sessions.get(sessionId);
-
-    if (!sessionClient) {
-      throw new Error('Session not found');
-    }
-
-    if (sessionClient.status !== WhatsappSessionStatus.CONNECTED) {
-      throw new Error('Session not connected');
-    }
-
-    const chatId = contactId.includes('@') ? contactId : `${contactId}@c.us`;
-    const allLabels = await sessionClient.client.getLabels();
-
-    for (const labelId of labelIds) {
-      const label = allLabels.find(l => l.id === labelId);
-      
-      if (label) {
-        try {
-          // Use the chat.changeLabels method (the correct way)
-          const chat = await sessionClient.client.getChatById(chatId);
-          const currentLabels = (chat as any).labels || [];
-          
-          if (currentLabels.includes(labelId)) {
-            continue;
-          }
-          
-          try {
-            const updatedLabels = [...currentLabels, labelId];
-            let success = false;
-            
-            if (typeof (chat as any).changeLabels === 'function') {
-              try {
-                await (chat as any).changeLabels(updatedLabels);
-                success = true;
-              } catch (e: any) {
-                // Silent fail, try next method
-              }
-            }
-            
-            if (!success) {
-              try {
-                const serializedChatId = (chat as any).id._serialized || chatId;
-                await (sessionClient.client as any).addOrRemoveLabels([labelId], [serializedChatId]);
-              } catch (e: any) {
-                // Silent fail
-              }
-            }
-            
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          } catch (error: any) {
-            console.error(`Error adding label:`, error.message);
-          }
-        } catch (error: any) {
-          console.error(`[ADD_LABELS] Error processing label "${label.name}":`, error.message);
-        }
-      } else {
-        console.warn(`[ADD_LABELS] Label with ID ${labelId} not found`);
-      }
-    }
+    console.warn('[BAILEYS] Label management not fully implemented yet');
   }
 
-  /**
-   * Remove labels from a chat
-   */
   async removeLabels(sessionId: string, contactId: string, labelIds: string[]): Promise<void> {
-    const sessionClient = this.sessions.get(sessionId);
-
-    if (!sessionClient) {
-      throw new Error('Session not found');
-    }
-
-    if (sessionClient.status !== WhatsappSessionStatus.CONNECTED) {
-      throw new Error('Session not connected');
-    }
-
-    const chatId = contactId.includes('@') ? contactId : `${contactId}@c.us`;
-    const allLabels = await sessionClient.client.getLabels();
-
-    for (const labelId of labelIds) {
-      const label = allLabels.find(l => l.id === labelId);
-      
-      if (label) {
-        try {
-          // Wait a bit to ensure any previous label operations are synced
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          
-          // Force refresh the chat to get the latest labels
-          const chat = await sessionClient.client.getChatById(chatId);
-          
-          // Try to fetch the chat again to ensure we have the latest state
-          await new Promise(resolve => setTimeout(resolve, 500));
-          const refreshedChat = await sessionClient.client.getChatById(chatId);
-          const currentLabels = (refreshedChat as any).labels || [];
-          
-          const labelIdStr = String(labelId);
-          const hasLabel = currentLabels.some((id: string) => String(id) === labelIdStr);
-          
-          const updatedLabels = hasLabel 
-            ? currentLabels.filter((id: string) => String(id) !== labelIdStr)
-            : [];
-          
-          let success = false;
-          
-          if (typeof (refreshedChat as any).changeLabels === 'function') {
-            try {
-              await (refreshedChat as any).changeLabels(updatedLabels);
-              success = true;
-            } catch (e: any) {
-              // Silent fail
-            }
-          }
-          
-          if (!success && typeof (refreshedChat as any).removeLabel === 'function') {
-            try {
-              await (refreshedChat as any).removeLabel(labelId);
-              success = true;
-            } catch (e: any) {
-              // Silent fail
-            }
-          }
-          
-          if (!success) {
-            try {
-              const serializedChatId = (refreshedChat as any).id._serialized || chatId;
-              await (sessionClient.client as any).addOrRemoveLabels([labelId], [serializedChatId]);
-            } catch (e: any) {
-              // Silent fail
-            }
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        } catch (error: any) {
-          console.error(`Error removing label:`, error.message);
-        }
-      } else {
-        console.warn(`[REMOVE_LABELS] Label with ID ${labelId} not found`);
-      }
-    }
+    console.warn('[BAILEYS] Label management not fully implemented yet');
   }
 
-  /**
-   * Get all labels from a chat
-   */
-  async getChatLabels(sessionId: string, contactId: string): Promise<any[]> {
-    const sessionClient = this.sessions.get(sessionId);
-
-    if (!sessionClient) {
-      throw new Error('Session not found');
-    }
-
-    if (sessionClient.status !== WhatsappSessionStatus.CONNECTED) {
-      throw new Error('Session not connected');
-    }
-
-    const chatId = contactId.includes('@') ? contactId : `${contactId}@c.us`;
-    const chat = await sessionClient.client.getChatById(chatId);
-
-    return (chat as any).labels || [];
-  }
-
-  /**
-   * Get all available labels
-   */
   async getAllLabels(sessionId: string): Promise<any[]> {
-    const sessionClient = this.sessions.get(sessionId);
-
-    if (!sessionClient) {
-      throw new Error('Session not found');
-    }
-
-    if (sessionClient.status !== WhatsappSessionStatus.CONNECTED) {
-      throw new Error('Session not connected');
-    }
-
-    const labels = await sessionClient.client.getLabels();
-    return labels || [];
+    console.warn('[BAILEYS] Label management not fully implemented yet');
+    return [];
   }
 
   /**
@@ -581,215 +336,178 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Setup event handlers for WhatsApp client
+   * Setup event handlers for Baileys
    */
-  private setupEventHandlers(client: Client, tenantId: string, sessionId: string): void {
-    client.on('qr', async (qr) => {
-      console.log(`QR Code generated for session ${sessionId}`);
-      
-      const sessionClient = this.sessions.get(sessionId);
-      if (sessionClient) {
-        sessionClient.status = WhatsappSessionStatus.QR_CODE;
+  private setupEventHandlers(socket: WASocket, tenantId: string, sessionId: string, saveCreds: () => Promise<void>): void {
+
+    socket.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      if (qr) {
+        console.log(`QR Code generated for session ${sessionId}`);
+        const sessionClient = this.sessions.get(sessionId);
+        if (sessionClient) {
+          sessionClient.status = WhatsappSessionStatus.QR_CODE;
+          sessionClient.qrCode = qr;
+        }
+
+        await this.whatsappService.updateSession(sessionId, {
+          status: WhatsappSessionStatus.QR_CODE,
+          qrCode: qr,
+        });
+
+        await this.eventBus.emit({
+          type: EventType.WHATSAPP_QR_CODE,
+          tenantId,
+          sessionId,
+          qrCode: qr,
+          timestamp: new Date(),
+        });
       }
 
-      await this.whatsappService.updateSession(sessionId, {
-        status: WhatsappSessionStatus.QR_CODE,
-        qrCode: qr,
-      });
+      if (connection === 'close') {
+        const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+        console.log(`Connection closed for session ${sessionId}. Reconnecting: ${shouldReconnect}`);
 
-      await this.eventBus.emit({
-        type: EventType.WHATSAPP_QR_CODE,
-        tenantId,
-        sessionId,
-        qrCode: qr,
-        timestamp: new Date(),
-      });
+        if (shouldReconnect) {
+          this.sessions.delete(sessionId);
+          await this.initializeSession(tenantId, sessionId);
+        } else {
+          this.sessions.delete(sessionId);
+          await this.whatsappService.updateSession(sessionId, {
+            status: WhatsappSessionStatus.DISCONNECTED,
+          });
+
+          await this.eventBus.emit({
+            type: EventType.WHATSAPP_SESSION_DISCONNECTED,
+            tenantId,
+            sessionId,
+            timestamp: new Date(),
+          });
+        }
+      }
+
+      if (connection === 'open') {
+        console.log(`WhatsApp session ${sessionId} is open and connected!`);
+
+        const sessionClient = this.sessions.get(sessionId);
+        if (sessionClient) {
+          sessionClient.status = WhatsappSessionStatus.CONNECTED;
+        }
+
+        const user = jidNormalizedUser(socket.user?.id!);
+        const phoneNumber = user.split('@')[0];
+
+        await this.whatsappService.updateSession(sessionId, {
+          status: WhatsappSessionStatus.CONNECTED,
+          phoneNumber,
+          qrCode: undefined,
+        });
+
+        await this.eventBus.emit({
+          type: EventType.WHATSAPP_SESSION_CONNECTED,
+          tenantId,
+          sessionId,
+          phoneNumber,
+          timestamp: new Date(),
+        });
+      }
     });
 
-    client.on('ready', async () => {
-      console.log(`WhatsApp session ${sessionId} is ready and connected!`);
-      
-      const sessionClient = this.sessions.get(sessionId);
-      if (sessionClient) {
-        sessionClient.status = WhatsappSessionStatus.CONNECTED;
+    socket.ev.on('creds.update', saveCreds);
+
+    socket.ev.on('messages.upsert', async (m) => {
+      if (m.type === 'notify') {
+        for (const msg of m.messages) {
+          if (!msg.key.fromMe) {
+            await this.handleIncomingMessage(tenantId, sessionId, msg);
+          }
+        }
       }
-
-      const info = client.info;
-      const phoneNumber = info?.wid?.user || '';
-
-      console.log(`Session ${sessionId} connected with phone: ${phoneNumber}`);
-
-      await this.whatsappService.updateSession(sessionId, {
-        status: WhatsappSessionStatus.CONNECTED,
-        phoneNumber,
-        qrCode: undefined,
-      });
-
-      await this.eventBus.emit({
-        type: EventType.WHATSAPP_SESSION_CONNECTED,
-        tenantId,
-        sessionId,
-        phoneNumber,
-        timestamp: new Date(),
-      });
     });
+  }
 
-    client.on('disconnected', async (reason) => {
-      const sessionClient = this.sessions.get(sessionId);
-      if (sessionClient) {
-        sessionClient.status = WhatsappSessionStatus.DISCONNECTED;
-      }
+  /**
+   * Handle incoming message
+   */
+  private async handleIncomingMessage(tenantId: string, sessionId: string, msg: WAMessage): Promise<void> {
+    const contactId = msg.key.remoteJid!;
+    const messageId = msg.key.id!;
 
-      await this.whatsappService.updateSession(sessionId, {
-        status: WhatsappSessionStatus.DISCONNECTED,
-      });
+    try {
+      const payload = await this.processMessage(msg, tenantId, sessionId);
 
-      await this.eventBus.emit({
-        type: EventType.WHATSAPP_SESSION_DISCONNECTED,
-        tenantId,
-        sessionId,
-        reason: String(reason),
-        timestamp: new Date(),
-      });
-
-      this.sessions.delete(sessionId);
-    });
-
-    // Listen for poll votes
-    client.on('vote_update', async (vote) => {
-      console.log('Poll vote received:', vote);
-      
-      if (!vote.selectedOptions || vote.selectedOptions.length === 0) {
-        return;
-      }
-
-      const contactId = vote.voter;
-      // The selected option text
-      const selectedOption = String(vote.selectedOptions[0]);
-      
-      console.log(`Poll vote from ${contactId}: ${selectedOption}`);
+      console.log(`Message received on session ${sessionId} from ${contactId}:`, payload.type);
 
       await this.eventBus.emit({
         type: EventType.WHATSAPP_MESSAGE_RECEIVED,
         tenantId,
         sessionId,
         contactId,
-        message: selectedOption,
+        message: payload.text || '',
         timestamp: new Date(),
       });
 
-      // Handle as a regular message
-      try {
-        await this.messageHandler.handleMessage(tenantId, sessionId, contactId, selectedOption);
-      } catch (error) {
-        console.error('Error handling poll vote:', error);
-      }
-    });
-
-    client.on('message', async (msg: Message) => {
-      // Only process incoming messages (not sent by us)
-      if (!msg.fromMe) {
-        const contactId = msg.from;
-        const messageId = msg.id._serialized;
-
-        // Check if it's a poll response
-        if (msg.type === 'poll_creation') {
-          console.log('Poll created, ignoring...');
-          return;
-        }
-
-        try {
-          // Process message (text or media)
-          const payload = await this.processMessage(msg, tenantId);
-
-          console.log(`Message received on session ${sessionId} from ${contactId}:`, payload.type);
-
-          await this.eventBus.emit({
-            type: EventType.WHATSAPP_MESSAGE_RECEIVED,
-            tenantId,
-            sessionId,
-            contactId,
-            message: payload.text || '',
-            timestamp: new Date(),
-          });
-
-          // Handle message with normalized payload
-          console.log('[SESSION_MANAGER] Calling handleMessage with payload:', payload);
-          try {
-            await this.messageHandler.handleMessage(tenantId, sessionId, contactId, payload);
-            console.log('[SESSION_MANAGER] handleMessage completed successfully');
-          } catch (error) {
-            console.error('[SESSION_MANAGER] Error in handleMessage:', error);
-          }
-        } catch (error) {
-          console.error('[SESSION_MANAGER] Error processing message:', error);
-          // Fallback to text-only handling
-          const message = msg.body || '';
-          await this.messageHandler.handleMessage(tenantId, sessionId, contactId, {
-            messageId,
-            from: contactId,
-            type: 'text',
-            text: message,
-            media: null,
-            timestamp: Date.now(),
-          });
-        }
-      }
-    });
-
-    client.on('auth_failure', async () => {
-      const sessionClient = this.sessions.get(sessionId);
-      if (sessionClient) {
-        sessionClient.status = WhatsappSessionStatus.ERROR;
-      }
-
-      await this.whatsappService.updateSession(sessionId, {
-        status: WhatsappSessionStatus.ERROR,
-      });
-    });
+      await this.messageHandler.handleMessage(tenantId, sessionId, contactId, payload);
+    } catch (error) {
+      console.error('[BAILEYS] Error processing incoming message:', error);
+    }
   }
 
   /**
-   * Process WhatsApp message and return normalized payload
+   * Process message and return normalized payload
    */
-  private async processMessage(msg: Message, tenantId: string): Promise<TriggerMessagePayload> {
-    const messageId = msg.id._serialized;
-    const contactId = msg.from;
-    const timestamp = Date.now();
+  private async processMessage(msg: WAMessage, tenantId: string, sessionId: string): Promise<TriggerMessagePayload> {
+    const messageId = msg.key.id!;
+    const from = msg.key.remoteJid!;
+    const timestamp = (Number(msg.messageTimestamp) * 1000) || Date.now();
+    const m = msg.message;
 
-    // Check if message has media
-    const hasMedia = msg.hasMedia;
-    const mediaType = msg.type;
+    if (!m) {
+      return { messageId, from, type: 'text', text: '', media: null, timestamp };
+    }
 
-    if (hasMedia && this.isMediaType(mediaType)) {
+    // Get text content
+    const text = m.conversation ||
+      m.extendedTextMessage?.text ||
+      m.imageMessage?.caption ||
+      m.videoMessage?.caption ||
+      m.documentMessage?.caption || '';
+
+    // Check for media
+    const mediaType = this.getBaileysMediaType(m);
+
+    if (mediaType) {
       try {
-        // Download media
-        const media = await msg.downloadMedia();
-        if (!media) {
-          throw new Error('Failed to download media');
+        const sessionClient = this.sessions.get(sessionId);
+        if (!sessionClient) throw new Error('Session client not found');
+
+        const stream = await downloadContentFromMessage(
+          (m as any)[mediaType + 'Message'],
+          mediaType
+        );
+
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) {
+          buffer = Buffer.concat([buffer, chunk]);
         }
 
-        // Convert base64 to buffer
-        const buffer = Buffer.from(media.data, 'base64');
-        const mimeType = media.mimetype || this.getMimeTypeFromWhatsAppType(mediaType);
-        // Access filename and caption safely (they may not exist on all message types)
-        const fileName = (msg as any).filename || ((msg as any).hasFileName ? (msg as any).fileName : null);
-        const caption = msg.body || null; // Caption is usually in the body for media messages
+        const mimeType = (m as any)[mediaType + 'Message'].mimetype;
+        const fileName = (m as any)[mediaType + 'Message'].fileName || `${mediaType}-${Date.now()}`;
 
-        // Upload to MinIO
         const uploadResult = await this.storageService.uploadMedia(
           buffer,
           mimeType,
-          fileName || undefined,
+          fileName
         );
 
         return {
           messageId,
-          from: contactId,
+          from,
           type: 'media',
-          text: caption,
+          text,
           media: {
-            mediaType: this.mapWhatsAppTypeToMediaType(mediaType),
+            mediaType: this.mapBaileysToMediaType(mediaType),
             mimeType,
             fileName,
             size: uploadResult.size,
@@ -797,85 +515,52 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
           },
           timestamp,
         };
-      } catch (error) {
-        console.error('[SESSION_MANAGER] Error processing media:', error);
-        // Fallback to text with error info
-        return {
-          messageId,
-          from: contactId,
-          type: 'text',
-          text: msg.body || `[Media processing failed: ${error.message}]`,
-          media: null,
-          timestamp,
-        };
+      } catch (error: any) {
+        console.error('[BAILEYS] Media download failed:', error.message);
+        return { messageId, from, type: 'text', text, media: null, timestamp };
       }
-    } else {
-      // Text message
-      return {
-        messageId,
-        from: contactId,
-        type: 'text',
-        text: msg.body || null,
-        media: null,
-        timestamp,
-      };
     }
+
+    return {
+      messageId,
+      from,
+      type: 'text',
+      text,
+      media: null,
+      timestamp,
+    };
   }
 
-  /**
-   * Check if WhatsApp message type is a media type
-   */
-  private isMediaType(type: string): boolean {
-    return [
-      'image',
-      'video',
-      'audio',
-      'ptt', // voice message
-      'document',
-      'sticker',
-    ].includes(type);
+  private getBaileysMediaType(m: proto.IMessage): 'image' | 'video' | 'audio' | 'document' | null {
+    if (m.imageMessage) return 'image';
+    if (m.videoMessage) return 'video';
+    if (m.audioMessage) return 'audio';
+    if (m.documentMessage) return 'document';
+    return null;
   }
 
-  /**
-   * Map WhatsApp message type to our media type
-   */
-  private mapWhatsAppTypeToMediaType(whatsappType: string): 'image' | 'video' | 'audio' | 'document' {
-    switch (whatsappType) {
-      case 'image':
-      case 'sticker':
-        return 'image';
-      case 'video':
-        return 'video';
-      case 'audio':
-      case 'ptt':
-        return 'audio';
-      case 'document':
-        return 'document';
-      default:
-        return 'document';
-    }
+  private mapBaileysToMediaType(type: string): 'image' | 'video' | 'audio' | 'document' {
+    if (type === 'image') return 'image';
+    if (type === 'video') return 'video';
+    if (type === 'audio') return 'audio';
+    return 'document';
   }
 
-  /**
-   * Get MIME type from WhatsApp message type
-   */
-  private getMimeTypeFromWhatsAppType(type: string): string {
-    switch (type) {
-      case 'image':
-        return 'image/jpeg';
-      case 'video':
-        return 'video/mp4';
-      case 'audio':
-        return 'audio/mpeg';
-      case 'ptt':
-        return 'audio/ogg';
-      case 'document':
-        return 'application/octet-stream';
-      case 'sticker':
-        return 'image/webp';
-      default:
-        return 'application/octet-stream';
+  private formatJid(contactId: string): string {
+    if (contactId.includes('@')) return contactId;
+    return `${contactId.replace('+', '')}@s.whatsapp.net`;
+  }
+
+  private getMimeTypeForMedia(url: string): string {
+    const ext = path.extname(url).toLowerCase();
+    switch (ext) {
+      case '.pdf': return 'application/pdf';
+      case '.doc': return 'application/msword';
+      case '.docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case '.xls': return 'application/vnd.ms-excel';
+      case '.xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case '.zip': return 'application/zip';
+      default: return 'application/octet-stream';
     }
   }
 }
-
