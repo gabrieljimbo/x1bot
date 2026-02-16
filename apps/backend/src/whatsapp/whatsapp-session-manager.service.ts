@@ -1,8 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import makeWASocket, {
-  useMultiFileAuthState,
-  DisconnectReason,
+import type {
   WASocket,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
@@ -10,7 +8,10 @@ import makeWASocket, {
   WAMessage,
   proto,
   downloadContentFromMessage,
-  WAVersion
+  WAVersion,
+  useMultiFileAuthState,
+  makeWASocket,
+  DisconnectReason
 } from '@whiskeysockets/baileys';
 import { WhatsappSessionStatus, EventType, TriggerMessagePayload } from '@n9n/shared';
 import { WhatsappService } from './whatsapp.service';
@@ -35,6 +36,7 @@ interface SessionClient {
 export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   private sessions: Map<string, SessionClient> = new Map();
   private logger = pino({ level: 'silent' });
+  private baileys: any;
 
   constructor(
     private configService: ConfigService,
@@ -45,7 +47,10 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     private storageService: StorageService,
   ) { }
 
-  onModuleInit() {
+  async onModuleInit() {
+    // Dynamic import Baileys since it's ESM only
+    this.baileys = await (eval(`import('@whiskeysockets/baileys')`));
+
     // Register send message callback
     this.whatsappSender.registerSendMessage(
       (sessionId: string, contactId: string, message: string) =>
@@ -97,15 +102,17 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     // Create directory if it doesn't exist
     await fs.mkdir(authPath, { recursive: true });
 
-    const { state, saveCreds } = await useMultiFileAuthState(authPath);
-    const { version } = await fetchLatestBaileysVersion();
+    const { state, saveCreds } = await this.baileys.useMultiFileAuthState(authPath);
+    const { version } = await this.baileys.fetchLatestBaileysVersion();
 
-    const socket = makeWASocket({
+    const makeWASocketFn = this.baileys.default || this.baileys.makeWASocket;
+
+    const socket = makeWASocketFn({
       version,
       printQRInTerminal: false,
       auth: {
         creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, this.logger),
+        keys: this.baileys.makeCacheableSignalKeyStore(state.keys, this.logger),
       },
       logger: this.logger,
       browser: ['n9n', 'Chrome', '1.0.0'],
@@ -366,7 +373,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       }
 
       if (connection === 'close') {
-        const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+        const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== this.baileys.DisconnectReason.loggedOut;
         console.log(`Connection closed for session ${sessionId}. Reconnecting: ${shouldReconnect}`);
 
         if (shouldReconnect) {
@@ -395,7 +402,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
           sessionClient.status = WhatsappSessionStatus.CONNECTED;
         }
 
-        const user = jidNormalizedUser(socket.user?.id!);
+        const user = this.baileys.jidNormalizedUser(socket.user?.id!);
         const phoneNumber = user.split('@')[0];
 
         await this.whatsappService.updateSession(sessionId, {
@@ -482,7 +489,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         const sessionClient = this.sessions.get(sessionId);
         if (!sessionClient) throw new Error('Session client not found');
 
-        const stream = await downloadContentFromMessage(
+        const stream = await this.baileys.downloadContentFromMessage(
           (m as any)[mediaType + 'Message'],
           mediaType
         );
