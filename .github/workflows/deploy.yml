@@ -7,9 +7,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAMESPACE: joaopauloqueiroz   # <-- seu user ou org do GitHub
-  IMAGE_NAME_BACKEND: n9n-backend
-  IMAGE_NAME_FRONTEND: n9n-frontend
+  IMAGE_NAMESPACE: gabrieljimbo   # <-- seu user ou org do GitHub
+  IMAGE_NAME_BACKEND: x1bot-backend
+  IMAGE_NAME_FRONTEND: x1bot-frontend
 
 jobs:
   build:

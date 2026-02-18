@@ -47,3 +47,6 @@ ngrok.yml
 *.ngrok.yml
 
 
+
+# Submodule clone
+n9n/
