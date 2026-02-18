@@ -75,9 +75,9 @@ RUN prisma generate
 
 RUN mkdir -p /app/data /app/logs
 
-# Entrypoint
+# Entrypoint (ensure LF line endings for Alpine)
 COPY apps/backend/docker-entrypoint.sh /app/apps/backend/docker-entrypoint.sh
-RUN chmod +x /app/apps/backend/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /app/apps/backend/docker-entrypoint.sh && chmod +x /app/apps/backend/docker-entrypoint.sh
 
 EXPOSE 3041
 ENTRYPOINT ["/app/apps/backend/docker-entrypoint.sh"]

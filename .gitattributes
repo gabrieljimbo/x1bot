@@ -1,0 +1,6 @@
+# Ensure shell scripts always have LF line endings (critical for Docker/Linux)
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+
+# Default text files to auto
+* text=auto
