@@ -1,7 +1,7 @@
 ############################
 # Base / Build stage
 ############################
-FROM node:18-alpine AS base
+FROM node:20-alpine AS base
 
 RUN npm install -g pnpm@10
 WORKDIR /app
@@ -30,7 +30,7 @@ RUN pnpm build
 ############################
 # Production stage
 ############################
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 
 WORKDIR /app
 
