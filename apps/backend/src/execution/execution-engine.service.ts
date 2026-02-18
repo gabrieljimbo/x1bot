@@ -258,31 +258,31 @@ export class ExecutionEngineService {
   ): Promise<void> {
     let iterationCount = 0;
     const MAX_ITERATIONS = 100; // Safety limit to prevent infinite loops (reduced from 10000)
-    
+
     while (execution.status === ExecutionStatus.RUNNING && execution.currentNodeId) {
       iterationCount++;
       if (iterationCount > MAX_ITERATIONS) {
         await this.failExecution(execution, `Execution exceeded maximum iterations (${MAX_ITERATIONS}). Possible infinite loop detected.`);
         return;
       }
-      
+
       if (iterationCount % 10 === 0) {
         console.warn(`[EXECUTION LOOP] High iteration count: ${iterationCount}, currentNodeId: ${execution.currentNodeId}, workflowId: ${execution.workflowId}`);
       }
-      
+
       const currentNode = workflow.nodes.find((n) => n.id === execution.currentNodeId);
 
       if (!currentNode) {
         await this.failExecution(execution, 'Current node not found');
         return;
       }
-      
+
       // If we're inside a loop and current node is the loop node itself, skip it
       // (loop node should only execute once at the start)
       // Only skip if we've already executed the loop node at least once (indicated by _loopCurrentIndex being set)
       const loopNodeId = this.contextService.getVariable(execution.context, '_loopNodeId');
       const loopCurrentIndex = this.contextService.getVariable(execution.context, '_loopCurrentIndex');
-      
+
       if (loopNodeId && currentNode.id === loopNodeId && currentNode.type === WorkflowNodeType.LOOP) {
         console.log(`[LOOP DEBUG] Returning to loop node ${loopNodeId}, currentIndex: ${loopCurrentIndex}, iterationCount: ${iterationCount}`);
         // Only skip if loop has already been initialized (currentIndex is set)
@@ -292,7 +292,7 @@ export class ExecutionEngineService {
           // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
           const loopEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'loop');
           const nextNodeId = loopEdge ? loopEdge.target : null;
-          
+
           if (nextNodeId) {
             execution.currentNodeId = nextNodeId;
             await this.executionService.updateExecution(execution.id, {
@@ -307,11 +307,11 @@ export class ExecutionEngineService {
             }
             continue;
           } else {
-          // No loop edge - go to done
-          // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
-          const doneEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'done');
+            // No loop edge - go to done
+            // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
+            const doneEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'done');
             const doneNodeId = doneEdge ? doneEdge.target : null;
-            
+
             if (doneNodeId) {
               execution.currentNodeId = doneNodeId;
               await this.executionService.updateExecution(execution.id, {
@@ -333,32 +333,32 @@ export class ExecutionEngineService {
         // We're inside a loop and reached END - continue to next iteration without executing END
         const loopDataEnd = this.contextService.getVariable(execution.context, '_loopData');
         const loopCurrentIndexEnd = this.contextService.getVariable(execution.context, '_loopCurrentIndex');
-        
+
         console.log(`[LOOP DEBUG] END node reached in loop, currentIndex: ${loopCurrentIndexEnd}, totalItems: ${Array.isArray(loopDataEnd) ? loopDataEnd.length : 'N/A'}, iterationCount: ${iterationCount}`);
-        
+
         if (Array.isArray(loopDataEnd) && loopCurrentIndexEnd !== undefined) {
           const nextIndex = loopCurrentIndexEnd + 1;
-          
+
           if (nextIndex < loopDataEnd.length) {
             console.log(`[LOOP DEBUG] Continuing to next iteration: ${nextIndex}/${loopDataEnd.length}`);
             // Continue to next iteration
             const itemVariableName = this.contextService.getVariable(execution.context, '_loopItemVariable') || 'item';
             const indexVariableName = this.contextService.getVariable(execution.context, '_loopIndexVariable') || 'index';
-            
+
             // Update loop variables for next iteration
             this.contextService.setVariable(execution.context, '_loopCurrentIndex', nextIndex);
             this.contextService.setVariable(execution.context, itemVariableName, loopDataEnd[nextIndex]);
             this.contextService.setVariable(execution.context, indexVariableName, nextIndex);
-            
+
             // Increment iteration count
             const currentIterations = this.contextService.getVariable(execution.context, '_loopIterationsExecuted') || 0;
             this.contextService.setVariable(execution.context, '_loopIterationsExecuted', currentIterations + 1);
-            
-          // Find the loop edge to go back to loop body
-          // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
-          const loopEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'loop');
+
+            // Find the loop edge to go back to loop body
+            // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
+            const loopEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'loop');
             const nextNodeId = loopEdge ? loopEdge.target : null;
-            
+
             if (nextNodeId) {
               execution.currentNodeId = nextNodeId;
               await this.executionService.updateExecution(execution.id, {
@@ -379,14 +379,14 @@ export class ExecutionEngineService {
             // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
             const doneEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'done');
             const doneNodeId = doneEdge ? doneEdge.target : null;
-            
+
             // Clear loop variables
             delete execution.context.variables['_loopNodeId'];
             delete execution.context.variables['_loopData'];
             delete execution.context.variables['_loopCurrentIndex'];
             delete execution.context.variables['_loopItemVariable'];
             delete execution.context.variables['_loopIndexVariable'];
-            
+
             if (doneNodeId) {
               execution.currentNodeId = doneNodeId;
               await this.executionService.updateExecution(execution.id, {
@@ -528,12 +528,29 @@ export class ExecutionEngineService {
           // Schedule automatic resume after wait time
           if (result.waitTimeoutSeconds) {
             const waitMs = result.waitTimeoutSeconds * 1000;
-            console.log(`[WAIT] Scheduling auto-resume in ${waitMs}ms`);
+            console.log(`[WAIT] Scheduling auto-resume in ${waitMs}ms for execution ${execution.id}`);
 
             const timeoutId = setTimeout(async () => {
               // Remove from active timeouts
               this.activeTimeouts.delete(execution.id);
+
+              // Acquire lock before resuming to prevent race conditions
+              const lockKey = `execution:lock:${execution.tenantId}:${execution.sessionId}:${execution.contactId}`;
+              let lockAcquired = false;
+
               try {
+                lockAcquired = await this.redis.acquireLock(lockKey, 30);
+                if (!lockAcquired) {
+                  console.warn(`[WAIT] Could not acquire lock for execution ${execution.id}, retrying in 2s...`);
+                  // Retry once after 2 seconds
+                  await new Promise(r => setTimeout(r, 2000));
+                  lockAcquired = await this.redis.acquireLock(lockKey, 30);
+                  if (!lockAcquired) {
+                    console.error(`[WAIT] Failed to acquire lock after retry for execution ${execution.id}`);
+                    return;
+                  }
+                }
+
                 console.log(`[WAIT] Auto-resuming execution ${execution.id}`);
 
                 // Get the updated execution from DB
@@ -591,6 +608,12 @@ export class ExecutionEngineService {
                 await this.continueExecution(updatedExecution, workflow);
               } catch (error) {
                 console.error('[WAIT] Error auto-resuming execution:', error);
+              } finally {
+                if (lockAcquired) {
+                  await this.redis.releaseLock(lockKey).catch((err: any) =>
+                    console.error('[WAIT] Error releasing lock:', err)
+                  );
+                }
               }
             }, waitMs);
 
@@ -645,32 +668,32 @@ export class ExecutionEngineService {
           // We're inside a loop - continue iteration
           const loopDataEndCheck = this.contextService.getVariable(execution.context, '_loopData');
           const loopCurrentIndexEndCheck = this.contextService.getVariable(execution.context, '_loopCurrentIndex');
-          
+
           console.log(`[LOOP DEBUG] END node reached (after execution), currentIndex: ${loopCurrentIndexEndCheck}, totalItems: ${Array.isArray(loopDataEndCheck) ? loopDataEndCheck.length : 'N/A'}, iterationCount: ${iterationCount}`);
-          
+
           if (Array.isArray(loopDataEndCheck) && loopCurrentIndexEndCheck !== undefined) {
             const nextIndex = loopCurrentIndexEndCheck + 1;
-            
+
             if (nextIndex < loopDataEndCheck.length) {
               console.log(`[LOOP DEBUG] Continuing to next iteration from END: ${nextIndex}/${loopDataEndCheck.length}`);
               // Continue to next iteration
               const itemVariableName = this.contextService.getVariable(execution.context, '_loopItemVariable') || 'item';
               const indexVariableName = this.contextService.getVariable(execution.context, '_loopIndexVariable') || 'index';
-              
+
               // Update loop variables for next iteration
               this.contextService.setVariable(execution.context, '_loopCurrentIndex', nextIndex);
               this.contextService.setVariable(execution.context, itemVariableName, loopDataEndCheck[nextIndex]);
               this.contextService.setVariable(execution.context, indexVariableName, nextIndex);
-              
+
               // Increment iteration count
               const currentIterations = this.contextService.getVariable(execution.context, '_loopIterationsExecuted') || 0;
               this.contextService.setVariable(execution.context, '_loopIterationsExecuted', currentIterations + 1);
-              
-          // Find the loop edge to go back to loop body
-          // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
-          const loopEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'loop');
+
+              // Find the loop edge to go back to loop body
+              // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
+              const loopEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'loop');
               const nextNodeId = loopEdge ? loopEdge.target : null;
-              
+
               if (nextNodeId) {
                 execution.currentNodeId = nextNodeId;
                 await this.executionService.updateExecution(execution.id, {
@@ -689,16 +712,16 @@ export class ExecutionEngineService {
             } else {
               // Loop completed - go to 'done' edge
               // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
-            const doneEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'done');
+              const doneEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'done');
               const doneNodeId = doneEdge ? doneEdge.target : null;
-              
+
               // Clear loop variables
               delete execution.context.variables['_loopNodeId'];
               delete execution.context.variables['_loopData'];
               delete execution.context.variables['_loopCurrentIndex'];
               delete execution.context.variables['_loopItemVariable'];
               delete execution.context.variables['_loopIndexVariable'];
-              
+
               if (doneNodeId) {
                 execution.currentNodeId = doneNodeId;
                 await this.executionService.updateExecution(execution.id, {
@@ -724,37 +747,37 @@ export class ExecutionEngineService {
       // Check if we're inside a loop and reached end of iteration (no next node)
       const loopDataNoNext = this.contextService.getVariable(execution.context, '_loopData');
       const loopCurrentIndexNoNext = this.contextService.getVariable(execution.context, '_loopCurrentIndex');
-      
+
       // If we're in a loop and reached a node with no next, continue loop iteration
       if (loopNodeId && Array.isArray(loopDataNoNext) && loopCurrentIndexNoNext !== undefined && !result.nextNodeId) {
         const loopNode = workflow.nodes.find((n) => n.id === loopNodeId);
-        
+
         console.log(`[LOOP DEBUG] Node with no next in loop, currentIndex: ${loopCurrentIndexNoNext}, totalItems: ${loopDataNoNext.length}, currentNodeId: ${execution.currentNodeId}, iterationCount: ${iterationCount}`);
-        
+
         if (loopNode) {
           // Check if we've processed all items
           const nextIndex = loopCurrentIndexNoNext + 1;
-          
+
           if (nextIndex < loopDataNoNext.length) {
             console.log(`[LOOP DEBUG] Continuing iteration: ${nextIndex}/${loopDataNoNext.length}`);
             // Continue to next iteration
             const itemVariableName = this.contextService.getVariable(execution.context, '_loopItemVariable') || 'item';
             const indexVariableName = this.contextService.getVariable(execution.context, '_loopIndexVariable') || 'index';
-            
+
             // Update loop variables for next iteration
             this.contextService.setVariable(execution.context, '_loopCurrentIndex', nextIndex);
             this.contextService.setVariable(execution.context, itemVariableName, loopDataNoNext[nextIndex]);
             this.contextService.setVariable(execution.context, indexVariableName, nextIndex);
-            
+
             // Increment iteration count
             const currentIterations = this.contextService.getVariable(execution.context, '_loopIterationsExecuted') || 0;
             this.contextService.setVariable(execution.context, '_loopIterationsExecuted', currentIterations + 1);
-            
-          // Find the loop edge to go back to loop body
-          // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
-          const loopEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'loop');
+
+            // Find the loop edge to go back to loop body
+            // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
+            const loopEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'loop');
             const nextNodeId = loopEdge ? loopEdge.target : null;
-            
+
             if (nextNodeId) {
               execution.currentNodeId = nextNodeId;
               await this.executionService.updateExecution(execution.id, {
@@ -775,14 +798,14 @@ export class ExecutionEngineService {
             // Note: sourceHandle from React Flow is saved as 'condition' in WorkflowEdge
             const doneEdge = workflow.edges.find((e) => e.source === loopNodeId && e.condition === 'done');
             const doneNodeId = doneEdge ? doneEdge.target : null;
-            
+
             // Clear loop variables
             delete execution.context.variables['_loopNodeId'];
             delete execution.context.variables['_loopData'];
             delete execution.context.variables['_loopCurrentIndex'];
             delete execution.context.variables['_loopItemVariable'];
             delete execution.context.variables['_loopIndexVariable'];
-            
+
             if (doneNodeId) {
               execution.currentNodeId = doneNodeId;
               await this.executionService.updateExecution(execution.id, {

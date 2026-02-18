@@ -304,9 +304,26 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
           messageContent.caption = options?.caption;
           break;
         case 'audio':
-          messageContent.audio = { url: mediaUrl };
-          messageContent.mimetype = 'audio/mp4';
-          messageContent.ptt = options?.sendAudioAsVoice;
+          // Download audio as buffer for reliable playback on WhatsApp
+          try {
+            const audioResponse = await fetch(mediaUrl);
+            if (!audioResponse.ok) {
+              throw new Error(`Failed to download audio: HTTP ${audioResponse.status}`);
+            }
+            const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+            const contentType = audioResponse.headers.get('content-type');
+            const audioMimetype = this.getAudioMimeType(mediaUrl, contentType);
+            console.log(`[SEND_MEDIA] Audio downloaded: ${audioBuffer.length} bytes, mimetype: ${audioMimetype}, ptt: ${options?.sendAudioAsVoice}`);
+            messageContent.audio = audioBuffer;
+            messageContent.mimetype = audioMimetype;
+            messageContent.ptt = options?.sendAudioAsVoice || false;
+          } catch (downloadError: any) {
+            console.error(`[SEND_MEDIA] Audio download failed, falling back to URL:`, downloadError.message);
+            // Fallback: try sending as URL (may not work for all formats)
+            messageContent.audio = { url: mediaUrl };
+            messageContent.mimetype = 'audio/mp4';
+            messageContent.ptt = options?.sendAudioAsVoice || false;
+          }
           break;
         case 'document':
           messageContent.document = { url: mediaUrl };
@@ -583,5 +600,32 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       case '.zip': return 'application/zip';
       default: return 'application/octet-stream';
     }
+  }
+
+  private getAudioMimeType(url: string, contentType: string | null): string {
+    // Try to detect from URL extension first
+    const urlWithoutQuery = url.split('?')[0];
+    const ext = path.extname(urlWithoutQuery).toLowerCase();
+    switch (ext) {
+      case '.mp3': return 'audio/mpeg';
+      case '.ogg': return 'audio/ogg; codecs=opus';
+      case '.opus': return 'audio/ogg; codecs=opus';
+      case '.m4a': return 'audio/mp4';
+      case '.aac': return 'audio/aac';
+      case '.wav': return 'audio/wav';
+      case '.wma': return 'audio/x-ms-wma';
+      case '.mp4': return 'audio/mp4';
+    }
+
+    // Try from Content-Type header
+    if (contentType) {
+      const ct = contentType.split(';')[0].trim().toLowerCase();
+      if (ct.startsWith('audio/')) {
+        return ct;
+      }
+    }
+
+    // Default to audio/ogg for voice messages (WhatsApp's native format)
+    return 'audio/ogg; codecs=opus';
   }
 }
