@@ -1,30 +1,69 @@
 import { PrismaClient } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 
+/**
+ * ============================================================
+ * 🔧 SEED — Criação de Usuários e Dados Iniciais
+ * ============================================================
+ *
+ * Este arquivo cria os dados iniciais do banco de dados.
+ * Para rodar: pnpm db:seed  (ou npx prisma db seed)
+ *
+ * 📌 COMO CRIAR NOVOS USUÁRIOS:
+ * 1. Crie (ou reutilize) um Tenant (organização/empresa)
+ * 2. Crie um User vinculado ao Tenant com:
+ *    - email: email do usuário
+ *    - password: hash bcrypt da senha (use bcrypt.hash('senha', 10))
+ *    - name: nome do usuário
+ *    - role: 'SUPERADMIN' ou 'ADMIN'
+ *    - tenantId: ID do tenant
+ *
+ * 📌 ROLES DISPONÍVEIS:
+ *    - SUPERADMIN: Acesso total ao sistema
+ *    - ADMIN: Acesso administrativo dentro do tenant
+ *
+ * 📌 EXEMPLO para adicionar um novo usuário:
+ *    const novaSenha = await bcrypt.hash('minhaSenha123', 10)
+ *    await prisma.user.upsert({
+ *      where: { tenantId_email: { tenantId: 'ID_DO_TENANT', email: 'novo@email.com' } },
+ *      update: { password: novaSenha },
+ *      create: {
+ *        email: 'novo@email.com',
+ *        password: novaSenha,
+ *        name: 'Nome do Usuário',
+ *        tenantId: 'ID_DO_TENANT',
+ *        role: 'ADMIN',
+ *      } as any,
+ *    })
+ *
+ * Depois de editar, rode: pnpm db:seed
+ * ============================================================
+ */
+
 const prisma = new PrismaClient()
 
 async function main() {
-  // Create superadmin tenant
+  // ── Super Admin Tenant ──────────────────────────────────
   const superAdminTenant = await prisma.tenant.upsert({
-    where: { email: 'superadmin@n9n.com' },
+    where: { email: 'superadmin@gmail.com' },
     update: {},
     create: {
       id: 'superadmin-tenant',
       name: 'Super Admin Tenant',
-      email: 'superadmin@n9n.com',
+      email: 'superadmin@gmail.com',
       isActive: true,
     },
   })
 
   console.log('Created superadmin tenant:', superAdminTenant)
 
-  // Create superadmin user
-  const superAdminPassword = await bcrypt.hash('superadmin123', 10)
+  // ── Super Admin User ────────────────────────────────────
+  const superAdminPassword = await bcrypt.hash('@superadmin123', 10)
   const superAdminUser = await prisma.user.upsert({
     where: {
       tenantId_email: {
         tenantId: superAdminTenant.id,
-        email: 'superadmin@n9n.com',
+        email: 'superadmin@gmail.com',
       },
     },
     update: {
@@ -33,7 +72,7 @@ async function main() {
       role: 'SUPERADMIN',
     } as any,
     create: {
-      email: 'superadmin@n9n.com',
+      email: 'superadmin@gmail.com',
       password: superAdminPassword,
       name: 'Super Admin',
       tenantId: superAdminTenant.id,
@@ -46,7 +85,6 @@ async function main() {
     email: superAdminUser.email,
     tenantId: superAdminUser.tenantId,
     role: (superAdminUser as any).role,
-    password: 'superadmin123', // Only for initial setup
   })
 
   // Create demo tenant
