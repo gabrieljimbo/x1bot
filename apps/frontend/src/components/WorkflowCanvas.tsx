@@ -13,8 +13,7 @@ import ReactFlow, {
   Connection,
   NodeTypes,
   EdgeTypes,
-  useReactFlow,
-  Panel,
+  ReactFlowInstance,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { WorkflowNode, WorkflowEdge, WorkflowNodeType } from '@n9n/shared'
@@ -68,7 +67,7 @@ export default function WorkflowCanvas({
   const [selectedNodes, setSelectedNodes] = useState<string[]>([])
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
-  const reactFlowInstance = useReactFlow()
+  const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null)
 
   // Track whether this is the first render (initial load)
   const isInitialLoad = useRef(true)
@@ -361,17 +360,26 @@ export default function WorkflowCanvas({
         return
       }
 
-      // Convert screen position to flow position
-      const position = reactFlowInstance.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      })
+      // Convert screen position to flow position if instance is available
+      let position: { x: number; y: number }
+      if (reactFlowInstanceRef.current) {
+        position = reactFlowInstanceRef.current.screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        })
+      } else {
+        const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect()
+        position = {
+          x: event.clientX - reactFlowBounds.left,
+          y: event.clientY - reactFlowBounds.top,
+        }
+      }
 
       if (onAddNode) {
         onAddNode(type, position)
       }
     },
-    [onAddNode, reactFlowInstance]
+    [onAddNode]
   )
 
   const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: Node[], edges: Edge[] }) => {
@@ -557,6 +565,7 @@ export default function WorkflowCanvas({
         onDrop={onDrop}
         onDragOver={onDragOver}
         onSelectionChange={onSelectionChange}
+        onInit={(instance) => { reactFlowInstanceRef.current = instance }}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
