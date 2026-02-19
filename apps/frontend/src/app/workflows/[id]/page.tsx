@@ -386,24 +386,31 @@ function WorkflowPageContent() {
 
   const handleAddNode = async (type: WorkflowNodeType, position?: { x: number; y: number }) => {
     console.log('[handleAddNode] Received type:', type);
-    console.log('[handleAddNode] Type of type:', typeof type);
 
     if (!type) {
       console.error('[handleAddNode] ERROR: type is undefined!');
       return;
     }
 
-    // Compute smart position: near the last node in the workflow
-    let defaultPosition = { x: 250, y: 250 }
+    // Use provided position (from drag-and-drop) or default to a sensible position
+    let nodePosition = position || { x: 250, y: 250 }
     if (!position) {
+      // Position below the last node in the workflow
       const currentNodes = currentNodesRef.current.length > 0 ? currentNodesRef.current : workflow.nodes
       if (currentNodes && currentNodes.length > 0) {
-        // Find the last node (most recently added)
-        const lastNode = currentNodes[currentNodes.length - 1]
-        if (lastNode?.position) {
-          defaultPosition = {
-            x: lastNode.position.x,
-            y: lastNode.position.y + 150, // Below the last node
+        // Find the node with the greatest Y value
+        let maxY = -Infinity
+        let maxYNode = currentNodes[0]
+        for (const n of currentNodes) {
+          if (n.position && n.position.y > maxY) {
+            maxY = n.position.y
+            maxYNode = n
+          }
+        }
+        if (maxYNode?.position) {
+          nodePosition = {
+            x: maxYNode.position.x,
+            y: maxYNode.position.y + 150,
           }
         }
       }
@@ -412,38 +419,27 @@ function WorkflowPageContent() {
     const newNode: WorkflowNode = {
       id: `${String(type).toLowerCase()}-${Date.now()}`,
       type,
-      position: position || defaultPosition,
+      position: nodePosition,
       config: {},
     }
 
-    console.log('[handleAddNode] Created node:', newNode);
-
-    // Use the latest nodes and edges from refs (updated by React Flow)
+    // Use the latest nodes and edges from refs
     const currentNodes = currentNodesRef.current.length > 0 ? currentNodesRef.current : workflow.nodes
     const currentEdges = currentEdgesRef.current.length > 0 ? currentEdgesRef.current : workflow.edges
 
     const updatedNodes = [...currentNodes, newNode]
 
-    console.log('[DEBUG] Adding node:', { type, position, newNode })
-    console.log('[DEBUG] Current nodes:', currentNodes)
-    console.log('[DEBUG] Current edges:', currentEdges)
-    console.log('[DEBUG] Updated nodes:', updatedNodes)
-
     try {
       setSaveStatus('saving')
-      console.log('[DEBUG] Calling API to update workflow...')
 
-      // Pass tenantId if available (for SUPERADMIN viewing other workspaces)
-      const result = await apiClient.updateWorkflow(
+      await apiClient.updateWorkflow(
         workflowId,
         {
           nodes: updatedNodes,
-          edges: currentEdges // Use current edges from ref
+          edges: currentEdges
         },
         tenantId || undefined
       )
-
-      console.log('[DEBUG] API response:', result)
 
       // Update refs
       currentNodesRef.current = updatedNodes
@@ -454,12 +450,8 @@ function WorkflowPageContent() {
       setTimeout(() => setSaveStatus('idle'), 2000)
     } catch (error: any) {
       console.error('[ERROR] Failed to add node:', error)
-      console.error('[ERROR] Error details:', error.response?.data || error.message)
       setSaveStatus('error')
-
-      // Show error message to user
       alert(`Erro ao adicionar nó: ${error.response?.data?.message || error.message}`)
-
       setTimeout(() => setSaveStatus('idle'), 3000)
     }
   }
@@ -531,6 +523,43 @@ function WorkflowPageContent() {
     setCurrentExecutionId(null)
     setExecutedNodes(new Set())
     setFailedNodes(new Set())
+  }
+
+  const handleDuplicateNode = async (nodeId: string) => {
+    const currentNodes = currentNodesRef.current.length > 0 ? currentNodesRef.current : workflow.nodes
+    const currentEdges = currentEdgesRef.current.length > 0 ? currentEdgesRef.current : workflow.edges
+
+    const sourceNode = currentNodes.find((n: WorkflowNode) => n.id === nodeId)
+    if (!sourceNode) return
+
+    const newNode: WorkflowNode = {
+      id: `${String(sourceNode.type).toLowerCase()}-${Date.now()}`,
+      type: sourceNode.type,
+      position: {
+        x: (sourceNode.position?.x || 0) + 40,
+        y: (sourceNode.position?.y || 0) + 40,
+      },
+      config: { ...sourceNode.config },
+    }
+
+    const updatedNodes = [...currentNodes, newNode]
+
+    try {
+      setSaveStatus('saving')
+      await apiClient.updateWorkflow(
+        workflowId,
+        { nodes: updatedNodes, edges: currentEdges },
+        tenantId || undefined
+      )
+      currentNodesRef.current = updatedNodes
+      setWorkflow({ ...workflow, nodes: updatedNodes, edges: currentEdges })
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    } catch (error: any) {
+      console.error('[ERROR] Failed to duplicate node:', error)
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 3000)
+    }
   }
 
   const toggleActive = async () => {
@@ -760,6 +789,7 @@ function WorkflowPageContent() {
             onNodeDoubleClick={handleNodeDoubleClick}
             onAddNode={handleAddNode}
             onManualTrigger={handleManualTrigger}
+            onDuplicateNode={handleDuplicateNode}
             executedNodes={executedNodes}
             failedNodes={failedNodes}
             executedEdges={executedEdges}
