@@ -1,7 +1,7 @@
 import { memo, useState } from 'react'
 import { Handle, Position, useReactFlow } from 'reactflow'
 import { WorkflowNodeType } from '@n9n/shared'
-import { Trash2, Play, MoreHorizontal } from 'lucide-react'
+import { Trash2, Play, Copy } from 'lucide-react'
 
 const nodeConfig: Record<string, any> = {
   'TRIGGER_MESSAGE': {
@@ -175,6 +175,7 @@ interface CustomNodeProps {
     hasExecuted?: boolean
     executionSuccess?: boolean
     onManualTrigger?: (nodeId: string) => void
+    onDuplicateNode?: (nodeId: string) => void
   }
 }
 
@@ -207,6 +208,13 @@ function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
     deleteElements({ nodes: [{ id }] })
+  }
+
+  const handleDuplicate = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (data.onDuplicateNode) {
+      data.onDuplicateNode(id)
+    }
   }
 
   // Determine border style based on execution state
@@ -391,17 +399,18 @@ function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
       {isHovered && (
         <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-1 z-50">
           <button
+            onClick={handleDuplicate}
+            className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded transition-colors"
+            title="Duplicar"
+          >
+            <Copy size={14} />
+          </button>
+          <button
             onClick={handleDelete}
             className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded transition-colors"
             title="Deletar"
           >
             <Trash2 size={14} />
-          </button>
-          <button
-            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 rounded transition-colors"
-            title="Mais opções"
-          >
-            <MoreHorizontal size={14} />
           </button>
         </div>
       )}
