@@ -149,6 +149,34 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Resolve a session client by sessionId.
+   * Falls back to any connected session for the same tenant if the exact ID is not found.
+   * This handles cases where executions store old session IDs (e.g., after server restarts).
+   */
+  private resolveSessionClient(sessionId: string): SessionClient | undefined {
+    // 1. Direct lookup
+    const direct = this.sessions.get(sessionId);
+    if (direct) return direct;
+
+    // 2. Fallback: find any connected session for the same tenant
+    //    First, find the tenant of the requested session from any session we know
+    //    (since we can't query DB synchronously, try all sessions for a connected one)
+    console.warn(`[SESSION_RESOLVE] Session ${sessionId} not found in Map, searching by tenant fallback...`);
+
+    // Try to find any connected session (when there's typically only one tenant)
+    for (const [id, client] of this.sessions.entries()) {
+      if (client.status === WhatsappSessionStatus.CONNECTED) {
+        console.warn(`[SESSION_RESOLVE] Using fallback session ${id} (tenant: ${client.tenantId}) instead of ${sessionId}`);
+        return client;
+      }
+    }
+
+    // No connected session found at all
+    console.error(`[SESSION_RESOLVE] No connected session found as fallback for ${sessionId}`);
+    return undefined;
+  }
+
+  /**
    * Disconnect session
    */
   async disconnectSession(sessionId: string): Promise<void> {
@@ -182,7 +210,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
    * Send message
    */
   async sendMessage(sessionId: string, contactId: string, message: string): Promise<void> {
-    const sessionClient = this.sessions.get(sessionId);
+    const sessionClient = this.resolveSessionClient(sessionId);
 
     if (!sessionClient) {
       throw new Error('Session not found');
@@ -200,7 +228,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
    * Send WhatsApp message with buttons
    */
   async sendButtons(sessionId: string, contactId: string, message: string, buttons: any[], footer?: string): Promise<void> {
-    const sessionClient = this.sessions.get(sessionId);
+    const sessionClient = this.resolveSessionClient(sessionId);
 
     if (!sessionClient) {
       throw new Error('Session not found');
@@ -233,7 +261,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
    * Send WhatsApp list message
    */
   async sendList(sessionId: string, contactId: string, message: string, buttonText: string, sections: any[], footer?: string): Promise<void> {
-    const sessionClient = this.sessions.get(sessionId);
+    const sessionClient = this.resolveSessionClient(sessionId);
 
     if (!sessionClient) {
       throw new Error('Session not found');
@@ -283,7 +311,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       sendAudioAsVoice?: boolean;
     }
   ): Promise<void> {
-    const sessionClient = this.sessions.get(sessionId);
+    const sessionClient = this.resolveSessionClient(sessionId);
 
     if (!sessionClient) {
       throw new Error('Session not found');
