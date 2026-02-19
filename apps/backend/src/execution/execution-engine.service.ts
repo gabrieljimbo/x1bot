@@ -33,27 +33,63 @@ export class ExecutionEngineService implements OnModuleInit {
   ) { }
 
   /**
-   * On startup: clean up stale RUNNING/WAITING executions that were lost
+   * On startup: restore pending WAIT timers and clean up truly stale executions
    * (e.g., from a previous container crash/redeploy)
    */
   async onModuleInit() {
     try {
       const staleThreshold = new Date(Date.now() - ExecutionEngineService.STALE_EXECUTION_MINUTES * 60 * 1000);
 
-      const staleExecutions = await this.prisma.workflowExecution.findMany({
+      // Get ALL pending executions (both RUNNING and WAITING)
+      const pendingExecutions = await this.prisma.workflowExecution.findMany({
         where: {
           status: {
             in: [ExecutionStatus.RUNNING, ExecutionStatus.WAITING],
           },
-          updatedAt: {
-            lt: staleThreshold,
-          },
         },
       });
 
-      if (staleExecutions.length > 0) {
-        console.log(`[STARTUP] Found ${staleExecutions.length} stale executions, marking as ERROR`);
-        for (const exec of staleExecutions) {
+      if (pendingExecutions.length === 0) {
+        console.log('[STARTUP] No pending executions found');
+        return;
+      }
+
+      console.log(`[STARTUP] Found ${pendingExecutions.length} pending executions, processing...`);
+      const now = Date.now();
+
+      for (const exec of pendingExecutions) {
+        const ctx = exec.context as any;
+        const waitResumeAt = ctx?.variables?._waitResumeAt;
+
+        if (exec.status === ExecutionStatus.WAITING && waitResumeAt) {
+          // This is a legitimate WAIT node with a scheduled resume time
+          const resumeTime = new Date(waitResumeAt).getTime();
+
+          if (isNaN(resumeTime)) {
+            // Invalid resume time — mark as error
+            console.error(`[STARTUP] Invalid _waitResumeAt for execution ${exec.id}: ${waitResumeAt}`);
+            await this.prisma.workflowExecution.update({
+              where: { id: exec.id },
+              data: {
+                status: ExecutionStatus.ERROR,
+                error: `Invalid _waitResumeAt: ${waitResumeAt}`,
+              },
+            });
+            continue;
+          }
+
+          const remainingMs = resumeTime - now;
+          if (remainingMs > 0) {
+            // Resume time is in the future — schedule a new timer
+            console.log(`[STARTUP] Restoring WAIT timer for execution ${exec.id}, resuming in ${Math.ceil(remainingMs / 1000)}s`);
+            this.scheduleWaitResume(exec.id, exec.tenantId, remainingMs);
+          } else {
+            // Resume time has already passed — resume immediately
+            console.log(`[STARTUP] WAIT timer expired for execution ${exec.id}, resuming immediately`);
+            this.scheduleWaitResume(exec.id, exec.tenantId, 0);
+          }
+        } else if (exec.updatedAt < staleThreshold) {
+          // Truly stale execution (RUNNING stuck or WAITING without _waitResumeAt)
           await this.prisma.workflowExecution.update({
             where: { id: exec.id },
             data: {
@@ -62,12 +98,12 @@ export class ExecutionEngineService implements OnModuleInit {
             },
           });
           console.log(`[STARTUP] Marked execution ${exec.id} (status: ${exec.status}) as ERROR`);
+        } else {
+          console.log(`[STARTUP] Execution ${exec.id} (status: ${exec.status}) is recent, skipping`);
         }
-      } else {
-        console.log('[STARTUP] No stale executions found');
       }
     } catch (error) {
-      console.error('[STARTUP] Error cleaning up stale executions:', error);
+      console.error('[STARTUP] Error processing pending executions:', error);
     }
   }
 
@@ -104,7 +140,17 @@ export class ExecutionEngineService implements OnModuleInit {
         const executionUpdatedAt = existingExecution.updatedAt || existingExecution.startedAt;
 
         if (executionUpdatedAt && executionUpdatedAt < staleThreshold) {
+          // Don't auto-expire if this is a legitimate WAIT with a future resume time
+          const waitResumeAt = existingExecution.context?.variables?._waitResumeAt;
+          if (waitResumeAt && new Date(waitResumeAt).getTime() > Date.now()) {
+            console.log(`[EXECUTION] Execution ${existingExecution.id} has scheduled WAIT resuming at ${waitResumeAt}, not expiring`);
+            await this.redis.releaseLock(lockKey);
+            throw new Error('Active execution already exists for this contact (waiting)');
+          }
+
           console.warn(`[EXECUTION] Auto-expiring stale execution ${existingExecution.id} (status: ${existingExecution.status}, updatedAt: ${executionUpdatedAt.toISOString()})`);
+          // Clean up any active timeout for this execution
+          this.cleanupExecutionTimeouts(existingExecution.id);
           await this.executionService.updateExecution(existingExecution.id, {
             status: ExecutionStatus.ERROR,
             error: `Auto-expired: execution was stuck in ${existingExecution.status} for over ${ExecutionEngineService.STALE_EXECUTION_MINUTES} minutes`,
@@ -578,6 +624,11 @@ export class ExecutionEngineService implements OnModuleInit {
         const isWaitNode = currentNode.type === WorkflowNodeType.WAIT;
 
         if (isWaitNode) {
+          // Store the expected resume time in context for restart recovery
+          const waitMs = (result.waitTimeoutSeconds || 0) * 1000;
+          const waitResumeAt = new Date(Date.now() + waitMs).toISOString();
+          execution.context.variables._waitResumeAt = waitResumeAt;
+
           // For WAIT nodes, move to next node immediately in DB but schedule resume
           await this.executionService.updateExecution(execution.id, {
             status: ExecutionStatus.WAITING,
@@ -587,119 +638,7 @@ export class ExecutionEngineService implements OnModuleInit {
 
           // Schedule automatic resume after wait time
           if (result.waitTimeoutSeconds) {
-            const waitMs = result.waitTimeoutSeconds * 1000;
-            console.log(`[WAIT] Scheduling auto-resume in ${waitMs}ms for execution ${execution.id}`);
-
-            const timeoutId = setTimeout(async () => {
-              // Remove from active timeouts
-              this.activeTimeouts.delete(execution.id);
-
-              // Acquire lock before resuming to prevent race conditions
-              // Use longer TTL (120s) to account for execution time after resume
-              const lockKey = `execution:lock:${execution.tenantId}:${execution.sessionId}:${execution.contactId}`;
-              let lockAcquired = false;
-
-              try {
-                lockAcquired = await this.redis.acquireLock(lockKey, 120);
-                if (!lockAcquired) {
-                  console.warn(`[WAIT] Could not acquire lock for execution ${execution.id}, retrying in 2s...`);
-                  // Retry once after 2 seconds
-                  await new Promise(r => setTimeout(r, 2000));
-                  lockAcquired = await this.redis.acquireLock(lockKey, 120);
-                  if (!lockAcquired) {
-                    console.error(`[WAIT] Failed to acquire lock after retry for execution ${execution.id}`);
-                    // Mark execution as ERROR to prevent it from being stuck forever
-                    try {
-                      await this.executionService.updateExecution(execution.id, {
-                        status: ExecutionStatus.ERROR,
-                        error: 'WAIT auto-resume failed: could not acquire lock',
-                      });
-                    } catch (e) { /* best effort */ }
-                    return;
-                  }
-                }
-
-                console.log(`[WAIT] Auto-resuming execution ${execution.id}`);
-
-                // Get the updated execution from DB
-                const updatedExecution = await this.executionService.getExecution(
-                  execution.tenantId,
-                  execution.id,
-                );
-
-                if (!updatedExecution) {
-                  console.error('[WAIT] Execution not found');
-                  return;
-                }
-
-                if (updatedExecution.status !== ExecutionStatus.WAITING) {
-                  console.log('[WAIT] Execution is no longer waiting, skipping auto-resume');
-                  return;
-                }
-
-                // Get workflow
-                const workflowData = await this.prisma.workflow.findFirst({
-                  where: { id: updatedExecution.workflowId, tenantId: updatedExecution.tenantId },
-                });
-
-                if (!workflowData) {
-                  console.error('[WAIT] Workflow not found, marking execution as ERROR');
-                  await this.executionService.updateExecution(execution.id, {
-                    status: ExecutionStatus.ERROR,
-                    error: 'WAIT auto-resume failed: workflow not found',
-                  });
-                  return;
-                }
-
-                const workflow: Workflow = {
-                  ...workflowData,
-                  description: workflowData.description || undefined,
-                  nodes: workflowData.nodes as any,
-                  edges: workflowData.edges as any,
-                };
-
-                // Update status to RUNNING
-                updatedExecution.status = ExecutionStatus.RUNNING;
-                await this.executionService.updateExecution(execution.id, {
-                  status: ExecutionStatus.RUNNING,
-                });
-
-                // Emit resumed event
-                await this.eventBus.emit({
-                  type: EventType.EXECUTION_RESUMED,
-                  tenantId: updatedExecution.tenantId,
-                  executionId: updatedExecution.id,
-                  workflowId: updatedExecution.workflowId,
-                  sessionId: updatedExecution.sessionId,
-                  contactId: updatedExecution.contactId,
-                  previousStatus: ExecutionStatus.WAITING,
-                  timestamp: new Date(),
-                });
-
-                // Continue execution from the next node
-                await this.continueExecution(updatedExecution, workflow);
-              } catch (error: any) {
-                console.error('[WAIT] Error auto-resuming execution:', error);
-                // CRITICAL: Mark execution as ERROR to prevent it from being stuck forever
-                try {
-                  await this.executionService.updateExecution(execution.id, {
-                    status: ExecutionStatus.ERROR,
-                    error: `WAIT auto-resume failed: ${error.message || 'unknown error'}`,
-                  });
-                } catch (updateError) {
-                  console.error('[WAIT] Failed to mark execution as ERROR:', updateError);
-                }
-              } finally {
-                if (lockAcquired) {
-                  await this.redis.releaseLock(lockKey).catch((err: any) =>
-                    console.error('[WAIT] Error releasing lock:', err)
-                  );
-                }
-              }
-            }, waitMs);
-
-            // Store timeout for cleanup
-            this.activeTimeouts.set(execution.id, timeoutId);
+            this.scheduleWaitResume(execution.id, execution.tenantId, waitMs);
           }
         } else {
           // For WAIT_REPLY, keep currentNodeId as the WAIT_REPLY node
@@ -1009,6 +948,135 @@ export class ExecutionEngineService implements OnModuleInit {
       clearTimeout(timeoutId);
       this.activeTimeouts.delete(executionId);
     }
+  }
+
+  /**
+   * Schedule automatic WAIT resume after a delay.
+   * This method is used both during normal WAIT execution and to restore
+   * pending WAIT timers after a server restart.
+   */
+  private scheduleWaitResume(executionId: string, tenantId: string, delayMs: number): void {
+    const safeDelay = Math.max(0, delayMs);
+    console.log(`[WAIT] Scheduling auto-resume in ${safeDelay}ms for execution ${executionId}`);
+
+    const timeoutId = setTimeout(async () => {
+      // Remove from active timeouts
+      this.activeTimeouts.delete(executionId);
+
+      let lockAcquired = false;
+      let lockKey = '';
+
+      try {
+        console.log(`[WAIT] Auto-resuming execution ${executionId}`);
+
+        // Get the execution from DB
+        const updatedExecution = await this.executionService.getExecution(
+          tenantId,
+          executionId,
+        );
+
+        if (!updatedExecution) {
+          console.error(`[WAIT] Execution ${executionId} not found`);
+          return;
+        }
+
+        if (updatedExecution.status !== ExecutionStatus.WAITING) {
+          console.log(`[WAIT] Execution ${executionId} is no longer waiting (${updatedExecution.status}), skipping`);
+          return;
+        }
+
+        // Acquire lock before resuming to prevent race conditions
+        lockKey = `execution:lock:${updatedExecution.tenantId}:${updatedExecution.sessionId}:${updatedExecution.contactId}`;
+        lockAcquired = await this.redis.acquireLock(lockKey, 120);
+        if (!lockAcquired) {
+          console.warn(`[WAIT] Could not acquire lock for execution ${executionId}, retrying in 2s...`);
+          await new Promise(r => setTimeout(r, 2000));
+          lockAcquired = await this.redis.acquireLock(lockKey, 120);
+          if (!lockAcquired) {
+            console.error(`[WAIT] Failed to acquire lock after retry for execution ${executionId}`);
+            try {
+              await this.executionService.updateExecution(executionId, {
+                status: ExecutionStatus.ERROR,
+                error: 'WAIT auto-resume failed: could not acquire lock',
+              });
+            } catch (e) { /* best effort */ }
+            return;
+          }
+        }
+
+        // Re-check status after acquiring lock (could have changed)
+        const recheckExecution = await this.executionService.getExecution(tenantId, executionId);
+        if (!recheckExecution || recheckExecution.status !== ExecutionStatus.WAITING) {
+          console.log(`[WAIT] Execution ${executionId} status changed after lock, skipping`);
+          return;
+        }
+
+        // Get workflow
+        const workflowData = await this.prisma.workflow.findFirst({
+          where: { id: recheckExecution.workflowId, tenantId: recheckExecution.tenantId },
+        });
+
+        if (!workflowData) {
+          console.error(`[WAIT] Workflow not found for execution ${executionId}, marking as ERROR`);
+          await this.executionService.updateExecution(executionId, {
+            status: ExecutionStatus.ERROR,
+            error: 'WAIT auto-resume failed: workflow not found',
+          });
+          return;
+        }
+
+        const workflow: Workflow = {
+          ...workflowData,
+          description: workflowData.description || undefined,
+          nodes: workflowData.nodes as any,
+          edges: workflowData.edges as any,
+        };
+
+        // Clean up _waitResumeAt from context
+        delete recheckExecution.context.variables._waitResumeAt;
+
+        // Update status to RUNNING
+        recheckExecution.status = ExecutionStatus.RUNNING;
+        await this.executionService.updateExecution(executionId, {
+          status: ExecutionStatus.RUNNING,
+          context: recheckExecution.context,
+        });
+
+        // Emit resumed event
+        await this.eventBus.emit({
+          type: EventType.EXECUTION_RESUMED,
+          tenantId: recheckExecution.tenantId,
+          executionId: recheckExecution.id,
+          workflowId: recheckExecution.workflowId,
+          sessionId: recheckExecution.sessionId,
+          contactId: recheckExecution.contactId,
+          previousStatus: ExecutionStatus.WAITING,
+          timestamp: new Date(),
+        });
+
+        // Continue execution from the next node
+        await this.continueExecution(recheckExecution, workflow);
+      } catch (error: any) {
+        console.error(`[WAIT] Error auto-resuming execution ${executionId}:`, error);
+        try {
+          await this.executionService.updateExecution(executionId, {
+            status: ExecutionStatus.ERROR,
+            error: `WAIT auto-resume failed: ${error.message || 'unknown error'}`,
+          });
+        } catch (updateError) {
+          console.error(`[WAIT] Failed to mark execution ${executionId} as ERROR:`, updateError);
+        }
+      } finally {
+        if (lockAcquired && lockKey) {
+          await this.redis.releaseLock(lockKey).catch((err: any) =>
+            console.error('[WAIT] Error releasing lock:', err)
+          );
+        }
+      }
+    }, safeDelay);
+
+    // Store timeout for cleanup
+    this.activeTimeouts.set(executionId, timeoutId);
   }
 
   /**
