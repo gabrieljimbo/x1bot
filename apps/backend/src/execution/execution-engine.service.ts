@@ -264,6 +264,16 @@ export class ExecutionEngineService implements OnModuleInit {
     }
 
     try {
+      // Cancel any active WAIT or WAIT_REPLY timeout for this execution
+      // This prevents double-execution when a user message arrives during a WAIT timer
+      this.cleanupExecutionTimeouts(execution.id);
+
+      // Clean up _waitResumeAt if it was set by a WAIT node
+      if (execution.context?.variables?._waitResumeAt) {
+        console.log(`[RESUME] Cancelling active WAIT timer for execution ${execution.id}`);
+        delete execution.context.variables._waitResumeAt;
+      }
+
       // Check if expired
       if (new Date() > execution.expiresAt) {
         await this.expireExecution(execution);
@@ -307,11 +317,18 @@ export class ExecutionEngineService implements OnModuleInit {
       const currentNode = workflow.nodes.find((n) => n.id === execution.currentNodeId);
 
       if (!currentNode) {
-        throw new Error('Current node not found');
+        // Node not found — fail gracefully instead of crashing
+        console.error(`[RESUME] Current node ${execution.currentNodeId} not found in workflow ${execution.workflowId}`);
+        await this.failExecution(execution, `Current node ${execution.currentNodeId} not found (workflow may have been edited)`);
+        return;
       }
 
       // Process reply if current node is WAIT_REPLY
       if (currentNode.type === WorkflowNodeType.WAIT_REPLY) {
+        // Cancel WAIT_REPLY timeout in Redis
+        const timeoutKey = `execution:timeout:${execution.id}`;
+        await this.redis.delete(timeoutKey).catch(() => { });
+
         this.nodeExecutor.processReply(currentNode, message, execution.context);
 
         // Move to next node after processing reply
@@ -632,14 +649,13 @@ export class ExecutionEngineService implements OnModuleInit {
           // For WAIT nodes, move to next node immediately in DB but schedule resume
           await this.executionService.updateExecution(execution.id, {
             status: ExecutionStatus.WAITING,
-            currentNodeId: result.nextNodeId, // Move to next node
+            currentNodeId: result.nextNodeId, // Move to next node (may be null)
             context: execution.context,
           });
 
           // Schedule automatic resume after wait time
-          if (result.waitTimeoutSeconds) {
-            this.scheduleWaitResume(execution.id, execution.tenantId, waitMs);
-          }
+          const effectiveWaitMs = waitMs > 0 ? waitMs : 1000; // At least 1s
+          this.scheduleWaitResume(execution.id, execution.tenantId, effectiveWaitMs);
         } else {
           // For WAIT_REPLY, keep currentNodeId as the WAIT_REPLY node
           // This is important so we can process the reply when resumed
@@ -649,8 +665,9 @@ export class ExecutionEngineService implements OnModuleInit {
             context: execution.context,
           });
 
-          // Set timeout in Redis for WAIT_REPLY
+          // Schedule WAIT_REPLY timeout via setTimeout (Redis TTL alone doesn't trigger actions)
           if (result.waitTimeoutSeconds) {
+            // Also store in Redis for metadata/debugging
             const timeoutKey = `execution:timeout:${execution.id}`;
             await this.redis.setWithTTL(
               timeoutKey,
@@ -659,6 +676,15 @@ export class ExecutionEngineService implements OnModuleInit {
                 timeoutTargetNodeId: result.timeoutTargetNodeId,
               }),
               result.waitTimeoutSeconds,
+            );
+
+            // Schedule actual timeout handler via setTimeout
+            this.scheduleWaitReplyTimeout(
+              execution.id,
+              execution.tenantId,
+              result.waitTimeoutSeconds * 1000,
+              result.onTimeout || 'END',
+              result.timeoutTargetNodeId,
             );
           }
         }
@@ -1035,6 +1061,26 @@ export class ExecutionEngineService implements OnModuleInit {
         // Clean up _waitResumeAt from context
         delete recheckExecution.context.variables._waitResumeAt;
 
+        // If currentNodeId is null (WAIT node with no next edge), complete the execution
+        if (!recheckExecution.currentNodeId) {
+          console.log(`[WAIT] No next node after WAIT, completing execution ${executionId}`);
+          await this.executionService.updateExecution(executionId, {
+            status: ExecutionStatus.COMPLETED,
+            context: recheckExecution.context,
+          });
+          await this.eventBus.emit({
+            type: EventType.EXECUTION_COMPLETED,
+            tenantId: recheckExecution.tenantId,
+            executionId: recheckExecution.id,
+            workflowId: recheckExecution.workflowId,
+            sessionId: recheckExecution.sessionId,
+            contactId: recheckExecution.contactId,
+            output: recheckExecution.context.output,
+            timestamp: new Date(),
+          });
+          return;
+        }
+
         // Update status to RUNNING
         recheckExecution.status = ExecutionStatus.RUNNING;
         await this.executionService.updateExecution(executionId, {
@@ -1076,6 +1122,152 @@ export class ExecutionEngineService implements OnModuleInit {
     }, safeDelay);
 
     // Store timeout for cleanup
+    this.activeTimeouts.set(executionId, timeoutId);
+  }
+
+  /**
+   * Schedule WAIT_REPLY timeout.
+   * When the timer fires, if the execution is still WAITING, either END it or GOTO a specific node.
+   */
+  private scheduleWaitReplyTimeout(
+    executionId: string,
+    tenantId: string,
+    delayMs: number,
+    onTimeout: 'END' | 'GOTO_NODE',
+    timeoutTargetNodeId?: string,
+  ): void {
+    const safeDelay = Math.max(0, delayMs);
+    console.log(`[WAIT_REPLY] Scheduling timeout in ${safeDelay}ms for execution ${executionId} (action: ${onTimeout})`);
+
+    const timeoutId = setTimeout(async () => {
+      // Remove from active timeouts
+      this.activeTimeouts.delete(executionId);
+
+      let lockAcquired = false;
+      let lockKey = '';
+
+      try {
+        console.log(`[WAIT_REPLY] Timeout fired for execution ${executionId}`);
+
+        // Get execution from DB
+        const execution = await this.executionService.getExecution(tenantId, executionId);
+        if (!execution) {
+          console.error(`[WAIT_REPLY] Execution ${executionId} not found`);
+          return;
+        }
+
+        if (execution.status !== ExecutionStatus.WAITING) {
+          console.log(`[WAIT_REPLY] Execution ${executionId} is no longer waiting (${execution.status}), skipping timeout`);
+          return;
+        }
+
+        // Acquire lock
+        lockKey = `execution:lock:${execution.tenantId}:${execution.sessionId}:${execution.contactId}`;
+        lockAcquired = await this.redis.acquireLock(lockKey, 120);
+        if (!lockAcquired) {
+          console.warn(`[WAIT_REPLY] Could not acquire lock for execution ${executionId}, retrying in 2s...`);
+          await new Promise(r => setTimeout(r, 2000));
+          lockAcquired = await this.redis.acquireLock(lockKey, 120);
+          if (!lockAcquired) {
+            console.error(`[WAIT_REPLY] Failed to acquire lock after retry for execution ${executionId}`);
+            return;
+          }
+        }
+
+        // Re-check status after lock
+        const recheckExecution = await this.executionService.getExecution(tenantId, executionId);
+        if (!recheckExecution || recheckExecution.status !== ExecutionStatus.WAITING) {
+          console.log(`[WAIT_REPLY] Execution ${executionId} status changed after lock, skipping timeout`);
+          return;
+        }
+
+        // Clean up Redis timeout key
+        const timeoutKey = `execution:timeout:${executionId}`;
+        await this.redis.delete(timeoutKey).catch(() => { });
+
+        if (onTimeout === 'END' || !timeoutTargetNodeId) {
+          // End the execution on timeout
+          console.log(`[WAIT_REPLY] Ending execution ${executionId} due to timeout`);
+          await this.executionService.updateExecution(executionId, {
+            status: ExecutionStatus.COMPLETED,
+            context: recheckExecution.context,
+          });
+          await this.eventBus.emit({
+            type: EventType.EXECUTION_COMPLETED,
+            tenantId: recheckExecution.tenantId,
+            executionId: recheckExecution.id,
+            workflowId: recheckExecution.workflowId,
+            sessionId: recheckExecution.sessionId,
+            contactId: recheckExecution.contactId,
+            output: recheckExecution.context.output,
+            timestamp: new Date(),
+          });
+        } else {
+          // GOTO_NODE: resume execution from the specified target node
+          console.log(`[WAIT_REPLY] Timeout GOTO_NODE ${timeoutTargetNodeId} for execution ${executionId}`);
+
+          const workflowData = await this.prisma.workflow.findFirst({
+            where: { id: recheckExecution.workflowId, tenantId: recheckExecution.tenantId },
+          });
+
+          if (!workflowData) {
+            console.error(`[WAIT_REPLY] Workflow not found for execution ${executionId}`);
+            await this.executionService.updateExecution(executionId, {
+              status: ExecutionStatus.ERROR,
+              error: 'WAIT_REPLY timeout: workflow not found',
+            });
+            return;
+          }
+
+          const workflow: Workflow = {
+            ...workflowData,
+            description: workflowData.description || undefined,
+            nodes: workflowData.nodes as any,
+            edges: workflowData.edges as any,
+          };
+
+          // Update execution to point to the timeout target node
+          recheckExecution.currentNodeId = timeoutTargetNodeId;
+          recheckExecution.status = ExecutionStatus.RUNNING;
+          await this.executionService.updateExecution(executionId, {
+            status: ExecutionStatus.RUNNING,
+            currentNodeId: timeoutTargetNodeId,
+            context: recheckExecution.context,
+          });
+
+          await this.eventBus.emit({
+            type: EventType.EXECUTION_RESUMED,
+            tenantId: recheckExecution.tenantId,
+            executionId: recheckExecution.id,
+            workflowId: recheckExecution.workflowId,
+            sessionId: recheckExecution.sessionId,
+            contactId: recheckExecution.contactId,
+            previousStatus: ExecutionStatus.WAITING,
+            timestamp: new Date(),
+          });
+
+          await this.continueExecution(recheckExecution, workflow);
+        }
+      } catch (error: any) {
+        console.error(`[WAIT_REPLY] Error handling timeout for execution ${executionId}:`, error);
+        try {
+          await this.executionService.updateExecution(executionId, {
+            status: ExecutionStatus.ERROR,
+            error: `WAIT_REPLY timeout failed: ${error.message || 'unknown error'}`,
+          });
+        } catch (updateError) {
+          console.error(`[WAIT_REPLY] Failed to mark execution ${executionId} as ERROR:`, updateError);
+        }
+      } finally {
+        if (lockAcquired && lockKey) {
+          await this.redis.releaseLock(lockKey).catch((err: any) =>
+            console.error('[WAIT_REPLY] Error releasing lock:', err)
+          );
+        }
+      }
+    }, safeDelay);
+
+    // Store timeout for cleanup (same map as WAIT timeouts)
     this.activeTimeouts.set(executionId, timeoutId);
   }
 
