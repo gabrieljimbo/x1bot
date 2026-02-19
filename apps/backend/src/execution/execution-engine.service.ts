@@ -561,51 +561,7 @@ export class ExecutionEngineService implements OnModuleInit {
 
       // Send message if node produced one
       if (result.messageToSend) {
-        const { sessionId, contactId, message, media } = result.messageToSend;
-
-        // Check if it's a media message
-        if (media) {
-          await this.whatsappSender.sendMedia(
-            sessionId,
-            contactId,
-            media.type,
-            media.url,
-            {
-              caption: media.caption,
-              fileName: media.fileName,
-              sendAudioAsVoice: media.sendAudioAsVoice,
-            }
-          );
-        } else if (message) {
-          // Check if message is a special type (buttons or list)
-          try {
-            const parsed = JSON.parse(message);
-
-            if (parsed.type === 'buttons') {
-              await this.whatsappSender.sendButtons(
-                sessionId,
-                contactId,
-                parsed.message,
-                parsed.buttons,
-                parsed.footer,
-              );
-            } else if (parsed.type === 'list') {
-              await this.whatsappSender.sendList(
-                sessionId,
-                contactId,
-                parsed.message,
-                parsed.buttonText,
-                parsed.sections,
-                parsed.footer,
-              );
-            } else {
-              await this.whatsappSender.sendMessage(sessionId, contactId, message);
-            }
-          } catch (e) {
-            // Not JSON, send as regular message
-            await this.whatsappSender.sendMessage(sessionId, contactId, message);
-          }
-        }
+        await this.sendMessageWithRetry(result.messageToSend);
       }
 
       const duration = Date.now() - startTime;
@@ -963,6 +919,101 @@ export class ExecutionEngineService implements OnModuleInit {
       currentNodeId: execution.currentNodeId,
       timestamp: new Date(),
     });
+  }
+
+  /**
+   * Send a WhatsApp message with retry logic.
+   * Retries up to 3 times with exponential backoff (2s, 4s, 8s) when
+   * "Session not found" error occurs (session is temporarily reconnecting).
+   */
+  private async sendMessageWithRetry(
+    messageToSend: {
+      sessionId: string;
+      contactId: string;
+      message?: string;
+      media?: {
+        type: 'image' | 'video' | 'audio' | 'document';
+        url: string;
+        caption?: string;
+        fileName?: string;
+        sendAudioAsVoice?: boolean;
+      };
+    },
+    maxRetries = 3,
+  ): Promise<void> {
+    const { sessionId, contactId, message, media } = messageToSend;
+    const retryDelays = [2000, 4000, 8000]; // Exponential backoff
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (media) {
+          await this.whatsappSender.sendMedia(
+            sessionId,
+            contactId,
+            media.type,
+            media.url,
+            {
+              caption: media.caption,
+              fileName: media.fileName,
+              sendAudioAsVoice: media.sendAudioAsVoice,
+            },
+          );
+        } else if (message) {
+          // Check if message is a special type (buttons or list)
+          try {
+            const parsed = JSON.parse(message);
+            if (parsed.type === 'buttons') {
+              await this.whatsappSender.sendButtons(
+                sessionId,
+                contactId,
+                parsed.message,
+                parsed.buttons,
+                parsed.footer,
+              );
+            } else if (parsed.type === 'list') {
+              await this.whatsappSender.sendList(
+                sessionId,
+                contactId,
+                parsed.message,
+                parsed.buttonText,
+                parsed.sections,
+                parsed.footer,
+              );
+            } else {
+              await this.whatsappSender.sendMessage(sessionId, contactId, message);
+            }
+          } catch (parseErr) {
+            // Not JSON, send as regular message
+            await this.whatsappSender.sendMessage(sessionId, contactId, message);
+          }
+        }
+        // Success — exit retry loop
+        return;
+      } catch (error: any) {
+        const isSessionNotFound =
+          error.message?.includes('Session not found') ||
+          error.message?.includes('Session not connected');
+
+        if (isSessionNotFound && attempt < maxRetries) {
+          const delay = retryDelays[attempt] || 8000;
+          console.warn(
+            `[SEND_RETRY] Session not available (attempt ${attempt + 1}/${maxRetries}), ` +
+            `retrying in ${delay}ms for session ${sessionId}...`,
+          );
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+
+        // Not a retryable error, or all retries exhausted
+        if (isSessionNotFound) {
+          console.error(
+            `[SEND_RETRY] All ${maxRetries} retries exhausted for session ${sessionId}. ` +
+            `Session is still unavailable.`,
+          );
+        }
+        throw error;
+      }
+    }
   }
 
   /**
