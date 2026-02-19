@@ -50,6 +50,7 @@ RUN apk add --no-cache \
     openssl \
     udev \
     ttf-liberation \
+    ffmpeg \
     && rm -rf /var/cache/apk/*
 
 # Use direct chromium path to avoid symlink issues

@@ -23,6 +23,9 @@ import pino from 'pino';
 import { Boom } from '@hapi/boom';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import * as os from 'os';
 
 interface SessionClient {
   socket: WASocket;
@@ -30,6 +33,7 @@ interface SessionClient {
   sessionId: string;
   status: WhatsappSessionStatus;
   qrCode?: string;
+  ownJid?: string; // The connected phone's own JID (e.g., '5511999999999@s.whatsapp.net')
 }
 
 @Injectable()
@@ -304,24 +308,43 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
           messageContent.caption = options?.caption;
           break;
         case 'audio':
-          // Download audio as buffer for reliable playback on WhatsApp
+          // Download audio and convert to OGG/Opus for WhatsApp mobile compatibility
           try {
             const audioResponse = await fetch(mediaUrl);
             if (!audioResponse.ok) {
               throw new Error(`Failed to download audio: HTTP ${audioResponse.status}`);
             }
-            const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
-            const contentType = audioResponse.headers.get('content-type');
-            const audioMimetype = this.getAudioMimeType(mediaUrl, contentType);
-            console.log(`[SEND_MEDIA] Audio downloaded: ${audioBuffer.length} bytes, mimetype: ${audioMimetype}, ptt: ${options?.sendAudioAsVoice}`);
+            let audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+            const isPtt = options?.sendAudioAsVoice || false;
+            let audioMimetype: string;
+
+            if (isPtt) {
+              // For voice messages (PTT), ALWAYS convert to OGG/Opus
+              // WhatsApp mobile requires this format for playable voice messages
+              try {
+                console.log(`[SEND_MEDIA] Converting audio to OGG/Opus for PTT (${audioBuffer.length} bytes)`);
+                audioBuffer = Buffer.from(await this.convertToOpus(audioBuffer));
+                console.log(`[SEND_MEDIA] Audio converted to OGG/Opus: ${audioBuffer.length} bytes`);
+              } catch (convError: any) {
+                console.error(`[SEND_MEDIA] OGG/Opus conversion failed:`, convError.message);
+                // Continue with original buffer — may work on WhatsApp Web at least
+              }
+              audioMimetype = 'audio/ogg; codecs=opus';
+            } else {
+              // For regular audio (non-PTT), use detected mimetype
+              const contentType = audioResponse.headers.get('content-type');
+              audioMimetype = this.getAudioMimeType(mediaUrl, contentType);
+            }
+
+            console.log(`[SEND_MEDIA] Audio ready: ${audioBuffer.length} bytes, mimetype: ${audioMimetype}, ptt: ${isPtt}`);
             messageContent.audio = audioBuffer;
             messageContent.mimetype = audioMimetype;
-            messageContent.ptt = options?.sendAudioAsVoice || false;
+            messageContent.ptt = isPtt;
           } catch (downloadError: any) {
             console.error(`[SEND_MEDIA] Audio download failed, falling back to URL:`, downloadError.message);
-            // Fallback: try sending as URL (may not work for all formats)
+            // Fallback: try sending as URL
             messageContent.audio = { url: mediaUrl };
-            messageContent.mimetype = 'audio/mp4';
+            messageContent.mimetype = 'audio/ogg; codecs=opus';
             messageContent.ptt = options?.sendAudioAsVoice || false;
           }
           break;
@@ -429,12 +452,15 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         console.log(`WhatsApp session ${sessionId} is open and connected!`);
 
         const sessionClient = this.sessions.get(sessionId);
-        if (sessionClient) {
-          sessionClient.status = WhatsappSessionStatus.CONNECTED;
-        }
-
         const user = this.baileys.jidNormalizedUser(socket.user?.id!);
         const phoneNumber = user.split('@')[0];
+
+        if (sessionClient) {
+          sessionClient.status = WhatsappSessionStatus.CONNECTED;
+          sessionClient.ownJid = user; // Store own JID to filter self-messages
+        }
+
+        console.log(`[SESSION] Own JID stored: ${user}`);
 
         await this.whatsappService.updateSession(sessionId, {
           status: WhatsappSessionStatus.CONNECTED,
@@ -456,10 +482,26 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     socket.ev.on('messages.upsert', async (m) => {
       if (m.type === 'notify') {
+        const sessionClient = this.sessions.get(sessionId);
         for (const msg of m.messages) {
-          if (!msg.key.fromMe) {
-            await this.handleIncomingMessage(tenantId, sessionId, msg);
+          // Skip messages from the bot itself
+          if (msg.key.fromMe) continue;
+
+          // Skip status broadcasts (stories/status updates)
+          const remoteJid = msg.key.remoteJid || '';
+          if (remoteJid === 'status@broadcast') continue;
+
+          // Skip messages from the connected number itself (prevents infinite loops)
+          if (sessionClient?.ownJid) {
+            const senderNumber = remoteJid.split('@')[0];
+            const ownNumber = sessionClient.ownJid.split('@')[0];
+            if (senderNumber === ownNumber) {
+              console.log(`[SESSION] Ignoring self-message from ${senderNumber}`);
+              continue;
+            }
           }
+
+          await this.handleIncomingMessage(tenantId, sessionId, msg);
         }
       }
     });
@@ -627,5 +669,42 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     // Default to audio/ogg for voice messages (WhatsApp's native format)
     return 'audio/ogg; codecs=opus';
+  }
+
+  /**
+   * Convert audio buffer to OGG/Opus format using ffmpeg
+   * This is required for WhatsApp mobile PTT (voice message) compatibility
+   */
+  private async convertToOpus(inputBuffer: Buffer): Promise<Buffer> {
+    const execFileAsync = promisify(execFile);
+    const tmpDir = os.tmpdir();
+    const inputFile = path.join(tmpDir, `wa_audio_in_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+    const outputFile = path.join(tmpDir, `wa_audio_out_${Date.now()}_${Math.random().toString(36).slice(2)}.ogg`);
+
+    try {
+      // Write input buffer to temp file
+      await fs.writeFile(inputFile, inputBuffer);
+
+      // Convert to OGG/Opus using ffmpeg
+      await execFileAsync('ffmpeg', [
+        '-i', inputFile,
+        '-vn',                    // No video
+        '-acodec', 'libopus',     // Opus codec
+        '-b:a', '128k',           // 128kbps bitrate
+        '-ar', '48000',           // 48kHz sample rate (Opus standard)
+        '-ac', '1',               // Mono
+        '-application', 'voip',   // Optimized for voice
+        '-y',                     // Overwrite output
+        outputFile,
+      ], { timeout: 30000 });
+
+      // Read the converted file
+      const outputBuffer = Buffer.from(await fs.readFile(outputFile));
+      return outputBuffer;
+    } finally {
+      // Clean up temp files
+      await fs.unlink(inputFile).catch(() => { });
+      await fs.unlink(outputFile).catch(() => { });
+    }
   }
 }
