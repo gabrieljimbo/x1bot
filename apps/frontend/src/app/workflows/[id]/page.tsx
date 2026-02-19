@@ -299,6 +299,9 @@ function WorkflowPageContent() {
       setSaveStatus('saving')
       // Pass tenantId if available (for SUPERADMIN viewing other workspaces)
       await apiClient.updateWorkflow(workflowId, { nodes, edges }, tenantId || undefined)
+      // Sync parent state so initialNodes/initialEdges stay current
+      // This is critical for pasted/deleted nodes to be recognized by the parent
+      setWorkflow((prev: any) => ({ ...prev, nodes, edges }))
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 2000)
     } catch (error) {
@@ -390,10 +393,26 @@ function WorkflowPageContent() {
       return;
     }
 
+    // Compute smart position: near the last node in the workflow
+    let defaultPosition = { x: 250, y: 250 }
+    if (!position) {
+      const currentNodes = currentNodesRef.current.length > 0 ? currentNodesRef.current : workflow.nodes
+      if (currentNodes && currentNodes.length > 0) {
+        // Find the last node (most recently added)
+        const lastNode = currentNodes[currentNodes.length - 1]
+        if (lastNode?.position) {
+          defaultPosition = {
+            x: lastNode.position.x,
+            y: lastNode.position.y + 150, // Below the last node
+          }
+        }
+      }
+    }
+
     const newNode: WorkflowNode = {
       id: `${String(type).toLowerCase()}-${Date.now()}`,
       type,
-      position: position || { x: 250, y: 250 },
+      position: position || defaultPosition,
       config: {},
     }
 
