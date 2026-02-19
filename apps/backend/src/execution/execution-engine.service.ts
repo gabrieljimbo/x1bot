@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import {
   Workflow,
   WorkflowExecution,
@@ -17,8 +17,9 @@ import { ContactTagsService } from './contact-tags.service';
 import { ContextService } from './context.service';
 
 @Injectable()
-export class ExecutionEngineService {
+export class ExecutionEngineService implements OnModuleInit {
   private activeTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private static readonly STALE_EXECUTION_MINUTES = 30; // Max time before an execution is considered stale
 
   constructor(
     private prisma: PrismaService,
@@ -30,6 +31,45 @@ export class ExecutionEngineService {
     private contactTagsService: ContactTagsService,
     private contextService: ContextService,
   ) { }
+
+  /**
+   * On startup: clean up stale RUNNING/WAITING executions that were lost
+   * (e.g., from a previous container crash/redeploy)
+   */
+  async onModuleInit() {
+    try {
+      const staleThreshold = new Date(Date.now() - ExecutionEngineService.STALE_EXECUTION_MINUTES * 60 * 1000);
+
+      const staleExecutions = await this.prisma.workflowExecution.findMany({
+        where: {
+          status: {
+            in: [ExecutionStatus.RUNNING, ExecutionStatus.WAITING],
+          },
+          updatedAt: {
+            lt: staleThreshold,
+          },
+        },
+      });
+
+      if (staleExecutions.length > 0) {
+        console.log(`[STARTUP] Found ${staleExecutions.length} stale executions, marking as ERROR`);
+        for (const exec of staleExecutions) {
+          await this.prisma.workflowExecution.update({
+            where: { id: exec.id },
+            data: {
+              status: ExecutionStatus.ERROR,
+              error: `Execution was stale (${exec.status}) after server restart. Started at ${exec.startedAt?.toISOString()}.`,
+            },
+          });
+          console.log(`[STARTUP] Marked execution ${exec.id} (status: ${exec.status}) as ERROR`);
+        }
+      } else {
+        console.log('[STARTUP] No stale executions found');
+      }
+    } catch (error) {
+      console.error('[STARTUP] Error cleaning up stale executions:', error);
+    }
+  }
 
   /**
    * Start new workflow execution
@@ -59,8 +99,21 @@ export class ExecutionEngineService {
       );
 
       if (existingExecution) {
-        await this.redis.releaseLock(lockKey);
-        throw new Error('Active execution already exists for this contact');
+        // Check if the existing execution is stale (stuck for more than STALE_EXECUTION_MINUTES)
+        const staleThreshold = new Date(Date.now() - ExecutionEngineService.STALE_EXECUTION_MINUTES * 60 * 1000);
+        const executionUpdatedAt = existingExecution.updatedAt || existingExecution.startedAt;
+
+        if (executionUpdatedAt && executionUpdatedAt < staleThreshold) {
+          console.warn(`[EXECUTION] Auto-expiring stale execution ${existingExecution.id} (status: ${existingExecution.status}, updatedAt: ${executionUpdatedAt.toISOString()})`);
+          await this.executionService.updateExecution(existingExecution.id, {
+            status: ExecutionStatus.ERROR,
+            error: `Auto-expired: execution was stuck in ${existingExecution.status} for over ${ExecutionEngineService.STALE_EXECUTION_MINUTES} minutes`,
+          });
+          // Continue to create a new execution
+        } else {
+          await this.redis.releaseLock(lockKey);
+          throw new Error('Active execution already exists for this contact');
+        }
       }
 
       // Get workflow
@@ -427,14 +480,21 @@ export class ExecutionEngineService {
         ? execution.context.input
         : execution.context.output || {};
 
-      // Execute node
-      const result = await this.nodeExecutor.executeNode(
-        currentNode,
-        execution.context,
-        workflow.edges,
-        execution.sessionId,
-        execution.contactId,
-      );
+      // Execute node with error handling — prevents stuck RUNNING on node failures
+      let result;
+      try {
+        result = await this.nodeExecutor.executeNode(
+          currentNode,
+          execution.context,
+          workflow.edges,
+          execution.sessionId,
+          execution.contactId,
+        );
+      } catch (nodeError: any) {
+        console.error(`[EXECUTION] Node ${currentNode.id} (${currentNode.type}) failed:`, nodeError.message);
+        await this.failExecution(execution, `Node ${currentNode.type} failed: ${nodeError.message}`);
+        return;
+      }
 
       // Send message if node produced one
       if (result.messageToSend) {
@@ -535,18 +595,26 @@ export class ExecutionEngineService {
               this.activeTimeouts.delete(execution.id);
 
               // Acquire lock before resuming to prevent race conditions
+              // Use longer TTL (120s) to account for execution time after resume
               const lockKey = `execution:lock:${execution.tenantId}:${execution.sessionId}:${execution.contactId}`;
               let lockAcquired = false;
 
               try {
-                lockAcquired = await this.redis.acquireLock(lockKey, 30);
+                lockAcquired = await this.redis.acquireLock(lockKey, 120);
                 if (!lockAcquired) {
                   console.warn(`[WAIT] Could not acquire lock for execution ${execution.id}, retrying in 2s...`);
                   // Retry once after 2 seconds
                   await new Promise(r => setTimeout(r, 2000));
-                  lockAcquired = await this.redis.acquireLock(lockKey, 30);
+                  lockAcquired = await this.redis.acquireLock(lockKey, 120);
                   if (!lockAcquired) {
                     console.error(`[WAIT] Failed to acquire lock after retry for execution ${execution.id}`);
+                    // Mark execution as ERROR to prevent it from being stuck forever
+                    try {
+                      await this.executionService.updateExecution(execution.id, {
+                        status: ExecutionStatus.ERROR,
+                        error: 'WAIT auto-resume failed: could not acquire lock',
+                      });
+                    } catch (e) { /* best effort */ }
                     return;
                   }
                 }
@@ -575,7 +643,11 @@ export class ExecutionEngineService {
                 });
 
                 if (!workflowData) {
-                  console.error('[WAIT] Workflow not found');
+                  console.error('[WAIT] Workflow not found, marking execution as ERROR');
+                  await this.executionService.updateExecution(execution.id, {
+                    status: ExecutionStatus.ERROR,
+                    error: 'WAIT auto-resume failed: workflow not found',
+                  });
                   return;
                 }
 
@@ -606,8 +678,17 @@ export class ExecutionEngineService {
 
                 // Continue execution from the next node
                 await this.continueExecution(updatedExecution, workflow);
-              } catch (error) {
+              } catch (error: any) {
                 console.error('[WAIT] Error auto-resuming execution:', error);
+                // CRITICAL: Mark execution as ERROR to prevent it from being stuck forever
+                try {
+                  await this.executionService.updateExecution(execution.id, {
+                    status: ExecutionStatus.ERROR,
+                    error: `WAIT auto-resume failed: ${error.message || 'unknown error'}`,
+                  });
+                } catch (updateError) {
+                  console.error('[WAIT] Failed to mark execution as ERROR:', updateError);
+                }
               } finally {
                 if (lockAcquired) {
                   await this.redis.releaseLock(lockKey).catch((err: any) =>
