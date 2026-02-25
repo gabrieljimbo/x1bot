@@ -7,6 +7,16 @@ RUN npm install -g pnpm@10
 WORKDIR /app
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 
+# Install native build tools for canvas
+RUN apk add --no-cache \
+    build-base \
+    g++ \
+    cairo-dev \
+    pango-dev \
+    giflib-dev \
+    librsvg-dev \
+    python3
+
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared ./packages/shared
 COPY apps/backend ./apps/backend
@@ -51,6 +61,10 @@ RUN apk add --no-cache \
     udev \
     ttf-liberation \
     ffmpeg \
+    cairo \
+    pango \
+    giflib \
+    librsvg \
     && rm -rf /var/cache/apk/*
 
 # Use direct chromium path to avoid symlink issues
@@ -61,6 +75,7 @@ COPY packages/shared ./packages/shared
 COPY apps/backend ./apps/backend
 
 # Install ONLY production deps
+# Enable scripts for canvas
 RUN pnpm install --prod --frozen-lockfile
 
 # Prisma CLI (somente para migrate deploy)
