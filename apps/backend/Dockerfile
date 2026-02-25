@@ -3,8 +3,9 @@
 ############################
 FROM node:20-alpine AS base
 
-RUN npm install -g pnpm@10
+RUN npm install -g pnpm@10 --registry=https://registry.npmjs.org/
 WORKDIR /app
+COPY .npmrc ./
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 
 # Install native build tools for canvas

@@ -74,9 +74,9 @@ fi
 
 # Run seeds
 echo "ðŸŒ± Running database seeds..."
-if [ -f "prisma/seed.js" ]; then
-  echo "Running seeds using node prisma/seed.js..."
-  node prisma/seed.js
+if [ -f "prisma/seed.ts" ]; then
+  echo "Running seeds using pnpm db:seed..."
+  pnpm db:seed
   SEED_EXIT_CODE=$?
   
   if [ $SEED_EXIT_CODE -eq 0 ]; then
@@ -102,5 +102,5 @@ if [ ! -f "dist/apps/backend/src/main.js" ]; then
   find /app/apps/backend/dist -name "main.js" || echo "main.js not found"
   exit 1
 fi
-exec node dist/apps/backend/src/main.js
+exec pnpm start
 
