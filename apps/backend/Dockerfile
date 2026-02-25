@@ -89,6 +89,7 @@ RUN npm install -g prisma@^5.8.0
 
 # Generate Prisma Client (uses the binaries already present in node_modules)
 WORKDIR /app/apps/backend
+COPY .npmrc /app/
 RUN npx prisma generate
 
 RUN mkdir -p /app/data /app/logs
