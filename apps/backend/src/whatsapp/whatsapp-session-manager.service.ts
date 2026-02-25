@@ -221,6 +221,10 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     }
 
     const jid = this.formatJid(contactId);
+
+    // Simulate human typing
+    await this.simulatePresence(sessionClient, jid, 'composing');
+
     await sessionClient.socket.sendMessage(jid, { text: message });
   }
 
@@ -239,6 +243,9 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     }
 
     const jid = this.formatJid(contactId);
+
+    // Simulate human typing
+    await this.simulatePresence(sessionClient, jid, 'composing');
 
     // Baileys button message format
     // Note: Buttons are currently limited in many WhatsApp versions (official and unofficial)
@@ -272,6 +279,9 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     }
 
     const jid = this.formatJid(contactId);
+
+    // Simulate human typing
+    await this.simulatePresence(sessionClient, jid, 'composing');
 
     // Fallback: formatted text
     let formattedMessage = `${message}\n\n`;
@@ -322,6 +332,10 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     }
 
     const jid = this.formatJid(contactId);
+
+    // Simulate human presence (typing or recording)
+    const presenceType = mediaType === 'audio' ? 'recording' : 'composing';
+    await this.simulatePresence(sessionClient, jid, presenceType);
 
     try {
       const messageContent: any = {};
@@ -719,6 +733,27 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     // Default to audio/ogg for voice messages (WhatsApp's native format)
     return 'audio/ogg; codecs=opus';
+  }
+
+  /**
+   * Helper to simulate human behavior by sending presence updates and waiting
+   */
+  private async simulatePresence(sessionClient: SessionClient, jid: string, type: 'composing' | 'recording'): Promise<void> {
+    try {
+      // Send the presence update
+      await sessionClient.socket.sendPresenceUpdate(type, jid);
+
+      // Wait a bit to simulate human reaction/typing/recording
+      // We use a shorter delay for typing and a longer one for recording
+      const delay = type === 'recording' ? 4000 : 2000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      // After the delay, we stop the simulation (usually done automatically by sending the message, but safer to pause)
+      await sessionClient.socket.sendPresenceUpdate('paused', jid);
+    } catch (error: any) {
+      console.warn(`[PRESENCE] Failed to simulate presence:`, error.message);
+      // Don't throw, just log warning and continue – better to send the message without simulation than fail
+    }
   }
 
   /**
