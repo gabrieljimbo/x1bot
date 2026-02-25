@@ -206,11 +206,13 @@ function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
   const switchRules = isSwitch && data.config.rules ? data.config.rules : []
 
   const handleDelete = (e: React.MouseEvent) => {
+    e.preventDefault()
     e.stopPropagation()
     deleteElements({ nodes: [{ id }] })
   }
 
   const handleDuplicate = (e: React.MouseEvent) => {
+    e.preventDefault()
     e.stopPropagation()
     if (data.onDuplicateNode) {
       data.onDuplicateNode(id)
@@ -397,8 +399,12 @@ function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
     >
       {/* Action Buttons - appear on hover */}
       {isHovered && (
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-1 z-50">
+        <div
+          className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-1 z-50"
+          onClick={(e) => e.stopPropagation()}
+        >
           <button
+            type="button"
             onClick={handleDuplicate}
             className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded transition-colors"
             title="Duplicar"
@@ -406,6 +412,7 @@ function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
             <Copy size={14} />
           </button>
           <button
+            type="button"
             onClick={handleDelete}
             className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded transition-colors"
             title="Deletar"
