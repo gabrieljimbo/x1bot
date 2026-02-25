@@ -100,6 +100,27 @@ export const apiClient = {
     return data
   },
 
+  shareWorkflow: async (workflowId: string) => {
+    const { data } = await client.post(`/api/workflows/${workflowId}/share`)
+    return data
+  },
+
+  getImportPreview: async (shareId: string) => {
+    const { data } = await client.get(`/api/workflows/import/${shareId}`)
+    return data
+  },
+
+  importWorkflow: async (shareId: string) => {
+    const { data } = await client.post(`/api/workflows/import/${shareId}`)
+    return data
+  },
+
+  getShareStats: async (workflowId: string, tenantId?: string) => {
+    const params = tenantId ? { tenantId } : {}
+    const { data } = await client.get(`/api/workflows/${workflowId}/share/stats`, { params })
+    return data
+  },
+
   // WhatsApp Sessions
   getWhatsappSessions: async (tenantId?: string) => {
     const params = tenantId ? { tenantId } : {}

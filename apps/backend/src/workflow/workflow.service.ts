@@ -384,5 +384,146 @@ export class WorkflowService {
 
     return this.mapToWorkflow(duplicated);
   }
+
+  /**
+   * Share workflow
+   */
+  async shareWorkflow(workflowId: string, userId: string): Promise<any> {
+    // Check if it's already shared
+    let shareable = await this.prisma.shareableWorkflow.findFirst({
+      where: { workflowId },
+    });
+
+    if (!shareable) {
+      shareable = await this.prisma.shareableWorkflow.create({
+        data: {
+          workflowId,
+          createdBy: userId,
+        },
+      });
+    }
+
+    return shareable;
+  }
+
+  /**
+   * Get shared workflow preview
+   */
+  async getSharedWorkflowPreview(shareId: string): Promise<any> {
+    const shareable = await this.prisma.shareableWorkflow.findUnique({
+      where: { id: shareId },
+      include: {
+        workflow: {
+          select: {
+            name: true,
+            description: true,
+            nodes: true,
+          },
+        },
+        user: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!shareable) {
+      throw new Error('Shared workflow not found');
+    }
+
+    const nodes = shareable.workflow.nodes as any[];
+
+    return {
+      shareId,
+      name: shareable.workflow.name,
+      description: shareable.workflow.description,
+      nodeCount: nodes.length,
+      authorName: shareable.user.name || 'Anonymous',
+      createdAt: shareable.createdAt,
+    };
+  }
+
+  /**
+   * Import workflow
+   */
+  async importWorkflow(shareId: string, tenantId: string, userId: string): Promise<Workflow> {
+    const shareable = await this.prisma.shareableWorkflow.findUnique({
+      where: { id: shareId },
+      include: {
+        workflow: true,
+      },
+    });
+
+    if (!shareable) {
+      throw new Error('Shared workflow not found');
+    }
+
+    const originalWorkflow = shareable.workflow;
+    const originalNodes = originalWorkflow.nodes as any[];
+    const originalEdges = originalWorkflow.edges as any[];
+
+    // Create a mapping of old IDs to new IDs
+    const idMap = new Map<string, string>();
+    const newNodes = originalNodes.map((node) => {
+      const newId = `${node.type.toLowerCase()}-${Math.random().toString(36).substr(2, 9)}`;
+      idMap.set(node.id, newId);
+      return {
+        ...node,
+        id: newId,
+      };
+    });
+
+    const newEdges = originalEdges.map((edge) => {
+      return {
+        ...edge,
+        id: `edge-${Math.random().toString(36).substr(2, 9)}`,
+        source: idMap.get(edge.source) || edge.source,
+        target: idMap.get(edge.target) || edge.target,
+      };
+    });
+
+    const importedWorkflow = await this.prisma.workflow.create({
+      data: {
+        tenantId,
+        name: `${originalWorkflow.name} (importado)`,
+        description: originalWorkflow.description,
+        nodes: newNodes as any,
+        edges: newEdges as any,
+        isActive: false,
+      },
+    });
+
+    // Increment import count
+    await this.prisma.shareableWorkflow.update({
+      where: { id: shareId },
+      data: {
+        importCount: {
+          increment: 1,
+        },
+      },
+    });
+
+    return this.mapToWorkflow(importedWorkflow);
+  }
+
+  /**
+   * Get workflow share stats
+   */
+  async getWorkflowShareStats(tenantId: string, workflowId: string): Promise<any> {
+    const workflow = await this.prisma.workflow.findFirst({
+      where: { id: workflowId, tenantId },
+    });
+
+    if (!workflow) {
+      throw new Error('Workflow not found');
+    }
+
+    const shareable = await this.prisma.shareableWorkflow.findFirst({
+      where: { workflowId },
+    });
+
+    return shareable || null;
+  }
 }
 

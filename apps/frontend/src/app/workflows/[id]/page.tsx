@@ -13,7 +13,7 @@ import NodesSidebar from '@/components/NodesSidebar'
 import { useAuth } from '@/contexts/AuthContext'
 import { AuthGuard } from '@/components/AuthGuard'
 import AppHeader from '@/components/AppHeader'
-import { Copy } from 'lucide-react'
+import { Copy, Share2, Info } from 'lucide-react'
 
 const WorkflowCanvas = dynamic(() => import('@/components/WorkflowCanvas'), {
   ssr: false,
@@ -49,6 +49,11 @@ function WorkflowPageContent() {
   const [previousNodeId, setPreviousNodeId] = useState<string | null>(null)
   const [isViewingHistory, setIsViewingHistory] = useState(false)
   const [historicalExecutionId, setHistoricalExecutionId] = useState<string | null>(null)
+
+  // Sharing states
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [shareData, setShareData] = useState<any>(null)
+  const [loadingShare, setLoadingShare] = useState(false)
 
   // Refs to keep track of latest nodes and edges
   const currentNodesRef = useRef<WorkflowNode[]>([])
@@ -594,6 +599,20 @@ function WorkflowPageContent() {
     }
   }
 
+  const handleShare = async () => {
+    try {
+      setLoadingShare(true)
+      setShowShareModal(true)
+      const data = await apiClient.shareWorkflow(workflowId)
+      setShareData(data)
+    } catch (err: any) {
+      alert('Erro ao compartilhar: ' + (err.response?.data?.message || err.message))
+      setShowShareModal(false)
+    } finally {
+      setLoadingShare(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
@@ -735,6 +754,14 @@ function WorkflowPageContent() {
           </button>
 
           <button
+            onClick={handleShare}
+            className="px-4 py-2 bg-surface border border-border rounded hover:border-primary transition flex items-center gap-2"
+          >
+            <Share2 size={16} className="text-purple-400" />
+            <span>Share</span>
+          </button>
+
+          <button
             onClick={handleDuplicate}
             className="px-4 py-2 bg-surface border border-border rounded hover:border-primary transition flex items-center gap-2"
           >
@@ -825,6 +852,84 @@ function WorkflowPageContent() {
           onClose={() => setShowHistory(false)}
           onSelectExecution={handleViewHistoricalExecution}
         />
+      )}
+
+      {/* Share Workflow Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 w-full max-w-lg shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Share2 className="text-purple-400" size={24} />
+                Compartilhar Workflow
+              </h2>
+              <button onClick={() => setShowShareModal(false)} className="text-gray-400 hover:text-white">✕</button>
+            </div>
+
+            <div className="space-y-6">
+              {loadingShare ? (
+                <div className="py-12 text-center text-gray-400 animate-pulse">Gerando código de compartilhamento...</div>
+              ) : shareData ? (
+                <>
+                  <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                    <p className="text-sm text-purple-300 mb-4">
+                      Qualquer pessoa com este código poderá importar uma cópia deste workflow para sua própria conta.
+                    </p>
+
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Código de Compartilhamento</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={shareData.id}
+                        className="flex-1 px-4 py-2 bg-black border border-gray-800 rounded font-mono text-sm text-primary"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(shareData.id)
+                          alert('Código copiado!')
+                        }}
+                        className="px-4 py-2 bg-primary text-black rounded hover:bg-primary/80 transition flex items-center gap-2 font-bold"
+                      >
+                        <Copy size={16} />
+                        Copiar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-surface border border-border rounded-lg">
+                      <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Total de Importações</p>
+                      <p className="text-2xl font-bold text-white">{shareData.importCount}</p>
+                    </div>
+                    <div className="p-4 bg-surface border border-border rounded-lg">
+                      <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Data de Criação</p>
+                      <p className="text-sm font-medium text-white">{new Date(shareData.createdAt).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-4 bg-yellow-500/5 border border-yellow-500/10 rounded-lg">
+                    <Info className="text-yellow-500 shrink-0" size={18} />
+                    <p className="text-xs text-yellow-200/60 leading-relaxed">
+                      Alterações feitas no workflow original não afetarão as cópias já importadas por outros usuários.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center text-red-400 py-8">Erro ao carregar dados de compartilhamento.</div>
+              )}
+            </div>
+
+            <div className="mt-8">
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="w-full px-4 py-3 bg-gray-800 text-white rounded hover:bg-gray-700 transition font-semibold"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

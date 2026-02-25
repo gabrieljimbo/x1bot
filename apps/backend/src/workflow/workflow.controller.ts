@@ -19,6 +19,7 @@ import { ExecutionService } from '../execution/execution.service';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { Tenant } from '../auth/decorators/tenant.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { CurrentUser } from '../auth/decorators/user.decorator';
 
 @Controller('api')
 export class WorkflowController {
@@ -338,6 +339,39 @@ export class WorkflowController {
     }
     const count = await this.tagService.getTagUsageCount(tenantId, tag.name);
     return { count };
+  }
+
+  // Workflow Sharing
+
+  @Post('workflows/:id/share')
+  async shareWorkflow(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+  ) {
+    return this.workflowService.shareWorkflow(id, user.id);
+  }
+
+  @Get('workflows/import/:shareId')
+  @Public()
+  async getSharedWorkflowPreview(@Param('shareId') shareId: string) {
+    return this.workflowService.getSharedWorkflowPreview(shareId);
+  }
+
+  @Post('workflows/import/:shareId')
+  async importWorkflow(
+    @Tenant() tenantId: string,
+    @CurrentUser() user: any,
+    @Param('shareId') shareId: string,
+  ) {
+    return this.workflowService.importWorkflow(shareId, tenantId, user.id);
+  }
+
+  @Get('workflows/:id/share/stats')
+  async getWorkflowShareStats(
+    @Tenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.workflowService.getWorkflowShareStats(tenantId, id);
   }
 }
 

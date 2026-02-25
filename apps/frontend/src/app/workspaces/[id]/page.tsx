@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Building2, Users, Workflow, MessageSquare, UserCog, Edit2, Trash2, Plus, Power, Copy } from 'lucide-react'
+import { ArrowLeft, Building2, Users, Workflow, MessageSquare, UserCog, Edit2, Trash2, Plus, Power, Copy, Share2, Download, Info } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { SuperAdminGuardWrapper } from '@/components/SuperAdminGuard'
 import { useAuth } from '@/contexts/AuthContext'
@@ -82,6 +82,19 @@ function WorkspaceDetailsPageContent() {
   const [newWorkflowName, setNewWorkflowName] = useState('')
   const [newWorkflowDescription, setNewWorkflowDescription] = useState('')
   const [creatingWorkflow, setCreatingWorkflow] = useState(false)
+
+  // Sharing states
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [sharingWorkflow, setSharingWorkflow] = useState<WorkspaceWorkflow | null>(null)
+  const [shareData, setShareData] = useState<any>(null)
+  const [loadingShare, setLoadingShare] = useState(false)
+
+  // Import states
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importId, setImportId] = useState('')
+  const [importPreview, setImportPreview] = useState<any>(null)
+  const [loadingImport, setLoadingImport] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
 
   useEffect(() => {
     if (workspaceId) {
@@ -231,6 +244,57 @@ function WorkspaceDetailsPageContent() {
       setTimeout(() => setSuccess(null), 3000)
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to duplicate workflow')
+    }
+  }
+
+  const handleShareWorkflow = async (workflow: WorkspaceWorkflow) => {
+    try {
+      setLoadingShare(true)
+      setSharingWorkflow(workflow)
+      setShowShareModal(true)
+      const data = await apiClient.shareWorkflow(workflow.id)
+      setShareData(data)
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to share workflow')
+      setShowShareModal(false)
+    } finally {
+      setLoadingShare(false)
+    }
+  }
+
+  const handleFetchImportPreview = async () => {
+    if (!importId.trim()) return
+    try {
+      setLoadingImport(true)
+      setImportError(null)
+      const preview = await apiClient.getImportPreview(importId.trim())
+      setImportPreview(preview)
+    } catch (err: any) {
+      setImportError(err.response?.data?.message || 'Invalid or non-existent share ID')
+      setImportPreview(null)
+    } finally {
+      setLoadingImport(false)
+    }
+  }
+
+  const handleImportWorkflow = async () => {
+    if (!importId.trim()) return
+    try {
+      setLoadingImport(true)
+      const workflow = await apiClient.importWorkflow(importId.trim())
+      setSuccess('Workflow imported successfully')
+      setShowImportModal(false)
+      setImportId('')
+      setImportPreview(null)
+      await loadTabData()
+      setTimeout(() => {
+        setSuccess(null)
+        router.push(`/workflows/${workflow.id}?tenantId=${workspaceId}`)
+      }, 1500)
+    } catch (err: any) {
+      setImportError(err.response?.data?.message || 'Failed to import workflow')
+    } finally {
+      setLoadingImport(false)
     }
   }
 
@@ -593,6 +657,18 @@ function WorkspaceDetailsPageContent() {
                   <Plus size={16} />
                   New Workflow
                 </button>
+                <button
+                  onClick={() => {
+                    setShowImportModal(true)
+                    setImportError(null)
+                    setImportId('')
+                    setImportPreview(null)
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-surface border border-border text-white rounded-lg hover:border-primary transition font-semibold"
+                >
+                  <Download size={16} />
+                  Import Workflow
+                </button>
               </div>
               {workflows.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
@@ -670,6 +746,16 @@ function WorkspaceDetailsPageContent() {
                             title="Duplicate workflow"
                           >
                             <Copy size={16} className="text-primary" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleShareWorkflow(workflow)
+                            }}
+                            className="p-2 hover:bg-purple-500/20 rounded transition"
+                            title="Share workflow"
+                          >
+                            <Share2 size={16} className="text-purple-400" />
                           </button>
                         </div>
                       </div>
@@ -797,6 +883,165 @@ function WorkspaceDetailsPageContent() {
                   >
                     {creatingSession ? 'Creating...' : 'Create'}
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Share Workflow Modal */}
+          {showShareModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 w-full max-w-lg shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    <Share2 className="text-purple-400" size={24} />
+                    Compartilhar Workflow
+                  </h2>
+                  <button onClick={() => setShowShareModal(false)} className="text-gray-400 hover:text-white">✕</button>
+                </div>
+
+                <div className="space-y-6">
+                  {loadingShare ? (
+                    <div className="py-12 text-center text-gray-400 animate-pulse">Gerando código de compartilhamento...</div>
+                  ) : shareData ? (
+                    <>
+                      <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                        <p className="text-sm text-purple-300 mb-4">
+                          Qualquer pessoa com este código poderá importar uma cópia deste workflow para sua própria conta.
+                        </p>
+
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Código de Compartilhamento</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={shareData.id}
+                            className="flex-1 px-4 py-2 bg-black border border-gray-800 rounded font-mono text-sm text-primary"
+                          />
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(shareData.id)
+                              alert('Código copiado!')
+                            }}
+                            className="px-4 py-2 bg-primary text-black rounded hover:bg-primary/80 transition flex items-center gap-2 font-bold"
+                          >
+                            <Copy size={16} />
+                            Copiar
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-surface border border-border rounded-lg">
+                          <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Total de Importações</p>
+                          <p className="text-2xl font-bold text-white">{shareData.importCount}</p>
+                        </div>
+                        <div className="p-4 bg-surface border border-border rounded-lg">
+                          <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Data de Criação</p>
+                          <p className="text-sm font-medium text-white">{new Date(shareData.createdAt).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3 p-4 bg-yellow-500/5 border border-yellow-500/10 rounded-lg">
+                        <Info className="text-yellow-500 shrink-0" size={18} />
+                        <p className="text-xs text-yellow-200/60 leading-relaxed">
+                          Alterações feitas no workflow original não afetarão as cópias já importadas por outros usuários.
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center text-red-400 py-8">Erro ao carregar dados de compartilhamento.</div>
+                  )}
+                </div>
+
+                <div className="mt-8">
+                  <button
+                    onClick={() => setShowShareModal(false)}
+                    className="w-full px-4 py-3 bg-gray-800 text-white rounded hover:bg-gray-700 transition font-semibold"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Import Workflow Modal */}
+          {showImportModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 w-full max-w-lg shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    <Download className="text-primary" size={24} />
+                    Importar Workflow
+                  </h2>
+                  <button onClick={() => setShowImportModal(false)} className="text-gray-400 hover:text-white">✕</button>
+                </div>
+
+                <div className="space-y-6">
+                  {!importPreview ? (
+                    <div className="space-y-4">
+                      <p className="text-sm text-gray-400">Insira o código UUID de compartilhamento para pré-visualizar o workflow.</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={importId}
+                          onChange={(e) => setImportId(e.target.value)}
+                          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                          className="flex-1 px-4 py-2 bg-black border border-gray-800 rounded focus:border-primary outline-none transition"
+                        />
+                        <button
+                          onClick={handleFetchImportPreview}
+                          disabled={!importId.trim() || loadingImport}
+                          className="px-6 py-2 bg-primary text-black rounded hover:bg-primary/80 transition disabled:opacity-50 font-bold"
+                        >
+                          {loadingImport ? 'Carregando...' : 'Ver'}
+                        </button>
+                      </div>
+                      {importError && <p className="text-sm text-red-400 bg-red-400/10 p-2 rounded border border-red-400/20">{importError}</p>}
+                    </div>
+                  ) : (
+                    <div className="space-y-4 animate-in fade-in zoom-in duration-300">
+                      <div className="p-6 bg-surface border border-border rounded-xl">
+                        <h3 className="text-lg font-bold text-primary mb-2">{importPreview.name}</h3>
+                        {importPreview.description && <p className="text-sm text-gray-400 mb-4">{importPreview.description}</p>}
+
+                        <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-border">
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase font-bold mb-1">Autor</p>
+                            <p className="text-sm text-white font-medium">{importPreview.authorName}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase font-bold mb-1">Nós</p>
+                            <p className="text-sm text-white font-medium">{importPreview.nodeCount} blocos</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3 p-4 bg-blue-500/5 border border-blue-500/10 rounded-lg">
+                        <Info className="text-blue-400 shrink-0" size={18} />
+                        <p className="text-xs text-blue-300/60 leading-relaxed">
+                          Este workflow será importado como uma nova cópia independente em sua conta.
+                        </p>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setImportPreview(null)}
+                          className="flex-1 px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 transition"
+                        >
+                          Trocar Código
+                        </button>
+                        <button
+                          onClick={handleImportWorkflow}
+                          disabled={loadingImport}
+                          className="flex-1 px-4 py-2 bg-primary text-black rounded hover:bg-primary/80 transition font-bold"
+                        >
+                          {loadingImport ? 'Importando...' : 'Confirmar Importação'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -40,6 +40,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shareableWorkflows ShareableWorkflow[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -61,6 +62,7 @@ model Workflow {
 
   tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   executions WorkflowExecution[]
+  shareableWorkflows ShareableWorkflow[]
 
   @@index([tenantId])
   @@index([tenantId, isActive])
@@ -228,5 +230,18 @@ model GlobalConfig {
   updatedAt                DateTime @updatedAt
 
   @@map("global_configs")
+}
+
+model ShareableWorkflow {
+  id          String   @id @default(uuid())
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  createdBy   String
+  user        User     @relation(fields: [createdBy], references: [id])
+  importCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("shareable_workflows")
 }
 
