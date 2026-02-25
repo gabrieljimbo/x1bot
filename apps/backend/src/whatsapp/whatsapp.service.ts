@@ -305,6 +305,27 @@ export class WhatsappService {
     });
   }
 
+  /**
+   * Get global humanization configuration
+   */
+  async getGlobalConfig() {
+    return this.prisma.globalConfig.findFirst();
+  }
+
+  /**
+   * Update global humanization configuration
+   */
+  async updateGlobalConfig(data: any) {
+    const config = await this.prisma.globalConfig.findFirst();
+    if (config) {
+      return this.prisma.globalConfig.update({
+        where: { id: config.id },
+        data,
+      });
+    }
+    return this.prisma.globalConfig.create({ data });
+  }
+
   private mapToSession(data: any): WhatsappSession {
     return {
       id: data.id,

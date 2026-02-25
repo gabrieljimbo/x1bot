@@ -19,12 +19,20 @@ export default function AppHeader() {
             N9N
           </Link>
           {isSuperAdmin(user?.role) && (
-            <Link
-              href="/workspaces"
-              className="text-gray-400 hover:text-white transition text-sm"
-            >
-              Workspaces
-            </Link>
+            <>
+              <Link
+                href="/workspaces"
+                className="text-gray-400 hover:text-white transition text-sm"
+              >
+                Workspaces
+              </Link>
+              <Link
+                href="/settings/whatsapp"
+                className="text-gray-400 hover:text-white transition text-sm"
+              >
+                Anti-Ban Settings
+              </Link>
+            </>
           )}
         </div>
 

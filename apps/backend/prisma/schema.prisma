@@ -219,3 +219,14 @@ model ContactTag {
   @@map("contact_tags")
 }
 
+model GlobalConfig {
+  id                       String   @id @default(uuid())
+  minDelay                 Int      @default(3000)
+  maxDelay                 Int      @default(8000)
+  maxMsgsPerMinute         Int      @default(20)
+  proportionalDelayEnabled Boolean  @default(true)
+  updatedAt                DateTime @updatedAt
+
+  @@map("global_configs")
+}
+

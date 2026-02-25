@@ -7,7 +7,7 @@ import { WhatsappService } from './whatsapp.service';
 export const useDatabaseAuthState = async (sessionId: string, whatsappService: WhatsappService): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> => {
 
     const authRecord = await whatsappService.getAuthState(sessionId);
-    let creds: AuthenticationCreds = authRecord?.creds
+    const creds: AuthenticationCreds = authRecord?.creds
         ? JSON.parse(JSON.stringify(authRecord.creds), BufferJSON.reviver)
         : initAuthCreds();
 

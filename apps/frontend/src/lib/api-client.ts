@@ -278,4 +278,15 @@ export const apiClient = {
   deleteUser: async (userId: string) => {
     await client.delete(`/api/admin/users/${userId}`)
   },
+
+  // WhatsApp Global Config
+  getWhatsappConfig: async () => {
+    const { data } = await client.get('/api/whatsapp/config')
+    return data
+  },
+
+  updateWhatsappConfig: async (config: any) => {
+    const { data } = await client.post('/api/whatsapp/config', config)
+    return data
+  },
 }

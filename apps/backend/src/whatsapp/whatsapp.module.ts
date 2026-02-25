@@ -7,21 +7,26 @@ import { ExecutionModule } from '../execution/execution.module';
 import { StorageModule } from '../storage/storage.module';
 import { NodeExecutorService } from '../execution/node-executor.service';
 
+import { MessageQueueService } from './message-queue.service';
+import { WhatsappController } from './whatsapp.controller';
+
 @Module({
   imports: [ExecutionModule, StorageModule],
+  controllers: [WhatsappController],
   providers: [
     WhatsappService,
     WhatsappSessionManager,
     WhatsappMessageHandler,
     WhatsappInitService,
+    MessageQueueService,
   ],
-  exports: [WhatsappService, WhatsappSessionManager],
+  exports: [WhatsappService, WhatsappSessionManager, MessageQueueService],
 })
 export class WhatsappModule implements OnModuleInit {
   constructor(
     private whatsappSessionManager: WhatsappSessionManager,
     private nodeExecutorService: NodeExecutorService,
-  ) {}
+  ) { }
 
   onModuleInit() {
     // Inject WhatsappSessionManager into NodeExecutorService

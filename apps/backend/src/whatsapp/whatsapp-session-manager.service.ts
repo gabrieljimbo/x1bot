@@ -26,6 +26,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as os from 'os';
 import { useDatabaseAuthState } from './database-auth-state';
+import { MessageQueueService } from './message-queue.service';
 
 interface SessionClient {
   socket: WASocket;
@@ -52,6 +53,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     private messageHandler: WhatsappMessageHandler,
     private whatsappSender: WhatsappSenderService,
     private storageService: StorageService,
+    private messageQueue: MessageQueueService,
   ) {
     this.readyPromise = new Promise((resolve) => {
       this.resolveReady = resolve;
@@ -168,6 +170,16 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Send presence update (composing, recording, etc)
+   */
+  async sendPresenceUpdate(sessionId: string, contactId: string, presence: 'composing' | 'recording' | 'paused'): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (session && session.socket) {
+      await session.socket.sendPresenceUpdate(presence, contactId);
+    }
+  }
+
+  /**
    * Resolve a session client by sessionId.
    * Falls back to any connected session for the same tenant if the exact ID is not found.
    * This handles cases where executions store old session IDs (e.g., after server restarts).
@@ -241,10 +253,15 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     const jid = this.formatJid(contactId);
 
-    // Simulate human typing
-    await this.simulatePresence(sessionClient, jid, 'composing');
-
-    await sessionClient.socket.sendMessage(jid, { text: message });
+    await this.messageQueue.enqueue(
+      sessionId,
+      jid,
+      sessionClient.socket,
+      { type: 'text', payload: { text: message } },
+      async () => {
+        await sessionClient.socket.sendMessage(jid, { text: message });
+      }
+    );
   }
 
   /**
@@ -263,24 +280,25 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     const jid = this.formatJid(contactId);
 
-    // Simulate human typing
-    await this.simulatePresence(sessionClient, jid, 'composing');
+    await this.messageQueue.enqueue(
+      sessionId,
+      jid,
+      sessionClient.socket,
+      { type: 'buttons', payload: { text: message, buttons } },
+      async () => {
+        // Fallback: formatted text (Baileys buttons are often not supported by WA anymore)
+        let formattedMessage = `${message}\n\n`;
+        buttons.forEach((btn, index) => {
+          formattedMessage += `${index + 1}. ${btn.text}\n`;
+        });
+        if (footer) {
+          formattedMessage += `\n_${footer}_`;
+        }
+        formattedMessage += `\n\n_Responda com o número da opção desejada_`;
 
-    // Baileys button message format
-    // Note: Buttons are currently limited in many WhatsApp versions (official and unofficial)
-    // We'll use a formatted message as a fallback if needed, but here's the Baileys format:
-
-    // Fallback: formatted text (Baileys buttons are often not supported by WA anymore)
-    let formattedMessage = `${message}\n\n`;
-    buttons.forEach((btn, index) => {
-      formattedMessage += `${index + 1}. ${btn.text}\n`;
-    });
-    if (footer) {
-      formattedMessage += `\n_${footer}_`;
-    }
-    formattedMessage += `\n\n_Responda com o número da opção desejada_`;
-
-    await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
+        await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
+      }
+    );
   }
 
   /**
@@ -299,31 +317,36 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     const jid = this.formatJid(contactId);
 
-    // Simulate human typing
-    await this.simulatePresence(sessionClient, jid, 'composing');
+    await this.messageQueue.enqueue(
+      sessionId,
+      jid,
+      sessionClient.socket,
+      { type: 'list', payload: { text: message, sections } },
+      async () => {
+        // Fallback: formatted text
+        let formattedMessage = `${message}\n\n`;
+        let optionNumber = 1;
+        sections.forEach((section) => {
+          formattedMessage += `*${section.title}*\n`;
+          section.rows.forEach((row: any) => {
+            formattedMessage += `${optionNumber}. ${row.title}`;
+            if (row.description) {
+              formattedMessage += ` - ${row.description}`;
+            }
+            formattedMessage += '\n';
+            optionNumber++;
+          });
+          formattedMessage += '\n';
+        });
 
-    // Fallback: formatted text
-    let formattedMessage = `${message}\n\n`;
-    let optionNumber = 1;
-    sections.forEach((section) => {
-      formattedMessage += `*${section.title}*\n`;
-      section.rows.forEach((row: any) => {
-        formattedMessage += `${optionNumber}. ${row.title}`;
-        if (row.description) {
-          formattedMessage += ` - ${row.description}`;
+        if (footer) {
+          formattedMessage += `_${footer}_\n`;
         }
-        formattedMessage += '\n';
-        optionNumber++;
-      });
-      formattedMessage += '\n';
-    });
+        formattedMessage += `\n_Responda com o número da opção desejada_`;
 
-    if (footer) {
-      formattedMessage += `_${footer}_\n`;
-    }
-    formattedMessage += `\n_Responda com o número da opção desejada_`;
-
-    await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
+        await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
+      }
+    );
   }
 
   /**
@@ -352,76 +375,71 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     const jid = this.formatJid(contactId);
 
-    // Simulate human presence (typing or recording)
-    const presenceType = mediaType === 'audio' ? 'recording' : 'composing';
-    await this.simulatePresence(sessionClient, jid, presenceType);
+    await this.messageQueue.enqueue(
+      sessionId,
+      jid,
+      sessionClient.socket,
+      { type: 'media', payload: { caption: options?.caption }, options },
+      async () => {
+        const messageContent: any = {};
 
-    try {
-      const messageContent: any = {};
-
-      switch (mediaType) {
-        case 'image':
-          messageContent.image = { url: mediaUrl };
-          messageContent.caption = options?.caption;
-          break;
-        case 'video':
-          messageContent.video = { url: mediaUrl };
-          messageContent.caption = options?.caption;
-          break;
-        case 'audio':
-          // Download audio and convert to OGG/Opus for WhatsApp mobile compatibility
-          try {
-            const audioResponse = await fetch(mediaUrl);
-            if (!audioResponse.ok) {
-              throw new Error(`Failed to download audio: HTTP ${audioResponse.status}`);
-            }
-            let audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
-            const isPtt = options?.sendAudioAsVoice || false;
-            let audioMimetype: string;
-
-            if (isPtt) {
-              // For voice messages (PTT), ALWAYS convert to OGG/Opus
-              // WhatsApp mobile requires this format for playable voice messages
-              try {
-                console.log(`[SEND_MEDIA] Converting audio to OGG/Opus for PTT (${audioBuffer.length} bytes)`);
-                audioBuffer = Buffer.from(await this.convertToOpus(audioBuffer));
-                console.log(`[SEND_MEDIA] Audio converted to OGG/Opus: ${audioBuffer.length} bytes`);
-              } catch (convError: any) {
-                console.error(`[SEND_MEDIA] OGG/Opus conversion failed:`, convError.message);
-                // Continue with original buffer — may work on WhatsApp Web at least
+        switch (mediaType) {
+          case 'image':
+            messageContent.image = { url: mediaUrl };
+            messageContent.caption = options?.caption;
+            break;
+          case 'video':
+            messageContent.video = { url: mediaUrl };
+            messageContent.caption = options?.caption;
+            break;
+          case 'audio':
+            // Download audio and convert to OGG/Opus for WhatsApp mobile compatibility
+            try {
+              const audioResponse = await fetch(mediaUrl);
+              if (!audioResponse.ok) {
+                throw new Error(`Failed to download audio: HTTP ${audioResponse.status}`);
               }
-              audioMimetype = 'audio/ogg; codecs=opus';
-            } else {
-              // For regular audio (non-PTT), use detected mimetype
-              const contentType = audioResponse.headers.get('content-type');
-              audioMimetype = this.getAudioMimeType(mediaUrl, contentType);
+              let audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+              const isPtt = options?.sendAudioAsVoice || false;
+              let audioMimetype: string;
+
+              if (isPtt) {
+                // For voice messages (PTT), ALWAYS convert to OGG/Opus
+                try {
+                  console.log(`[SEND_MEDIA] Converting audio to OGG/Opus for PTT (${audioBuffer.length} bytes)`);
+                  audioBuffer = Buffer.from(await this.convertToOpus(audioBuffer));
+                  console.log(`[SEND_MEDIA] Audio converted to OGG/Opus: ${audioBuffer.length} bytes`);
+                } catch (convError: any) {
+                  console.error(`[SEND_MEDIA] OGG/Opus conversion failed:`, convError.message);
+                }
+                audioMimetype = 'audio/ogg; codecs=opus';
+              } else {
+                const contentType = audioResponse.headers.get('content-type');
+                audioMimetype = this.getAudioMimeType(mediaUrl, contentType);
+              }
+
+              console.log(`[SEND_MEDIA] Audio ready: ${audioBuffer.length} bytes, mimetype: ${audioMimetype}, ptt: ${isPtt}`);
+              messageContent.audio = audioBuffer;
+              messageContent.mimetype = audioMimetype;
+              messageContent.ptt = isPtt;
+            } catch (downloadError: any) {
+              console.error(`[SEND_MEDIA] Audio download failed, falling back to URL:`, downloadError.message);
+              messageContent.audio = { url: mediaUrl };
+              messageContent.mimetype = 'audio/ogg; codecs=opus';
+              messageContent.ptt = options?.sendAudioAsVoice || false;
             }
+            break;
+          case 'document':
+            messageContent.document = { url: mediaUrl };
+            messageContent.mimetype = this.getMimeTypeForMedia(mediaUrl);
+            messageContent.fileName = options?.fileName || 'document';
+            messageContent.caption = options?.caption;
+            break;
+        }
 
-            console.log(`[SEND_MEDIA] Audio ready: ${audioBuffer.length} bytes, mimetype: ${audioMimetype}, ptt: ${isPtt}`);
-            messageContent.audio = audioBuffer;
-            messageContent.mimetype = audioMimetype;
-            messageContent.ptt = isPtt;
-          } catch (downloadError: any) {
-            console.error(`[SEND_MEDIA] Audio download failed, falling back to URL:`, downloadError.message);
-            // Fallback: try sending as URL
-            messageContent.audio = { url: mediaUrl };
-            messageContent.mimetype = 'audio/ogg; codecs=opus';
-            messageContent.ptt = options?.sendAudioAsVoice || false;
-          }
-          break;
-        case 'document':
-          messageContent.document = { url: mediaUrl };
-          messageContent.mimetype = this.getMimeTypeForMedia(mediaUrl);
-          messageContent.fileName = options?.fileName || 'document';
-          messageContent.caption = options?.caption;
-          break;
+        await sessionClient.socket.sendMessage(jid, messageContent);
       }
-
-      await sessionClient.socket.sendMessage(jid, messageContent);
-    } catch (error: any) {
-      console.error(`Failed to send ${mediaType}:`, error.message);
-      throw new Error(`Failed to send ${mediaType}: ${error.message}`);
-    }
+    );
   }
 
   /**
