@@ -581,20 +581,19 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       m.imageMessage?.caption ||
       m.videoMessage?.caption ||
       m.documentMessage?.caption ||
-      m.audioMessage?.caption ||
       '';
 
     // Handle interactive messages (common in Meta Ads)
     if (m.buttonsResponseMessage) {
-      text = m.buttonsResponseMessage.selectedButtonId || m.buttonsResponseMessage.displayText || text;
+      text = (m.buttonsResponseMessage as any).selectedButtonId || (m.buttonsResponseMessage as any).displayText || text;
     } else if (m.listResponseMessage) {
       text = m.listResponseMessage.title || m.listResponseMessage.singleSelectReply?.selectedRowId || text;
     } else if (m.templateButtonReplyMessage) {
-      text = m.templateButtonReplyMessage.selectedId || m.templateButtonReplyMessage.displayText || text;
+      text = (m.templateButtonReplyMessage as any).selectedId || (m.templateButtonReplyMessage as any).displayText || text;
     } else if (m.interactiveResponseMessage) {
       const interactive = m.interactiveResponseMessage;
       if (interactive.body) {
-        text = interactive.nativeFlowResponse?.paramsJson || interactive.body.text || text;
+        text = (interactive as any).nativeFlowResponse?.paramsJson || interactive.body.text || text;
       }
     } else if (m.buttonsMessage) {
       text = m.buttonsMessage.contentText || text;
