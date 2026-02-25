@@ -46,6 +46,8 @@ RUN pnpm build
 FROM node:20-alpine AS production
 
 WORKDIR /app
+RUN npm install -g pnpm@10 --registry=https://registry.npmjs.org/
+COPY .npmrc ./
 
 # Avoid redundant apk updates and keep only runtime libraries
 RUN apk add --no-cache \
