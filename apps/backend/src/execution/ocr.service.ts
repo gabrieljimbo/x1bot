@@ -7,7 +7,7 @@ import * as os from 'os';
 const sharp = require('sharp');
 import { createWorker } from 'tesseract.js';
 // @ts-ignore
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
 
 @Injectable()
 export class OCRService {
