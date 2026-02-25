@@ -6,6 +6,7 @@ import { ContextService } from './context.service';
 import { WhatsappSenderService } from './whatsapp-sender.service';
 import { ContactTagsService } from './contact-tags.service';
 import { ScheduleWorker } from '../worker/schedule.worker';
+import { OCRService } from './ocr.service';
 
 @Global()
 @Module({
@@ -17,6 +18,7 @@ import { ScheduleWorker } from '../worker/schedule.worker';
     WhatsappSenderService,
     ContactTagsService,
     ScheduleWorker,
+    OCRService,
   ],
   exports: [
     ExecutionService,
@@ -24,7 +26,8 @@ import { ScheduleWorker } from '../worker/schedule.worker';
     NodeExecutorService,
     WhatsappSenderService,
     ContactTagsService,
+    OCRService,
   ],
 })
-export class ExecutionModule {}
+export class ExecutionModule { }
 

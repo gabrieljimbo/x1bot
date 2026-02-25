@@ -312,6 +312,9 @@ export interface PixRecognitionConfig {
   imageUrl?: string; // supports {{variables.name}} syntax
   validateAmount?: boolean;
   expectedAmount?: string; // supports {{variables.name}} syntax
+  validateDate?: boolean; // If true, validates if receipt is from today
+  expectedReceiverName?: string; // supports {{variables.name}} syntax
+  acceptedValues?: string; // comma-separated values, e.g. "19.90, 29.90"
   saveResponseAs?: string; // default 'pixResult'
 }
 

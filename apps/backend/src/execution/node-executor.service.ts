@@ -27,6 +27,8 @@ import { ContactTagsService } from './contact-tags.service';
 import { JSDOM } from 'jsdom';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { PixParser } from './pix-parser.util';
+import { OCRService } from './ocr.service';
 
 export interface NodeExecutionResult {
   nextNodeId: string | null;
@@ -57,6 +59,7 @@ export class NodeExecutorService {
     private contextService: ContextService,
     private configService: ConfigService,
     private contactTagsService: ContactTagsService,
+    private ocrService: OCRService,
   ) { }
 
   setWhatsappSessionManager(manager: any) {
@@ -1802,55 +1805,118 @@ export class NodeExecutorService {
     }
   }
 
-  /**
-   * Execute PIX_RECOGNITION node
-   */
   private async executePixRecognition(
     node: WorkflowNode,
     context: ExecutionContext,
     edges: any[],
   ): Promise<NodeExecutionResult> {
     const config = node.config as PixRecognitionConfig;
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { createWorker } = require('tesseract.js');
-
-    // Default to triggering message media URL if not specified
     const imageUrl = this.contextService.interpolate(config.imageUrl || '{{triggerMessage.media.url}}', context);
+    const saveAs = config.saveResponseAs || 'pixResult';
 
     try {
       if (!imageUrl || imageUrl.includes('{{')) {
-        throw new Error('No valid image URL provided for PIX recognition');
+        throw new Error('No valid image/PDF URL provided for PIX recognition');
       }
 
-      console.log(`[PIX_RECOGNITION] Processing image: ${imageUrl}`);
+      console.log(`[PIX_RECOGNITION] Processing file: ${imageUrl}`);
 
-      // Initialize Tesseract worker
-      // Note: This might download language data on first run
-      const worker = await createWorker('por'); // Portuguese
-      const { data: { text } } = await worker.recognize(imageUrl);
-      await worker.terminate();
+      // 1. Run OCR via OCRService (handles pre-processing and PDF)
+      const rawText = await this.ocrService.extractText(imageUrl);
 
-      // Parse OCR text to extract PIX information
-      const pixData = this.parsePixText(text);
+      // 2. Parse text with bank-specific logic
+      const pixData = PixParser.parse(rawText);
 
-      // Validate amount if requested
-      if (config.validateAmount && config.expectedAmount) {
-        const expectedStr = this.contextService.interpolate(config.expectedAmount, context);
-        const expectedAmount = parseFloat(expectedStr.replace(',', '.'));
+      // 3. Validations
+      let valid = true;
+      let reason = null;
 
-        if (!isNaN(expectedAmount)) {
-          pixData.isAmountValid = Math.abs((pixData.amount || 0) - expectedAmount) < 0.01;
+      // Date Validation (Mandatory: must be today)
+      if (config.validateDate !== false) {
+        const today = new Date();
+        const dd = String(today.getDate()).padStart(2, '0');
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const yyyy = today.getFullYear();
+        const todayStr = `${dd}/${mm}/${yyyy}`;
+
+        if (pixData.date && pixData.date !== todayStr) {
+          valid = false;
+          reason = `Data inválida: encontrado ${pixData.date}, esperado ${todayStr}`;
+        } else if (!pixData.date) {
+          // If date is mandatory but not found, we might want to flag it or be lenient?
+          // User requested that "comprovantes com data anterior devem ser rejeitados".
+          // If not found, it's safer to fail or warn.
         }
       }
 
-      // Basic validity check: must have found some key PIX indicators
-      const hasPixKeywords = text.toLowerCase().includes('pix') || text.toLowerCase().includes('pagamento');
-      pixData.isValidComprovante = hasPixKeywords && (pixData.amount > 0 || !!pixData.transactionId);
+      // Receiver Name Validation
+      if (valid && config.expectedReceiverName) {
+        const expected = this.contextService.interpolate(config.expectedReceiverName, context).toLowerCase().trim();
+        const found = (pixData.receiverName || '').toLowerCase().trim();
 
-      const saveAs = config.saveResponseAs || 'pixResult';
+        if (!found.includes(expected) && !expected.includes(found)) {
+          valid = false;
+          reason = `Recebedor não correspondente: encontrado "${pixData.receiverName || 'Não identificado'}", esperado "${config.expectedReceiverName}"`;
+        }
+      }
+
+      // Value Validation (Accepted list)
+      if (valid && (config.validateAmount || config.acceptedValues)) {
+        if (config.acceptedValues) {
+          const acceptedList = config.acceptedValues.split(',').map(v => parseFloat(v.trim().replace(',', '.')));
+          const foundValue = pixData.amount;
+
+          if (!acceptedList.some(v => Math.abs(v - foundValue) < 0.01)) {
+            valid = false;
+            reason = `Valor não autorizado: encontrado R$ ${pixData.amount.toFixed(2)}, valores aceitos: ${config.acceptedValues}`;
+          }
+        } else if (config.expectedAmount) {
+          const expectedStr = this.contextService.interpolate(config.expectedAmount, context);
+          const expectedAmount = parseFloat(expectedStr.replace(',', '.'));
+
+          if (!isNaN(expectedAmount) && Math.abs(pixData.amount - expectedAmount) >= 0.01) {
+            valid = false;
+            reason = `Valor divergente: encontrado R$ ${pixData.amount.toFixed(2)}, esperado R$ ${expectedAmount.toFixed(2)}`;
+          }
+        }
+      }
+
+      // General fallback validity check
+      const hasPixKeywords = rawText.toLowerCase().includes('pix') || rawText.toLowerCase().includes('pagamento');
+      if (valid && !hasPixKeywords && pixData.amount <= 0 && !pixData.transactionId) {
+        valid = false;
+        reason = 'O arquivo não parece ser um comprovante de PIX válido.';
+      }
+
       const result = {
-        ...pixData,
-        rawText: text,
+        valid,
+        reason,
+        data: {
+          ...pixData,
+          rawText
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      console.log(`[PIX_RECOGNITION] Result for ${imageUrl}: valid=${valid}${reason ? ` (${reason})` : ''}`);
+
+      this.contextService.setVariable(context, saveAs, result);
+      this.contextService.setOutput(context, { [saveAs]: result });
+
+      const nextEdge = edges.find((e) => e.source === node.id);
+      const nextNodeId = nextEdge ? nextEdge.target : null;
+
+      return {
+        nextNodeId,
+        shouldWait: false,
+        output: { [saveAs]: result },
+      };
+    } catch (error: any) {
+      console.error('[PIX_RECOGNITION] Fatal Error:', error.message);
+      const result = {
+        valid: false,
+        reason: `Erro no processamento: ${error.message}`,
+        data: { rawText: '' },
         timestamp: new Date().toISOString(),
       };
 
@@ -1865,79 +1931,9 @@ export class NodeExecutorService {
         shouldWait: false,
         output: { [saveAs]: result },
       };
-    } catch (error: any) {
-      console.error('[PIX_RECOGNITION] Error:', error.message);
-      const saveAs = config.saveResponseAs || 'pixResult';
-      const errorResponse = {
-        error: true,
-        message: error.message,
-        timestamp: new Date().toISOString(),
-      };
-
-      this.contextService.setVariable(context, saveAs, errorResponse);
-      this.contextService.setOutput(context, { [saveAs]: errorResponse });
-
-      const nextEdge = edges.find((e) => e.source === node.id);
-      const nextNodeId = nextEdge ? nextEdge.target : null;
-
-      return {
-        nextNodeId,
-        shouldWait: false,
-        output: { [saveAs]: errorResponse },
-      };
     }
   }
 
-  /**
-   * Helper to parse text extracted from a PIX receipt
-   */
-  private parsePixText(text: string) {
-    const data: any = {
-      amount: 0,
-      date: null,
-      transactionId: null,
-      payer: null,
-      receiver: null,
-    };
-
-    // Normalize text: remove multiple spaces, handle line breaks
-    const cleanText = text.replace(/\s+/g, ' ');
-
-    // 1. Extract Amount (Value)
-    // Common formats: "R$ 100,00", "Valor: 100,00", "Valor Pago: 100.00"
-    const amountRegex = /(?:R\$|Valor|TOTAL)\s*:?\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[\.,]\d{2})/i;
-    const amountMatch = cleanText.match(amountRegex);
-    if (amountMatch) {
-      const amountStr = amountMatch[1].replace(/\./g, '').replace(',', '.');
-      data.amount = parseFloat(amountStr);
-    }
-
-    // 2. Extract Date
-    // Common formats: "16/02/2026", "16 FEV 2026"
-    const dateRegex = /(\d{2}\/\d{2}\/\d{4})/;
-    const dateMatch = cleanText.match(dateRegex);
-    if (dateMatch) {
-      data.date = dateMatch[1];
-    }
-
-    // 3. Extract Transaction ID (ID da Transação / Autenticação)
-    // PIX IDs usually start with E followed by numbers/letters or are long strings
-    const txIdRegex = /(?:ID|Transação|Autenticação|Código|Protocolo)\s*:?\s*([A-Z0-9]{15,})/i;
-    const txIdMatch = cleanText.match(txIdRegex);
-    if (txIdMatch) {
-      data.transactionId = txIdMatch[1];
-    }
-
-    // 4. Extract names (Heuristic)
-    // This is harder via OCR and simple regex, but we can try to look after "Pagador" or "De:"
-    const payerRegex = /(?:Pagador|De|Nome)\s*:?\s*([A-Z\s]{5,30})(?:\s[A-Z]|\n|$)/i;
-    const payerMatch = cleanText.match(payerRegex);
-    if (payerMatch) {
-      data.payer = payerMatch[1].trim();
-    }
-
-    return data;
-  }
 
   /**
    * Sanitize an object to make it safe for serialization (remove circular refs, etc.)
