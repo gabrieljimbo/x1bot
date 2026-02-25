@@ -46,10 +46,7 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-RUN npm install -g pnpm@10
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_SKIP_DOWNLOAD=true
-
+# Avoid redundant apk updates and keep only runtime libraries
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -73,24 +70,23 @@ RUN apk add --no-cache \
 # Use direct chromium path to avoid symlink issues
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/shared ./packages/shared
-COPY apps/backend ./apps/backend
+# Copy all pre-compiled node_modules from base stage
+# This avoids running pnpm install --prod in production (which would try to recompiling canvas)
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/apps/backend/node_modules ./apps/backend/node_modules
+COPY --from=base /app/packages/shared/node_modules ./packages/shared/node_modules
 
-# Install ONLY production deps
-# Enable scripts for canvas
-RUN pnpm install --prod --frozen-lockfile
-
-# Prisma CLI (somente para migrate deploy)
-RUN npm install -g prisma@^5.8.0
-
-# Copy build artifacts
+# Copy app code and artifacts
+COPY . .
 COPY --from=base /app/packages/shared/dist ./packages/shared/dist
 COPY --from=base /app/apps/backend/dist ./apps/backend/dist
 
-# Generate Prisma Client in production stage
+# Prisma CLI (needed for migrate deploy in entrypoint)
+RUN npm install -g prisma@^5.8.0
+
+# Generate Prisma Client (uses the binaries already present in node_modules)
 WORKDIR /app/apps/backend
-RUN prisma generate
+RUN npx prisma generate
 
 RUN mkdir -p /app/data /app/logs
 
