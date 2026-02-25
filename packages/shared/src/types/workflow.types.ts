@@ -96,6 +96,7 @@ export interface WhatsappSession {
   status: WhatsappSessionStatus;
   qrCode?: string;
   phoneNumber?: string;
+  isBusiness: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

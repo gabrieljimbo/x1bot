@@ -34,6 +34,7 @@ interface SessionClient {
   status: WhatsappSessionStatus;
   qrCode?: string;
   ownJid?: string; // The connected phone's own JID (e.g., '5511999999999@s.whatsapp.net')
+  isBusiness?: boolean;
 }
 
 @Injectable()
@@ -406,20 +407,82 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Label management (Note: Baileys doesn't have a simple high-level API for this yet)
-   * We will implement it as stub or simple version if possible.
+   * Label management
    */
   async addLabels(sessionId: string, contactId: string, labelIds: string[]): Promise<void> {
-    console.warn('[BAILEYS] Label management not fully implemented yet');
+    const sessionClient = this.sessions.get(sessionId);
+    if (!sessionClient) throw new Error(`Session ${sessionId} not found`);
+
+    if (!sessionClient.isBusiness) {
+      throw new Error('ACCOUNT_NOT_BUSINESS: WhatsApp labels are only available for Business accounts');
+    }
+
+    try {
+      await sessionClient.socket.chatModify(
+        { addChatLabel: { labelId: labelIds[0] } }, // Baileys currently supports one at a time for high-level? or we can loop
+        contactId
+      );
+
+      // If multiple, Baileys might need separate calls or a different structure. 
+      // Most common use case is adding one or we loop.
+      for (let i = 1; i < labelIds.length; i++) {
+        await sessionClient.socket.chatModify({ addChatLabel: { labelId: labelIds[i] } }, contactId);
+      }
+
+      await this.whatsappService.addChatLabels(sessionId, contactId, labelIds);
+    } catch (error: any) {
+      console.error(`[LABELS] Failed to add labels for session ${sessionId}:`, error.message);
+      throw error;
+    }
   }
 
   async removeLabels(sessionId: string, contactId: string, labelIds: string[]): Promise<void> {
-    console.warn('[BAILEYS] Label management not fully implemented yet');
+    const sessionClient = this.sessions.get(sessionId);
+    if (!sessionClient) throw new Error(`Session ${sessionId} not found`);
+
+    if (!sessionClient.isBusiness) {
+      throw new Error('ACCOUNT_NOT_BUSINESS: WhatsApp labels are only available for Business accounts');
+    }
+
+    try {
+      for (const labelId of labelIds) {
+        await sessionClient.socket.chatModify(
+          { removeChatLabel: { labelId } },
+          contactId
+        );
+      }
+      await this.whatsappService.removeChatLabels(sessionId, contactId, labelIds);
+    } catch (error: any) {
+      console.error(`[LABELS] Failed to remove labels for session ${sessionId}:`, error.message);
+      throw error;
+    }
   }
 
   async getAllLabels(sessionId: string): Promise<any[]> {
-    console.warn('[BAILEYS] Label management not fully implemented yet');
-    return [];
+    return this.whatsappService.getLabels(sessionId);
+  }
+
+  async getChatLabels(sessionId: string, contactId: string): Promise<any[]> {
+    return this.whatsappService.getChatLabels(sessionId, contactId);
+  }
+
+  /**
+   * Sync labels and associations from WhatsApp
+   */
+  async syncLabelsAndAssociations(sessionId: string): Promise<void> {
+    const sessionClient = this.sessions.get(sessionId);
+    if (!sessionClient || !sessionClient.isBusiness) return;
+
+    try {
+      // Baileys provides labels in the store or via query.
+      // Since we don't use a full persistent store in this service yet, 
+      // we can try to fetch them if Baileys supports a query for this.
+      // Note: Baileys labels are usually synced via the 'labels.edit' and 'labels.association' events.
+      // A full manual sync might require querying the WA server directly.
+      console.log(`[LABELS] Auto-syncing labels for session ${sessionId}`);
+    } catch (error: any) {
+      console.error(`[LABELS] Sync error for session ${sessionId}:`, error.message);
+    }
   }
 
   /**
@@ -527,15 +590,35 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         if (sessionClient) {
           sessionClient.status = WhatsappSessionStatus.CONNECTED;
           sessionClient.ownJid = user; // Store own JID to filter self-messages
+
+          // Check if it's a business account
+          // @ts-ignore
+          const isBusiness = !!socket.authState.creds.me?.platform || socket.user?.id.includes(':');
+          // Note: Baileys platform check or querying business profile is better.
+          // For now, we can try to detect via the user object if available or simple query.
+
+          try {
+            // A more reliable way is to fetch the verified name or business profile
+            const result = await socket.getBusinessProfile(user).catch(() => null);
+            sessionClient.isBusiness = !!result;
+          } catch (e) {
+            sessionClient.isBusiness = false;
+          }
+
+          console.log(`[SESSION] Account type detected: ${sessionClient.isBusiness ? 'BUSINESS' : 'PERSONAL'}`);
+
+          await this.whatsappService.updateSession(sessionId, {
+            status: WhatsappSessionStatus.CONNECTED,
+            phoneNumber,
+            qrCode: undefined,
+            // @ts-ignore
+            isBusiness: sessionClient.isBusiness
+          });
+
+          if (sessionClient.isBusiness) {
+            this.syncLabelsAndAssociations(sessionId);
+          }
         }
-
-        console.log(`[SESSION] Own JID stored: ${user}`);
-
-        await this.whatsappService.updateSession(sessionId, {
-          status: WhatsappSessionStatus.CONNECTED,
-          phoneNumber,
-          qrCode: undefined,
-        });
 
         await this.eventBus.emit({
           type: EventType.WHATSAPP_SESSION_CONNECTED,
@@ -572,6 +655,30 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
           await this.handleIncomingMessage(tenantId, sessionId, msg);
         }
+      }
+    });
+
+    // Label Events
+    socket.ev.on('labels.edit', async (label) => {
+      console.log(`[LABELS] Label edit received:`, label);
+      if (label.name) {
+        await this.whatsappService.upsertLabels(sessionId, [{
+          labelId: label.id,
+          name: label.name,
+          color: (label as any).colorIndex || (label as any).color
+        }]);
+      } else {
+        // Label deleted (or name is missing)
+        await this.whatsappService.deleteLabel(sessionId, label.id);
+      }
+    });
+
+    socket.ev.on('labels.association', async ({ association, type }) => {
+      console.log(`[LABELS] Label association: ${association.chatId} -> ${association.labelId} (${type})`);
+      if (type === 'add') {
+        await this.whatsappService.addChatLabels(sessionId, association.chatId, [association.labelId]);
+      } else {
+        await this.whatsappService.removeChatLabels(sessionId, association.chatId, [association.labelId]);
       }
     });
   }

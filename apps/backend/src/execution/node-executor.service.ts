@@ -409,8 +409,15 @@ export class NodeExecutorService {
         nextNodeId,
         shouldWait: false,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('[MANAGE_LABELS] Error:', error);
+
+      if (error.message?.includes('ACCOUNT_NOT_BUSINESS')) {
+        // Log specifically but don't crash the whole workflow if not critical
+        // For now, we wrap the error for clarity
+        throw new Error(`WhatsApp Labels failed: Connected account is not a Business account. Labels are not supported.`);
+      }
+
       throw error;
     }
   }

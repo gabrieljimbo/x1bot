@@ -67,6 +67,7 @@ export class WhatsappService {
       status: WhatsappSessionStatus;
       qrCode: string;
       phoneNumber: string;
+      isBusiness: boolean;
     }>,
   ): Promise<WhatsappSession> {
     const session = await this.prisma.whatsappSession.update({
@@ -149,6 +150,124 @@ export class WhatsappService {
     return results;
   }
 
+  /**
+   * Upsert many labels for a session
+   */
+  async upsertLabels(sessionId: string, labels: { labelId: string; name: string; color?: number }[]) {
+    const results = [];
+    for (const label of labels) {
+      const result = await this.prisma.whatsappLabel.upsert({
+        where: {
+          sessionId_labelId: {
+            sessionId,
+            labelId: label.labelId,
+          },
+        },
+        update: {
+          name: label.name,
+          color: label.color,
+          updatedAt: new Date(),
+        },
+        create: {
+          sessionId,
+          labelId: label.labelId,
+          name: label.name,
+          color: label.color,
+        },
+      });
+      results.push(result);
+    }
+    return results;
+  }
+
+  /**
+   * Delete a label by ID
+   */
+  async deleteLabel(sessionId: string, labelId: string) {
+    return this.prisma.whatsappLabel.deleteMany({
+      where: { sessionId, labelId },
+    });
+  }
+
+  /**
+   * Get all labels for a session
+   */
+  async getLabels(sessionId: string) {
+    return this.prisma.whatsappLabel.findMany({
+      where: { sessionId },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Sync chat labels (associations)
+   */
+  async syncChatLabels(sessionId: string, chatId: string, labelIds: string[]) {
+    // Remove existing associations for this chat
+    await this.prisma.whatsappChatLabel.deleteMany({
+      where: { sessionId, chatId },
+    });
+
+    // Bulk create new ones
+    if (labelIds.length > 0) {
+      return this.prisma.whatsappChatLabel.createMany({
+        data: labelIds.map((labelId) => ({
+          sessionId,
+          chatId,
+          labelId,
+        })),
+      });
+    }
+    return { count: 0 };
+  }
+
+  /**
+   * Add association between chat and labels
+   */
+  async addChatLabels(sessionId: string, chatId: string, labelIds: string[]) {
+    const data = labelIds.map(labelId => ({
+      sessionId,
+      chatId,
+      labelId
+    }));
+
+    return this.prisma.whatsappChatLabel.createMany({
+      data,
+      skipDuplicates: true
+    });
+  }
+
+  /**
+   * Remove association between chat and labels
+   */
+  async removeChatLabels(sessionId: string, chatId: string, labelIds: string[]) {
+    return this.prisma.whatsappChatLabel.deleteMany({
+      where: {
+        sessionId,
+        chatId,
+        labelId: { in: labelIds }
+      }
+    });
+  }
+
+  /**
+   * Get labels associated with a chat
+   */
+  async getChatLabels(sessionId: string, chatId: string) {
+    const associations = await this.prisma.whatsappChatLabel.findMany({
+      where: { sessionId, chatId },
+    });
+
+    const labelIds = associations.map(a => a.labelId);
+
+    return this.prisma.whatsappLabel.findMany({
+      where: {
+        sessionId,
+        labelId: { in: labelIds },
+      },
+    });
+  }
+
   private mapToSession(data: any): WhatsappSession {
     return {
       id: data.id,
@@ -157,6 +276,7 @@ export class WhatsappService {
       status: data.status as WhatsappSessionStatus,
       qrCode: data.qrCode,
       phoneNumber: data.phoneNumber,
+      isBusiness: data.isBusiness || false,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     };
