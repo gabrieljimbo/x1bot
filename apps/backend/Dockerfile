@@ -15,6 +15,8 @@ RUN apk add --no-cache \
     pango-dev \
     giflib-dev \
     librsvg-dev \
+    pixman-dev \
+    glib-dev \
     python3
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -65,6 +67,7 @@ RUN apk add --no-cache \
     pango \
     giflib \
     librsvg \
+    pixman \
     && rm -rf /var/cache/apk/*
 
 # Use direct chromium path to avoid symlink issues
