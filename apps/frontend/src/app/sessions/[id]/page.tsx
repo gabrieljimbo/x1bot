@@ -6,6 +6,8 @@ import { apiClient } from '@/lib/api-client'
 import QRCode from 'react-qr-code'
 import { useAuth } from '@/contexts/AuthContext'
 import { AuthGuard } from '@/components/AuthGuard'
+import { wsClient } from '@/lib/websocket'
+import { EventType } from '@n9n/shared'
 
 function SessionDetailPageContent({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -23,11 +25,49 @@ function SessionDetailPageContent({ params }: { params: { id: string } }) {
   useEffect(() => {
     if (sessionId && tenantId) {
       loadSession()
-      // Reload every 3 seconds
-      const interval = setInterval(loadSession, 3000)
-      return () => clearInterval(interval)
+
+      // Connect to WebSocket if we have a token (usually available from AuthContext)
+      if (token) {
+        wsClient.connect(tenantId, token)
+      }
+
+      // Reload periodically as fallback
+      const interval = setInterval(loadSession, 5000)
+
+      // WebSocket listeners for real-time updates
+      const handleQrCode = (event: any) => {
+        if (event.sessionId === sessionId) {
+          console.log('Real-time QR code received via WebSocket')
+          setSession((prev: any) => prev ? { ...prev, qrCode: event.qrCode, status: 'QR_CODE' } : null)
+        }
+      }
+
+      const handleConnected = (event: any) => {
+        if (event.sessionId === sessionId) {
+          console.log('Real-time connection event received via WebSocket')
+          setSession((prev: any) => prev ? { ...prev, status: 'CONNECTED', phoneNumber: event.phoneNumber } : null)
+        }
+      }
+
+      const handleDisconnected = (event: any) => {
+        if (event.sessionId === sessionId) {
+          console.log('Real-time disconnect event received via WebSocket')
+          setSession((prev: any) => prev ? { ...prev, status: 'DISCONNECTED' } : null)
+        }
+      }
+
+      wsClient.on(EventType.WHATSAPP_QR_CODE, handleQrCode)
+      wsClient.on(EventType.WHATSAPP_SESSION_CONNECTED, handleConnected)
+      wsClient.on(EventType.WHATSAPP_SESSION_DISCONNECTED, handleDisconnected)
+
+      return () => {
+        clearInterval(interval)
+        wsClient.off(EventType.WHATSAPP_QR_CODE, handleQrCode)
+        wsClient.off(EventType.WHATSAPP_SESSION_CONNECTED, handleConnected)
+        wsClient.off(EventType.WHATSAPP_SESSION_DISCONNECTED, handleDisconnected)
+      }
     }
-  }, [sessionId, tenantId])
+  }, [sessionId, tenantId, token])
 
   const loadSession = async () => {
     try {

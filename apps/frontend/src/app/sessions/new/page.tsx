@@ -11,7 +11,7 @@ import { AuthGuard } from '@/components/AuthGuard'
 function NewSessionPageContent() {
   const router = useRouter()
   const { tenant, token } = useAuth()
-  
+
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -36,14 +36,14 @@ function NewSessionPageContent() {
           addDebug('Polling session status...')
           const session = await apiClient.getWhatsappSession(sessionId)
           addDebug(`Status: ${session.status}, Has QR: ${!!session.qrCode}`)
-          
+
           setStatus(session.status)
-          
+
           if (session.qrCode && session.status === 'QR_CODE') {
             addDebug('QR Code received!')
             setQrCode(session.qrCode)
           }
-          
+
           if (session.status === 'CONNECTED') {
             addDebug('Connected! Redirecting...')
             setTimeout(() => {
@@ -61,16 +61,16 @@ function NewSessionPageContent() {
       const pollInterval = setInterval(pollSession, 2000)
 
       const handleQrCode = (event: any) => {
-        addDebug('WebSocket: QR Code event received')
         if (event.sessionId === sessionId) {
+          addDebug('WebSocket: New QR Code received')
           setQrCode(event.qrCode)
           setStatus('QR_CODE')
         }
       }
 
       const handleConnected = (event: any) => {
-        addDebug('WebSocket: Connected event received')
         if (event.sessionId === sessionId) {
+          addDebug('WebSocket: Session CONNECTED')
           setStatus('CONNECTED')
           setTimeout(() => {
             router.push('/')
@@ -78,20 +78,30 @@ function NewSessionPageContent() {
         }
       }
 
+      const handleDisconnected = (event: any) => {
+        if (event.sessionId === sessionId) {
+          addDebug('WebSocket: Session DISCONNECTED')
+          setStatus('DISCONNECTED')
+          setQrCode(null)
+        }
+      }
+
       wsClient.on(EventType.WHATSAPP_QR_CODE, handleQrCode)
       wsClient.on(EventType.WHATSAPP_SESSION_CONNECTED, handleConnected)
+      wsClient.on(EventType.WHATSAPP_SESSION_DISCONNECTED, handleDisconnected)
 
       return () => {
         clearInterval(pollInterval)
         wsClient.off(EventType.WHATSAPP_QR_CODE, handleQrCode)
         wsClient.off(EventType.WHATSAPP_SESSION_CONNECTED, handleConnected)
+        wsClient.off(EventType.WHATSAPP_SESSION_DISCONNECTED, handleDisconnected)
       }
     }
   }, [sessionId, tenant?.id, token, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!name.trim()) {
       setError('Name is required')
       return
@@ -180,13 +190,12 @@ function NewSessionPageContent() {
                   <p className="text-gray-400">Session ID: {sessionId}</p>
                 </div>
                 <div
-                  className={`px-4 py-2 rounded text-sm font-semibold ${
-                    status === 'CONNECTED'
+                  className={`px-4 py-2 rounded text-sm font-semibold ${status === 'CONNECTED'
                       ? 'bg-primary text-black'
                       : status === 'QR_CODE'
-                      ? 'bg-yellow-500 text-black'
-                      : 'bg-gray-700 text-white'
-                  }`}
+                        ? 'bg-yellow-500 text-black'
+                        : 'bg-gray-700 text-white'
+                    }`}
                 >
                   {status}
                 </div>

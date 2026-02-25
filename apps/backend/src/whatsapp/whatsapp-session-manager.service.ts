@@ -447,7 +447,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
-        console.log(`QR Code generated for session ${sessionId}`);
+        console.log(`[QR_GENERATE] Session ${sessionId}: New QR generated (${qr.substring(0, 10)}...)`);
         const sessionClient = this.sessions.get(sessionId);
         if (sessionClient) {
           sessionClient.status = WhatsappSessionStatus.QR_CODE;
@@ -466,6 +466,8 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
           qrCode: qr,
           timestamp: new Date(),
         });
+
+        console.log(`[QR_BROADCAST] Session ${sessionId}: QR code broadcasted to event bus`);
       }
 
       if (connection === 'close') {
