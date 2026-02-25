@@ -111,6 +111,7 @@ export interface TriggerMessageConfig {
 export interface TriggerMessagePayload {
   messageId: string;
   from: string;
+  fromMe: boolean;
   type: 'text' | 'media';
   text: string | null;
   media: {

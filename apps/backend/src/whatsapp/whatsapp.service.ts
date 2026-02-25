@@ -4,7 +4,7 @@ import { WhatsappSession, WhatsappSessionStatus } from '@n9n/shared';
 
 @Injectable()
 export class WhatsappService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   /**
    * Create WhatsApp session
@@ -90,6 +90,63 @@ export class WhatsappService {
         tenantId,
       },
     });
+  }
+
+  /**
+   * Get all group configurations for a session
+   */
+  async getGroupConfigs(sessionId: string) {
+    return this.prisma.whatsappGroupConfig.findMany({
+      where: { sessionId },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Update a group configuration
+   */
+  async updateGroupConfig(
+    configId: string,
+    data: Partial<{
+      enabled: boolean;
+      workflowIds: string[];
+    }>,
+  ) {
+    return this.prisma.whatsappGroupConfig.update({
+      where: { id: configId },
+      data,
+    });
+  }
+
+  /**
+   * Upsert many group configurations (for sync)
+   */
+  async upsertGroupConfigs(sessionId: string, groups: { groupId: string; name: string }[]) {
+    const results = [];
+
+    for (const group of groups) {
+      const config = await this.prisma.whatsappGroupConfig.upsert({
+        where: {
+          sessionId_groupId: {
+            sessionId,
+            groupId: group.groupId,
+          },
+        },
+        update: {
+          name: group.name,
+        },
+        create: {
+          sessionId,
+          groupId: group.groupId,
+          name: group.name,
+          enabled: false,
+          workflowIds: [],
+        },
+      });
+      results.push(config);
+    }
+
+    return results;
   }
 
   private mapToSession(data: any): WhatsappSession {

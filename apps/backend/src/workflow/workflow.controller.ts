@@ -247,6 +247,26 @@ export class WorkflowController {
     return { success: true };
   }
 
+  // Group Management
+
+  @Get('whatsapp/sessions/:id/groups')
+  async getGroupConfigs(@Param('id') sessionId: string) {
+    return this.whatsappService.getGroupConfigs(sessionId);
+  }
+
+  @Post('whatsapp/sessions/:id/groups/sync')
+  async syncGroups(@Param('id') sessionId: string) {
+    return this.whatsappSessionManager.syncGroups(sessionId);
+  }
+
+  @Put('whatsapp/sessions/:id/groups/:configId')
+  async updateGroupConfig(
+    @Param('configId') configId: string,
+    @Body() body: { enabled: boolean; workflowIds: string[] },
+  ) {
+    return this.whatsappService.updateGroupConfig(configId, body);
+  }
+
   // Executions
 
   @Get('workflows/:workflowId/executions')

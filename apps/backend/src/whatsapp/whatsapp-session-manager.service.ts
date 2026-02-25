@@ -423,6 +423,31 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Sync all participating groups for a session
+   */
+  async syncGroups(sessionId: string): Promise<any[]> {
+    const sessionClient = this.sessions.get(sessionId);
+    if (!sessionClient) {
+      throw new Error(`Session ${sessionId} not found or initialized`);
+    }
+
+    try {
+      // Fetch all participating groups from Baileys
+      const groups = await sessionClient.socket.groupFetchAllParticipating();
+      const groupList = Object.values(groups).map((g) => ({
+        groupId: g.id,
+        name: g.subject,
+      }));
+
+      // Upsert into database to preserve existing "enabled" and "workflowIds" settings
+      return this.whatsappService.upsertGroupConfigs(sessionId, groupList);
+    } catch (error: any) {
+      console.error(`[GROUPS] Failed to sync groups for session ${sessionId}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Get session status
    */
   getSessionStatus(sessionId: string): WhatsappSessionStatus | null {
@@ -588,7 +613,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     const m = msg.message;
 
     if (!m) {
-      return { messageId, from, type: 'text', text: '', media: null, timestamp };
+      return { messageId, from, fromMe: !!msg.key.fromMe, type: 'text', text: '', media: null, timestamp };
     }
 
     // Get text content from various Baileys message types
@@ -650,6 +675,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         return {
           messageId,
           from,
+          fromMe: !!msg.key.fromMe,
           type: 'media',
           text,
           media: {
@@ -663,13 +689,14 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         };
       } catch (error: any) {
         console.error('[BAILEYS] Media download failed:', error.message);
-        return { messageId, from, type: 'text', text, media: null, timestamp };
+        return { messageId, from, fromMe: !!msg.key.fromMe, type: 'text', text, media: null, timestamp };
       }
     }
 
     return {
       messageId,
       from,
+      fromMe: !!msg.key.fromMe,
       type: 'text',
       text,
       media: null,

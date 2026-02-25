@@ -142,6 +142,25 @@ export const apiClient = {
     return data
   },
 
+  // Group Management
+  getGroupConfigs: async (sessionId: string) => {
+    const { data } = await client.get(`/api/whatsapp/sessions/${sessionId}/groups`)
+    return data
+  },
+
+  syncGroups: async (sessionId: string) => {
+    const { data } = await client.post(`/api/whatsapp/sessions/${sessionId}/groups/sync`)
+    return data
+  },
+
+  updateGroupConfig: async (sessionId: string, configId: string, enabled: boolean, workflowIds: string[]) => {
+    const { data } = await client.put(`/api/whatsapp/sessions/${sessionId}/groups/${configId}`, {
+      enabled,
+      workflowIds,
+    })
+    return data
+  },
+
   // Executions
   getExecution: async (executionId: string) => {
     const { data } = await client.get(`/api/executions/${executionId}`)

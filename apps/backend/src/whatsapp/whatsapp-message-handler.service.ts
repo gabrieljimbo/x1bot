@@ -21,17 +21,49 @@ export class WhatsappMessageHandler {
     contactId: string,
     payload: TriggerMessagePayload | string,
   ): Promise<void> {
-    // Normalize payload: if string, convert to payload format
+    // Normalize payload
     const normalizedPayload: TriggerMessagePayload = typeof payload === 'string'
       ? {
         messageId: `text-${Date.now()}`,
         from: contactId,
+        fromMe: false, // Default for simple string messages
         type: 'text',
         text: payload,
         media: null,
         timestamp: Date.now(),
       }
       : payload;
+
+    // 1. Loop Protection: Ignore messages from bot itself
+    if (normalizedPayload.fromMe) {
+      console.log(`[IGNORE] Session ${sessionId}: Ignoring message from self (loop protection)`);
+      return;
+    }
+
+    // 2. Group Filtering: Check if message is from a group
+    const isGroup = contactId.endsWith('@g.us');
+    let whitelistedWorkflows: string[] = [];
+
+    if (isGroup) {
+      // Fetch group configuration
+      const groupConfig = await this.prisma.whatsappGroupConfig.findUnique({
+        where: {
+          sessionId_groupId: {
+            sessionId,
+            groupId: contactId,
+          },
+        },
+      });
+
+      // 3. Whitelist Check: Discard if group not authorized or disabled
+      if (!groupConfig || !groupConfig.enabled) {
+        console.log(`[IGNORE] Session ${sessionId}: Group ${contactId} not in whitelist or disabled`);
+        return;
+      }
+
+      whitelistedWorkflows = groupConfig.workflowIds;
+      console.log(`[GROUP] Session ${sessionId}: Group authorized. Permitted workflows:`, whitelistedWorkflows);
+    }
 
     // Check for active execution
     const activeExecution = await this.executionService.getActiveExecution(
@@ -41,15 +73,20 @@ export class WhatsappMessageHandler {
     );
 
     if (activeExecution) {
+      // 4. Workflow Check for Groups (Resume): Ensure the active workflow is permitted in this group
+      if (isGroup && !whitelistedWorkflows.includes(activeExecution.workflowId)) {
+        console.log(`[IGNORE] Session ${sessionId}: Active workflow ${activeExecution.workflowId} not permitted in group ${contactId}`);
+        return;
+      }
+
       // Resume existing execution
       if (activeExecution.status === ExecutionStatus.WAITING) {
-        // For resume, we pass the text content
         const resumeText = normalizedPayload.text || '';
         await this.executionEngine.resumeExecution(activeExecution, resumeText, normalizedPayload);
       }
     } else {
       // Try to match trigger
-      await this.matchTriggerAndStart(tenantId, sessionId, contactId, normalizedPayload);
+      await this.matchTriggerAndStart(tenantId, sessionId, contactId, normalizedPayload, isGroup, whitelistedWorkflows);
     }
   }
 
@@ -61,6 +98,8 @@ export class WhatsappMessageHandler {
     sessionId: string,
     contactId: string,
     payload: TriggerMessagePayload,
+    isGroup: boolean = false,
+    whitelistedWorkflows: string[] = [],
   ): Promise<void> {
     const messageText = payload.text || '';
     console.log('[TRIGGER] Matching message:', messageText, 'Type:', payload.type);
@@ -99,6 +138,12 @@ export class WhatsappMessageHandler {
 
       const config = triggerNode.config;
       console.log('[TRIGGER] Trigger config:', config);
+
+      // 4. Workflow Check for Groups (Start): If in a group, only trigger if workflow is whitelisted
+      if (isGroup && !whitelistedWorkflows.includes(workflow.id)) {
+        console.log(`[IGNORE] Session ${sessionId}: Workflow ${workflow.id} not whitelisted for group ${contactId}`);
+        continue;
+      }
 
       // Check if this trigger is for a specific session
       if (config.sessionId && config.sessionId !== sessionId) {

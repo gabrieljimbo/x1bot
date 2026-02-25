@@ -106,10 +106,28 @@ model WhatsappSession {
 
   tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   executions WorkflowExecution[]
+  groupConfigs WhatsappGroupConfig[]
 
   @@index([tenantId])
   @@index([tenantId, status])
   @@map("whatsapp_sessions")
+}
+
+model WhatsappGroupConfig {
+  id          String   @id @default(uuid())
+  sessionId   String
+  groupId     String   // Group JID (e.g., xxx@g.us)
+  name        String
+  enabled     Boolean  @default(false)
+  workflowIds String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  session WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, groupId])
+  @@index([sessionId])
+  @@map("whatsapp_group_configs")
 }
 
 model ExecutionLog {

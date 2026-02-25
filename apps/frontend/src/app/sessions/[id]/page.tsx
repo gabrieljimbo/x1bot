@@ -169,12 +169,20 @@ function SessionDetailPageContent({ params }: { params: { id: string } }) {
                 {session.status}
               </span>
             </div>
-            <button
-              onClick={handleDelete}
-              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-400 transition"
-            >
-              Delete Session
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => router.push(`/sessions/${sessionId}/groups${tenantIdFromUrl ? `?tenantId=${tenantIdFromUrl}` : ''}`)}
+                className="px-4 py-2 bg-surface border border-border rounded hover:border-primary transition"
+              >
+                👥 Manage Groups
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-400 transition"
+              >
+                Delete Session
+              </button>
+            </div>
           </div>
 
           <div className="space-y-4 mb-8">
