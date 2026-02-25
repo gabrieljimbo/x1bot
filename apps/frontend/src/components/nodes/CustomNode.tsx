@@ -400,24 +400,36 @@ function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
       {/* Action Buttons - appear on hover */}
       {isHovered && (
         <div
-          className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-1 z-50"
-          onClick={(e) => e.stopPropagation()}
+          className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-1.5 z-[100] pointer-events-auto"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
         >
           <button
             type="button"
-            onClick={handleDuplicate}
-            className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              handleDuplicate(e);
+            }}
+            className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-md transition-colors flex items-center justify-center min-w-[32px] min-h-[32px] relative z-[110]"
             title="Duplicar"
           >
-            <Copy size={14} />
+            <Copy size={16} />
           </button>
+          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-0.5" />
           <button
             type="button"
-            onClick={handleDelete}
-            className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              handleDelete(e);
+            }}
+            className="p-2 hover:bg-red-50 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-md transition-colors flex items-center justify-center min-w-[32px] min-h-[32px] relative z-[110]"
             title="Deletar"
           >
-            <Trash2 size={14} />
+            <Trash2 size={16} />
           </button>
         </div>
       )}
