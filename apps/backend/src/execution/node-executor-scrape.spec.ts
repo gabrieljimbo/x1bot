@@ -2,6 +2,7 @@ import { NodeExecutorService } from './node-executor.service';
 import { ContextService } from './context.service';
 import { ConfigService } from '@nestjs/config';
 import { ContactTagsService } from './contact-tags.service';
+import { OCRService } from './ocr.service';
 import { WorkflowNodeType, ExecutionContext, HttpScrapeConfig } from '@n9n/shared';
 
 // Mock puppeteer before importing the service
@@ -34,11 +35,13 @@ describe('NodeExecutorService - HTTP_SCRAPE', () => {
     contextService = new ContextService();
     const configService = new ConfigService();
     const contactTagsService = {} as ContactTagsService;
+    const ocrService = {} as OCRService;
 
     service = new NodeExecutorService(
       contextService,
       configService,
       contactTagsService,
+      ocrService,
     );
 
     // Reset mocks
