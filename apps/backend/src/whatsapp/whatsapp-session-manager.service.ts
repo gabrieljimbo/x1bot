@@ -575,12 +575,34 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       return { messageId, from, type: 'text', text: '', media: null, timestamp };
     }
 
-    // Get text content
-    const text = m.conversation ||
+    // Get text content from various Baileys message types
+    let text = m.conversation ||
       m.extendedTextMessage?.text ||
       m.imageMessage?.caption ||
       m.videoMessage?.caption ||
-      m.documentMessage?.caption || '';
+      m.documentMessage?.caption ||
+      m.audioMessage?.caption ||
+      '';
+
+    // Handle interactive messages (common in Meta Ads)
+    if (m.buttonsResponseMessage) {
+      text = m.buttonsResponseMessage.selectedButtonId || m.buttonsResponseMessage.displayText || text;
+    } else if (m.listResponseMessage) {
+      text = m.listResponseMessage.title || m.listResponseMessage.singleSelectReply?.selectedRowId || text;
+    } else if (m.templateButtonReplyMessage) {
+      text = m.templateButtonReplyMessage.selectedId || m.templateButtonReplyMessage.displayText || text;
+    } else if (m.interactiveResponseMessage) {
+      const interactive = m.interactiveResponseMessage;
+      if (interactive.body) {
+        text = interactive.nativeFlowResponse?.paramsJson || interactive.body.text || text;
+      }
+    } else if (m.buttonsMessage) {
+      text = m.buttonsMessage.contentText || text;
+    } else if (m.templateMessage) {
+      text = m.templateMessage.hydratedTemplate?.hydratedContentText || text;
+    } else if (m.interactiveMessage) {
+      text = m.interactiveMessage.body?.text || text;
+    }
 
     // Check for media
     const mediaType = this.getBaileysMediaType(m);
@@ -600,8 +622,9 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
           buffer = Buffer.concat([buffer, chunk]);
         }
 
-        const mimeType = (m as any)[mediaType + 'Message'].mimetype;
-        const fileName = (m as any)[mediaType + 'Message'].fileName || `${mediaType}-${Date.now()}`;
+        const msgContent = (m as any)[mediaType + 'Message'];
+        const mimeType = msgContent.mimetype;
+        const fileName = msgContent.fileName || `${mediaType}-${Date.now()}`;
 
         const uploadResult = await this.storageService.uploadMedia(
           buffer,
