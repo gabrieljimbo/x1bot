@@ -268,6 +268,43 @@ export class WhatsappService {
     });
   }
 
+  /**
+   * Get authentication state for a session
+   */
+  async getAuthState(sessionId: string) {
+    return this.prisma.whatsappAuthState.findUnique({
+      where: { sessionId },
+    });
+  }
+
+  /**
+   * Save or update authentication state
+   */
+  async saveAuthState(sessionId: string, creds: any, keys: any) {
+    return this.prisma.whatsappAuthState.upsert({
+      where: { sessionId },
+      update: {
+        creds,
+        keys,
+        updatedAt: new Date(),
+      },
+      create: {
+        sessionId,
+        creds,
+        keys,
+      },
+    });
+  }
+
+  /**
+   * Delete authentication state
+   */
+  async deleteAuthState(sessionId: string) {
+    return this.prisma.whatsappAuthState.deleteMany({
+      where: { sessionId },
+    });
+  }
+
   private mapToSession(data: any): WhatsappSession {
     return {
       id: data.id,

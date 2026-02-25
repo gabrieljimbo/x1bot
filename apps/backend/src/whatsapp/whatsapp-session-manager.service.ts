@@ -9,7 +9,6 @@ import type {
   proto,
   downloadContentFromMessage,
   WAVersion,
-  useMultiFileAuthState,
   makeWASocket,
   DisconnectReason
 } from '@whiskeysockets/baileys';
@@ -26,6 +25,7 @@ import * as fs from 'fs/promises';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as os from 'os';
+import { useDatabaseAuthState } from './database-auth-state';
 
 interface SessionClient {
   socket: WASocket;
@@ -90,6 +90,32 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       (sessionId: string, contactId: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) =>
         this.sendMedia(sessionId, contactId, mediaType, mediaUrl, options)
     );
+
+    // Auto-reconnect active sessions with staggered delay
+    this.reconnectActiveSessions();
+  }
+
+  /**
+   * Reconnect all sessions that were previously CONNECTED
+   */
+  private async reconnectActiveSessions() {
+    console.log('[SESSION_MANAGER] Starting automatic reconnection of active sessions...');
+    const sessions = await this.whatsappService.getAllSessions();
+    const activeSessions = sessions.filter(s => s.status === WhatsappSessionStatus.CONNECTED);
+
+    console.log(`[SESSION_MANAGER] Found ${activeSessions.length} active sessions to reconnect`);
+
+    for (const session of activeSessions) {
+      try {
+        console.log(`[SESSION_MANAGER] Reconnecting session ${session.id} (${session.name})...`);
+        await this.initializeSession(session.tenantId, session.id);
+
+        // Staggered delay of 1.5 seconds between reconnections
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      } catch (error) {
+        console.error(`[SESSION_MANAGER] Failed to reconnect session ${session.id}:`, error);
+      }
+    }
   }
 
   async onModuleDestroy() {
@@ -113,15 +139,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     console.log(`Initializing Baileys session ${sessionId} for tenant ${tenantId}`);
 
-    const authPath = path.join(
-      this.configService.get('WHATSAPP_SESSION_PATH', './.baileys_auth'),
-      sessionId
-    );
-
-    // Create directory if it doesn't exist
-    await fs.mkdir(authPath, { recursive: true });
-
-    const { state, saveCreds } = await this.baileys.useMultiFileAuthState(authPath);
+    const { state, saveCreds } = await useDatabaseAuthState(sessionId, this.whatsappService);
     const { version } = await this.baileys.fetchLatestBaileysVersion();
 
     const makeWASocketFn = this.baileys.default || this.baileys.makeWASocket;
@@ -559,16 +577,29 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       }
 
       if (connection === 'close') {
-        const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== this.baileys.DisconnectReason.loggedOut;
-        console.log(`Connection closed for session ${sessionId}. Reconnecting: ${shouldReconnect}`);
+        const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+        const reasons = [
+          this.baileys.DisconnectReason.loggedOut,
+          this.baileys.DisconnectReason.connectionReplaced,
+          this.baileys.DisconnectReason.forbidden
+        ];
+
+        const shouldReconnect = !reasons.includes(statusCode);
+        console.log(`Connection closed for session ${sessionId}. Status: ${statusCode}. Reconnecting: ${shouldReconnect}`);
 
         if (shouldReconnect) {
           this.sessions.delete(sessionId);
           await this.initializeSession(tenantId, sessionId);
         } else {
+          console.log(`[SESSION_CLEANUP] Cleaning up session ${sessionId} due to logout/conflict/forbidden`);
           this.sessions.delete(sessionId);
+
+          // Clear DB auth state
+          await this.whatsappService.deleteAuthState(sessionId);
+
           await this.whatsappService.updateSession(sessionId, {
             status: WhatsappSessionStatus.DISCONNECTED,
+            qrCode: undefined
           });
 
           await this.eventBus.emit({

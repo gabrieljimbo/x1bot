@@ -109,10 +109,23 @@ model WhatsappSession {
   executions WorkflowExecution[]
   groupConfigs WhatsappGroupConfig[]
   labels       WhatsappLabel[]
+  authState    WhatsappAuthState?
 
   @@index([tenantId])
   @@index([tenantId, status])
   @@map("whatsapp_sessions")
+}
+
+model WhatsappAuthState {
+  id        String   @id @default(uuid())
+  sessionId String   @unique
+  creds     Json
+  keys      Json
+  updatedAt DateTime @updatedAt
+
+  session WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_auth_states")
 }
 
 model WhatsappLabel {
