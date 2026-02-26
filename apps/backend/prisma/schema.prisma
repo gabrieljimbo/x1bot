@@ -45,6 +45,7 @@ model Message {
   timestamp      DateTime
   status         MessageStatus @default(SENT)
   createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
   conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
@@ -68,7 +69,7 @@ model ContactFlowState {
 }
 
 model Workflow {
-  id                  String                @id
+  id                  String                @id @default(cuid())
   tenantId            String
   name                String
   description         String?
@@ -76,10 +77,10 @@ model Workflow {
   edges               Json
   isActive            Boolean               @default(false)
   createdAt           DateTime              @default(now())
-  updatedAt           DateTime
-  shareable_workflows ShareableWorkflow[]
-  workflow_executions WorkflowExecution[]
-  tenants             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  updatedAt           DateTime              @updatedAt
+  shareableWorkflows  ShareableWorkflow[]
+  workflowExecutions  WorkflowExecution[]
+  tenant              Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([tenantId, isActive])
@@ -87,7 +88,7 @@ model Workflow {
 }
 
 model WorkflowExecution {
-  id                String            @id
+  id                String            @id @default(cuid())
   tenantId          String
   workflowId        String
   sessionId         String
@@ -97,13 +98,13 @@ model WorkflowExecution {
   context           Json
   interactionCount  Int               @default(0)
   startedAt         DateTime          @default(now())
-  updatedAt         DateTime
+  updatedAt         DateTime          @updatedAt
   expiresAt         DateTime
   completedAt       DateTime?
   error             String?
-  whatsapp_sessions WhatsappSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  tenants           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  workflows         Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  whatsappSession   WhatsappSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflow          Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([status, expiresAt])
   @@index([tenantId])
@@ -113,21 +114,21 @@ model WorkflowExecution {
 }
 
 model WhatsappSession {
-  id                     String                   @id
+  id                     String                   @id @default(cuid())
   tenantId               String
   name                   String
   status                 String
   qrCode                 String?
   phoneNumber            String?
   createdAt              DateTime                 @default(now())
-  updatedAt              DateTime
+  updatedAt              DateTime                 @updatedAt
   isBusiness             Boolean                  @default(false)
   conversations          Conversation[]
-  whatsapp_auth_states   WhatsappAuthState?
-  whatsapp_group_configs WhatsappGroupConfig[]
-  whatsapp_labels        WhatsappLabel[]
-  tenants                Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  workflow_executions    WorkflowExecution[]
+  authInfo               WhatsappAuthState?
+  groupConfigs           WhatsappGroupConfig[]
+  labels                 WhatsappLabel[]
+  tenant                 Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflowExecutions     WorkflowExecution[]
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -135,14 +136,14 @@ model WhatsappSession {
 }
 
 model WhatsappLabel {
-  id                String            @id
-  sessionId         String
-  labelId           String
-  name              String
-  color             Int?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime
-  whatsapp_sessions WhatsappSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id              String            @id @default(cuid())
+  sessionId       String
+  labelId         String
+  name            String
+  color           Int?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  whatsappSession WhatsappSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, labelId])
   @@index([sessionId])
@@ -150,15 +151,15 @@ model WhatsappLabel {
 }
 
 model WhatsappGroupConfig {
-  id                String            @id
+  id                String            @id @default(cuid())
   sessionId         String
   groupId           String
   name              String
   enabled           Boolean           @default(false)
   workflowIds       String[]          @default([])
   createdAt         DateTime          @default(now())
-  updatedAt         DateTime
-  whatsapp_sessions WhatsappSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  updatedAt         DateTime          @updatedAt
+  whatsappSession   WhatsappSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, groupId])
   @@index([sessionId])
@@ -166,11 +167,12 @@ model WhatsappGroupConfig {
 }
 
 model WhatsappChatLabel {
-  id        String   @id
+  id        String   @id @default(cuid())
   sessionId String
   chatId    String
   labelId   String
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([sessionId, chatId, labelId])
   @@index([sessionId, chatId])
@@ -179,31 +181,31 @@ model WhatsappChatLabel {
 }
 
 model WhatsappAuthState {
-  id                String            @id
-  sessionId         String            @unique
-  creds             Json
-  keys              Json
-  updatedAt         DateTime
-  whatsapp_sessions WhatsappSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id              String            @id @default(cuid())
+  sessionId       String            @unique
+  creds           Json
+  keys            Json
+  updatedAt       DateTime          @updatedAt
+  whatsappSession WhatsappSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   @@map("whatsapp_auth_states")
 }
 
 model User {
-  id                  String                @id
+  id                  String                @id @default(cuid())
   tenantId            String
   email               String
   password            String
   name                String?
   isActive            Boolean               @default(true)
   createdAt           DateTime              @default(now())
-  updatedAt           DateTime
+  updatedAt           DateTime              @updatedAt
   licenseExpiresAt    DateTime?
   licenseStatus       LicenseStatus         @default(TRIAL)
   trialEndsAt         DateTime?
   trialStartedAt      DateTime?             @default(now())
   role                Role                  @default(USER)
-  shareable_workflows ShareableWorkflow[]
-  tenants             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shareableWorkflows  ShareableWorkflow[]
+  tenant              Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, email])
   @@index([email])
@@ -213,28 +215,28 @@ model User {
 }
 
 model Tenant {
-  id                  String                @id
+  id                  String                @id @default(cuid())
   name                String
   email               String                @unique
   isActive            Boolean               @default(true)
   createdAt           DateTime              @default(now())
-  updatedAt           DateTime
+  updatedAt           DateTime              @updatedAt
   conversations       Conversation[]
   users               User[]
-  whatsapp_sessions   WhatsappSession[]
-  workflow_executions WorkflowExecution[]
+  whatsappSessions    WhatsappSession[]
+  workflowExecutions  WorkflowExecution[]
   workflows           Workflow[]
   @@map("tenants")
 }
 
 model Tag {
-  id          String   @id
+  id          String   @id @default(cuid())
   tenantId    String
   name        String
   color       String?  @default("#8b5cf6")
   description String?
   createdAt   DateTime @default(now())
-  updatedAt   DateTime
+  updatedAt   DateTime @updatedAt
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -242,35 +244,36 @@ model Tag {
 }
 
 model ShareableWorkflow {
-  id          String    @id
+  id          String    @id @default(cuid())
   workflowId  String
   createdBy   String
   importCount Int       @default(0)
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime
-  users       User      @relation(fields: [createdBy], references: [id])
-  workflows   Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [createdBy], references: [id])
+  workflow    Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   @@map("shareable_workflows")
 }
 
 model GlobalConfig {
-  id                       String   @id
+  id                       String   @id @default(cuid())
   minDelay                 Int      @default(3000)
   maxDelay                 Int      @default(8000)
   maxMsgsPerMinute         Int      @default(20)
   proportionalDelayEnabled Boolean  @default(true)
-  updatedAt                DateTime
+  updatedAt                DateTime @updatedAt
   @@map("global_configs")
 }
 
 model ExecutionLog {
-  id          String   @id
+  id          String   @id @default(cuid())
   tenantId    String
   executionId String
   nodeId      String?
   eventType   String
   data        Json
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([createdAt])
   @@index([executionId])
@@ -279,13 +282,13 @@ model ExecutionLog {
 }
 
 model ContactTag {
-  id        String   @id
+  id        String   @id @default(cuid())
   tenantId  String
   sessionId String
   contactId String
   tags      String[] @default([])
   createdAt DateTime @default(now())
-  updatedAt DateTime
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, sessionId, contactId])
   @@index([tenantId])

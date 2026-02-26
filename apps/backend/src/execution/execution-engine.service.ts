@@ -895,7 +895,7 @@ export class ExecutionEngineService implements OnModuleInit {
     await this.prisma.contactFlowState.deleteMany({
       where: {
         sessionId: execution.sessionId,
-        contactPhone: execution.contactId,
+        contactId: execution.contactId,
       },
     });
 
@@ -926,7 +926,7 @@ export class ExecutionEngineService implements OnModuleInit {
     await this.prisma.contactFlowState.deleteMany({
       where: {
         sessionId: execution.sessionId,
-        contactPhone: execution.contactId,
+        contactId: execution.contactId,
       },
     });
 
@@ -957,7 +957,7 @@ export class ExecutionEngineService implements OnModuleInit {
     await this.prisma.contactFlowState.deleteMany({
       where: {
         sessionId: execution.sessionId,
-        contactPhone: execution.contactId,
+        contactId: execution.contactId,
       },
     });
 

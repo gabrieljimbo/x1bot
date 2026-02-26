@@ -1,0 +1,27 @@
+
+> @n9n/backend@1.0.0 build C:\Users\gabri\X1bot\apps\backend
+> nest build "--filter" "@n9n/backend"
+
+node.exe : error: 
+unknown option 
+'--filter'
+No C:\Users\gabri\AppDa
+ta\Roaming\npm\pnpm.ps1
+:24 caractere:5
++     & "node$exe"  "$b
+asedir/node_modules/pnp
+m/bin/pnpm.cjs" $args
++     ~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (error: unknow   
+ n option '--filter    
+':String) [], Remo    
+teException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+???ELIFECYCLE??? Command failed with exit code 1.

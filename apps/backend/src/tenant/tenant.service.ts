@@ -14,7 +14,7 @@ export interface UpdateTenantDto {
 
 @Injectable()
 export class TenantService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async findAll() {
     return this.prisma.tenant.findMany({
@@ -51,7 +51,7 @@ export class TenantService {
           select: {
             workflows: true,
             whatsappSessions: true,
-            executions: true,
+            workflowExecutions: true,
           },
         },
       },

@@ -1,0 +1,26 @@
+﻿node.exe : npm warn 
+Unknown project config 
+"always-auth". This 
+will stop working in 
+the next major version 
+of npm.
+No linha:1 caractere:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (npm warn Unkn   
+ ow...version of np    
+m.:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
