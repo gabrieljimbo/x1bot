@@ -37,6 +37,7 @@ RUN pnpm build
 
 # Build backend
 WORKDIR /app/apps/backend
+RUN npx prisma generate --schema=prisma/schema.prisma
 RUN pnpm build
 
 

@@ -294,6 +294,19 @@ enum MessageStatus {
   READ
 }
 
+model ContactFlowState {
+  id        String   @id @default(uuid())
+  sessionId String
+  contactId String
+  flowId    String
+  state     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, contactId])
+  @@map("contact_flow_states")
+}
+
 enum Role {
   SUPER_ADMIN
   ADMIN
