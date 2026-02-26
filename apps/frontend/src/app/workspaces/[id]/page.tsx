@@ -75,6 +75,7 @@ function WorkspaceDetailsPageContent() {
   const [workflows, setWorkflows] = useState<WorkspaceWorkflow[]>([])
   const [sessions, setSessions] = useState<WorkspaceSession[]>([])
   const [inboxStats, setInboxStats] = useState({ totalUnread: 0, openCount: 0, pendingCount: 0 })
+  const [inboxStatsError, setInboxStatsError] = useState(false)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'workflows' | 'sessions' | 'course' | 'inbox'>(initialTab)
   const [error, setError] = useState<string | null>(null)
@@ -146,9 +147,15 @@ function WorkspaceDetailsPageContent() {
       const workspaceUsers = allUsers.filter((u: any) => u.tenant?.id === workspaceId)
       setUsers(workspaceUsers)
 
-      // Load inbox stats
-      const stats = await apiClient.getInboxStats()
-      setInboxStats(stats)
+      // Load inbox stats separately to not block page load
+      try {
+        const stats = await apiClient.getInboxStats()
+        setInboxStats(stats)
+        setInboxStatsError(false)
+      } catch (err) {
+        console.warn('Silent: Error loading inbox stats (likely no active session)')
+        setInboxStatsError(true)
+      }
 
     } catch (error: any) {
       console.error('Error loading workspace details:', error)
@@ -849,23 +856,36 @@ function WorkspaceDetailsPageContent() {
                 <MessageSquare className="text-[#00ff88]" size={32} />
               </div>
               <h2 className="text-2xl font-bold mb-2">Central de Atendimento</h2>
-              <p className="text-gray-400 max-w-md mb-8">
-                Gerencie todas as conversas das suas sessões conectadas em tempo real.
-              </p>
-              <div className="grid grid-cols-3 gap-6 mb-8 w-full max-w-xl">
-                <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                  <p className="text-xs text-gray-500 uppercase font-bold mb-1">Abertas</p>
-                  <p className="text-2xl font-bold text-white">{inboxStats.openCount}</p>
+
+              {inboxStatsError ? (
+                <div className="bg-amber-500/10 border border-amber-500/20 text-amber-200 p-4 rounded-xl max-w-md mx-auto mb-8">
+                  <p className="text-sm font-medium">
+                    Nenhuma sessão WhatsApp ativa. Conecte uma sessão para começar a receber mensagens.
+                  </p>
                 </div>
-                <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                  <p className="text-xs text-gray-500 uppercase font-bold mb-1">Pendentes</p>
-                  <p className="text-2xl font-bold text-amber-400">{inboxStats.pendingCount}</p>
+              ) : (
+                <p className="text-gray-400 max-w-md mb-8">
+                  Gerencie todas as conversas das suas sessões conectadas em tempo real.
+                </p>
+              )}
+
+              {!inboxStatsError && (
+                <div className="grid grid-cols-3 gap-6 mb-8 w-full max-w-xl">
+                  <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Abertas</p>
+                    <p className="text-2xl font-bold text-white">{inboxStats.openCount}</p>
+                  </div>
+                  <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Pendentes</p>
+                    <p className="text-2xl font-bold text-amber-400">{inboxStats.pendingCount}</p>
+                  </div>
+                  <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Não Lidas</p>
+                    <p className="text-2xl font-bold text-[#00ff88]">{inboxStats.totalUnread}</p>
+                  </div>
                 </div>
-                <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                  <p className="text-xs text-gray-500 uppercase font-bold mb-1">Não Lidas</p>
-                  <p className="text-2xl font-bold text-[#00ff88]">{inboxStats.totalUnread}</p>
-                </div>
-              </div>
+              )}
+
               <Link
                 href="/inbox"
                 className="px-8 py-3 bg-[#00ff88] text-black rounded-xl font-bold hover:bg-[#00ff88]/90 transition shadow-lg shadow-[#00ff88]/20 flex items-center gap-2"

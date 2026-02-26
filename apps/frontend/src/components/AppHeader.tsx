@@ -16,7 +16,8 @@ export default function AppHeader() {
       const stats = await apiClient.getInboxStats()
       setUnreadCount(stats.totalUnread || 0)
     } catch (e) {
-      console.error('Error loading inbox stats:', e)
+      // Silet error for stats since it fails if no session is active
+      console.warn('AppHeader: Could not load inbox stats')
     }
   }
 
