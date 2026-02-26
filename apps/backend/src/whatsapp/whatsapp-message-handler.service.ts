@@ -92,9 +92,9 @@ export class WhatsappMessageHandler {
     // Fetch if there's an active waiting flow for this contact
     const flowState = await this.prisma.contactFlowState.findUnique({
       where: {
-        sessionId_contactPhone: {
+        sessionId_contactId: {
           sessionId,
-          contactPhone: contactId,
+          contactId: contactId,
         },
       },
     });

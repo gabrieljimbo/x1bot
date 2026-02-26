@@ -278,7 +278,7 @@ export class ExecutionEngineService implements OnModuleInit {
       await this.prisma.contactFlowState.deleteMany({
         where: {
           sessionId: execution.sessionId,
-          contactPhone: execution.contactId,
+          contactId: execution.contactId,
         },
       });
 
@@ -626,14 +626,14 @@ export class ExecutionEngineService implements OnModuleInit {
           const expiresAt = new Date(Date.now() + waitMs);
           await this.prisma.contactFlowState.upsert({
             where: {
-              sessionId_contactPhone: {
+              sessionId_contactId: {
                 sessionId: execution.sessionId,
-                contactPhone: execution.contactId,
+                contactId: execution.contactId,
               },
             },
             create: {
               sessionId: execution.sessionId,
-              contactPhone: execution.contactId,
+              contactId: execution.contactId,
               workflowId: execution.workflowId,
               currentNodeId: currentNode.id,
               executionId: execution.id,
