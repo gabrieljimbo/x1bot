@@ -75,6 +75,44 @@ export default function WorkflowCanvas({
   const lastInitialNodesRef = useRef<WorkflowNode[]>(initialNodes)
   const lastInitialEdgesRef = useRef<WorkflowEdge[]>(initialEdges)
 
+  const onRemoveNode = useCallback((nodeId: string) => {
+    if (readonly) return
+
+    setNodes((nds) => {
+      const updatedNodes = nds.filter((n) => n.id !== nodeId)
+
+      // Also remove edges connected to this node
+      setEdges((eds) => {
+        const updatedEdges = eds.filter(
+          (edge) => edge.source !== nodeId && edge.target !== nodeId
+        )
+
+        if (onChange) {
+          const workflowNodes: WorkflowNode[] = updatedNodes.map((n) => ({
+            id: n.id,
+            type: n.data.type,
+            config: n.data.config,
+            position: n.position,
+          }))
+
+          const workflowEdges: WorkflowEdge[] = updatedEdges.map((e) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            label: typeof e.label === 'string' ? e.label : undefined,
+            condition: e.sourceHandle || undefined,
+          }))
+
+          onChange(workflowNodes, workflowEdges)
+        }
+
+        return updatedEdges
+      })
+
+      return updatedNodes
+    })
+  }, [readonly, onChange, setNodes, setEdges])
+
   // Build React Flow nodes from workflow nodes
   const buildFlowNodes = useCallback((workflowNodes: WorkflowNode[]): Node[] => {
     return workflowNodes.map((node) => ({
@@ -90,9 +128,10 @@ export default function WorkflowCanvas({
         executionSuccess: executedNodes.has(node.id) && !failedNodes.has(node.id),
         onManualTrigger,
         onDuplicateNode,
+        onRemoveNode,
       },
     }))
-  }, [currentNodeId, executionStatus, executedNodes, failedNodes, onManualTrigger, onDuplicateNode])
+  }, [currentNodeId, executionStatus, executedNodes, failedNodes, onManualTrigger, onDuplicateNode, onRemoveNode])
 
   // Build React Flow edges from workflow edges
   const buildFlowEdges = useCallback((workflowEdges: WorkflowEdge[]): Edge[] => {
@@ -155,7 +194,7 @@ export default function WorkflowCanvas({
       setNodes(flowNodes)
       setEdges(flowEdges)
     }
-  }, [initialNodes, initialEdges])
+  }, [initialNodes, initialEdges, buildFlowNodes, buildFlowEdges, setNodes, setEdges])
 
   // UPDATE DATA ONLY: When execution state changes, update node data in-place
   // This avoids recreating nodes (which destroys selection state)
@@ -171,10 +210,11 @@ export default function WorkflowCanvas({
           executionSuccess: executedNodes.has(node.id) && !failedNodes.has(node.id),
           onManualTrigger,
           onDuplicateNode,
+          onRemoveNode,
         },
       }))
     )
-  }, [currentNodeId, executionStatus, executedNodes, failedNodes, onManualTrigger, onDuplicateNode])
+  }, [currentNodeId, executionStatus, executedNodes, failedNodes, onManualTrigger, onDuplicateNode, onRemoveNode, setNodes])
 
   // UPDATE EDGE STYLES: When execution state changes, update edge styles in-place
   useEffect(() => {
@@ -213,7 +253,7 @@ export default function WorkflowCanvas({
         }
       })
     )
-  }, [executedEdges, failedEdges, currentNodeId])
+  }, [executedEdges, failedEdges, currentNodeId, setEdges])
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -249,7 +289,7 @@ export default function WorkflowCanvas({
         return updatedEdges
       })
     },
-    [readonly, nodes, onChange]
+    [readonly, nodes, onChange, setEdges]
   )
 
   const handleNodesChange = useCallback(
@@ -257,40 +297,41 @@ export default function WorkflowCanvas({
       onNodesChange(changes)
 
       if (onChange && !readonly) {
-        const hasPositionChange = changes.some((c: any) => c.type === 'position' && c.dragging === false)
+        const hasSignificantChange = changes.some(
+          (c: any) => (c.type === 'position' && c.dragging === false) || c.type === 'remove'
+        )
 
-        if (hasPositionChange) {
-          const updatedNodes: WorkflowNode[] = nodes.map((node) => {
-            const change = changes.find((c: any) => c.id === node.id && c.type === 'position')
-            if (change && change.position) {
-              return {
+        if (hasSignificantChange) {
+          // Wait for state to settle
+          setTimeout(() => {
+            setNodes((currentNodes) => {
+              const workflowNodes: WorkflowNode[] = currentNodes.map((node) => ({
                 id: node.id,
                 type: node.data.type,
                 config: node.data.config,
-                position: change.position,
-              }
-            }
-            return {
-              id: node.id,
-              type: node.data.type,
-              config: node.data.config,
-              position: node.position,
-            }
-          })
+                position: node.position,
+              }))
 
-          const workflowEdges: WorkflowEdge[] = edges.map((e) => ({
-            id: e.id,
-            source: e.source,
-            target: e.target,
-            label: typeof e.label === 'string' ? e.label : undefined,
-            condition: e.sourceHandle || undefined,
-          }))
+              setEdges((currentEdges) => {
+                const workflowEdges: WorkflowEdge[] = currentEdges.map((e) => ({
+                  id: e.id,
+                  source: e.source,
+                  target: e.target,
+                  label: typeof e.label === 'string' ? e.label : undefined,
+                  condition: e.sourceHandle || undefined,
+                }))
 
-          onChange(updatedNodes, workflowEdges)
+                onChange(workflowNodes, workflowEdges)
+                return currentEdges
+              })
+
+              return currentNodes
+            })
+          }, 0)
         }
       }
     },
-    [nodes, edges, onChange, readonly, onNodesChange]
+    [onChange, readonly, onNodesChange, setNodes, setEdges]
   )
 
   const handleEdgesChange = useCallback(
@@ -482,6 +523,7 @@ export default function WorkflowCanvas({
           ...node.data,
           onManualTrigger,
           onDuplicateNode,
+          onRemoveNode,
         },
       }
     })
@@ -498,31 +540,36 @@ export default function WorkflowCanvas({
       }))
 
     // Build the combined node/edge lists
-    const allNodes = [...nodes.map(n => ({ ...n, selected: false })), ...newNodes]
-    const allEdges = [...edges.map(e => ({ ...e, selected: false })), ...newEdges]
+    setNodes((nds) => {
+      const allNodes = [...nds.map(n => ({ ...n, selected: false })), ...newNodes]
 
-    setNodes(allNodes)
-    setEdges(allEdges)
+      setEdges((eds) => {
+        const allEdges = [...eds.map(e => ({ ...e, selected: false })), ...newEdges]
 
-    if (onChange) {
-      const workflowNodes: WorkflowNode[] = allNodes.map((node) => ({
-        id: node.id,
-        type: node.data.type,
-        config: node.data.config,
-        position: node.position,
-      }))
+        if (onChange) {
+          const workflowNodes: WorkflowNode[] = allNodes.map((node) => ({
+            id: node.id,
+            type: node.data.type,
+            config: node.data.config,
+            position: node.position,
+          }))
 
-      const workflowEdges: WorkflowEdge[] = allEdges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        label: typeof e.label === 'string' ? e.label : undefined,
-        condition: e.sourceHandle || undefined,
-      }))
+          const workflowEdges: WorkflowEdge[] = allEdges.map((e) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            label: typeof e.label === 'string' ? e.label : undefined,
+            condition: e.sourceHandle || undefined,
+          }))
 
-      onChange(workflowNodes, workflowEdges)
-    }
-  }, [nodes, edges, readonly, onChange, onManualTrigger, onDuplicateNode])
+          onChange(workflowNodes, workflowEdges)
+        }
+        return allEdges
+      })
+
+      return allNodes
+    })
+  }, [nodes, edges, readonly, onChange, onManualTrigger, onDuplicateNode, onRemoveNode, setNodes, setEdges])
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -547,11 +594,19 @@ export default function WorkflowCanvas({
       if ((event.ctrlKey || event.metaKey) && event.key === 'v' && !readonly) {
         handlePaste()
       }
+
+      // Escape to deselect
+      if (event.key === 'Escape') {
+        setNodes((nds) => nds.map((n) => ({ ...n, selected: false })))
+        setEdges((eds) => eds.map((e) => ({ ...e, selected: false })))
+        setSelectedNodes([])
+        setSelectedEdges([])
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleDelete, handleCopy, handlePaste, readonly])
+  }, [handleDelete, handleCopy, handlePaste, readonly, setNodes, setEdges])
 
   return (
     <div ref={reactFlowWrapper} className="w-full h-full">
@@ -570,6 +625,7 @@ export default function WorkflowCanvas({
         edgeTypes={edgeTypes}
         fitView
         selectNodesOnDrag={false}
+        deleteKeyCode={null}
         defaultEdgeOptions={{
           type: 'custom',
           animated: true,

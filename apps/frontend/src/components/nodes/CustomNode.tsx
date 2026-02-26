@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { Handle, Position, useReactFlow } from 'reactflow'
+import { Handle, Position } from 'reactflow'
 import { WorkflowNodeType } from '@n9n/shared'
 import { Trash2, Play, Copy } from 'lucide-react'
 
@@ -176,10 +176,12 @@ interface CustomNodeProps {
     executionSuccess?: boolean
     onManualTrigger?: (nodeId: string) => void
     onDuplicateNode?: (nodeId: string) => void
+    onRemoveNode?: (nodeId: string) => void
   }
+  selected?: boolean
 }
 
-function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
+function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
   const config = nodeConfig[data.type] || {
     label: data.type,
     subtitle: 'NODE',
@@ -189,7 +191,6 @@ function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
     iconBg: 'bg-gradient-to-br from-gray-500 to-gray-600',
   }
 
-  const { deleteElements } = useReactFlow()
   const [isHovered, setIsHovered] = useState(false)
 
   const isTrigger =
@@ -208,7 +209,9 @@ function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
   const handleDelete = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    deleteElements({ nodes: [{ id }] })
+    if (data.onRemoveNode) {
+      data.onRemoveNode(id)
+    }
   }
 
   const handleDuplicate = (e: React.MouseEvent) => {
@@ -219,23 +222,30 @@ function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
     }
   }
 
-  // Determine border style based on execution state
-  const getExecutionBorderClass = () => {
-    if (!data.isActive) return ''
+  // Determine border style based on execution state AND selection
+  const getBorderStyles = () => {
+    let classes = ''
+
+    // Selection style - highest priority for visual feedback
+    if (selected) {
+      classes += ' ring-4 ring-offset-2 ring-offset-[#0a0a0a] ring-primary shadow-[0_0_20px_rgba(0,186,124,0.4)] '
+    }
+
+    if (!data.isActive) return classes
 
     if (data.executionStatus === 'completed' && isEnd) {
-      return 'ring-2 ring-primary shadow-lg shadow-primary/30'
+      return classes + ' ring-2 ring-primary shadow-lg shadow-primary/30'
     }
 
     if (data.executionStatus === 'waiting') {
-      return 'ring-2 ring-yellow-500 animate-pulse shadow-lg shadow-yellow-500/30'
+      return classes + ' ring-2 ring-yellow-500 animate-pulse shadow-lg shadow-yellow-500/30'
     }
 
     if (data.executionStatus === 'failed') {
-      return 'ring-2 ring-red-500 shadow-lg shadow-red-500/30'
+      return classes + ' ring-2 ring-red-500 shadow-lg shadow-red-500/30'
     }
 
-    return 'ring-2 ring-primary animate-pulse shadow-lg shadow-primary/30'
+    return classes + ' ring-2 ring-primary animate-pulse shadow-lg shadow-primary/30'
   }
 
   // Get preview text
@@ -390,7 +400,7 @@ function CustomNode({ data, id }: CustomNodeProps & { id: string }) {
         ${config.bgColor} ${config.borderColor}
         border-2 rounded-xl min-w-[200px] max-w-[280px]
         transition-all duration-200 hover:scale-105
-        ${getExecutionBorderClass()}
+        ${getBorderStyles()}
         backdrop-blur-sm
         relative
       `}

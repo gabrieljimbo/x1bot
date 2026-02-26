@@ -105,7 +105,7 @@ export interface WhatsappSession {
 
 export interface TriggerMessageConfig {
   pattern: string; // regex or exact match
-  matchType: 'exact' | 'regex' | 'contains';
+  matchType: 'exact' | 'regex' | 'contains' | 'starts_with';
   sessionId?: string; // WhatsApp session to listen to (optional, if empty listens to all)
 }
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Building2, Users, Workflow, MessageSquare, UserCog, Edit2, Trash2, Plus, Power, Copy, Share2, Download, Info } from 'lucide-react'
+import { ArrowLeft, Building2, Users, Workflow, MessageSquare, UserCog, Edit2, Trash2, Plus, Power, Copy, Share2, Download, Info, Rocket, Clock } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { SuperAdminGuardWrapper } from '@/components/SuperAdminGuard'
 import { useAuth } from '@/contexts/AuthContext'
@@ -58,17 +58,24 @@ function WorkspaceDetailsPageContent() {
   const { user: currentUser } = useAuth()
 
   // Get initial tab from URL query param
-  const tabFromUrl = searchParams?.get('tab') as 'overview' | 'users' | 'workflows' | 'sessions' | null
-  const initialTab = tabFromUrl && ['overview', 'users', 'workflows', 'sessions'].includes(tabFromUrl)
+  const tabFromUrl = searchParams?.get('tab') as 'overview' | 'users' | 'workflows' | 'sessions' | 'course' | null
+  const initialTab = tabFromUrl && ['overview', 'users', 'workflows', 'sessions', 'course'].includes(tabFromUrl)
     ? tabFromUrl
     : 'overview'
+
+  // const COURSE_MODULES = [
+  //   { id: 1, title: "Fundação", lessons: [] },
+  //   { id: 2, title: "Construindo Fluxos que Vendem", lessons: [] },
+  //   { id: 3, title: "Escala", lessons: [] },
+  //   { id: 4, title: "Resultados", lessons: [] }
+  // ]
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [users, setUsers] = useState<WorkspaceUser[]>([])
   const [workflows, setWorkflows] = useState<WorkspaceWorkflow[]>([])
   const [sessions, setSessions] = useState<WorkspaceSession[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'workflows' | 'sessions'>(initialTab)
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'workflows' | 'sessions' | 'course'>(initialTab)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -112,8 +119,8 @@ function WorkspaceDetailsPageContent() {
 
   // Update activeTab when URL query param changes
   useEffect(() => {
-    const tabFromUrl = searchParams?.get('tab') as 'overview' | 'users' | 'workflows' | 'sessions' | null
-    if (tabFromUrl && ['overview', 'users', 'workflows', 'sessions'].includes(tabFromUrl)) {
+    const tabFromUrl = searchParams?.get('tab') as 'overview' | 'users' | 'workflows' | 'sessions' | 'course' | null
+    if (tabFromUrl && ['overview', 'users', 'workflows', 'sessions', 'course'].includes(tabFromUrl)) {
       setActiveTab(tabFromUrl)
     }
   }, [searchParams])
@@ -529,6 +536,21 @@ function WorkspaceDetailsPageContent() {
                   }`}
               >
                 Sessions ({workspace._count?.whatsappSessions || 0})
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('course')
+                  const url = new URL(window.location.href)
+                  url.searchParams.set('tab', 'course')
+                  window.history.pushState({}, '', url.toString())
+                }}
+                className={`px-4 py-2 border-b-2 transition flex items-center gap-2 ${activeTab === 'course'
+                  ? 'border-primary text-primary font-bold'
+                  : 'border-transparent text-gray-400 hover:text-gray-300'
+                  }`}
+              >
+                <Rocket size={16} />
+                Do 0 aos 10K
               </button>
             </div>
           </div>
@@ -1183,6 +1205,44 @@ function WorkspaceDetailsPageContent() {
                   >
                     {creatingWorkflow ? 'Creating...' : 'Create'}
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {activeTab === 'course' && (
+            <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+              <div className="w-24 h-24 mb-8 relative">
+                <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full animate-pulse" />
+                <div className="relative flex items-center justify-center w-full h-full bg-[#151515] border border-primary/30 rounded-2xl shadow-2xl">
+                  <Rocket size={48} className="text-primary animate-bounce" />
+                </div>
+              </div>
+
+              <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight bg-gradient-to-r from-white via-white to-primary bg-clip-text text-transparent">
+                Do 0 aos 10K com X1Bot
+              </h1>
+
+              <p className="text-xl text-gray-400 max-w-2xl mb-8 leading-relaxed">
+                O método que gerou <span className="text-primary font-bold">R$100.000 em menos de 3 meses</span> com automação no WhatsApp
+              </p>
+
+              <div className="flex items-center gap-3 px-6 py-3 bg-surface border border-border rounded-full text-gray-300 mb-12 animate-pulse">
+                <Clock size={18} className="text-primary" />
+                <span className="font-semibold tracking-wide">Em breve. Conteúdo exclusivo chegando.</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-3xl opacity-40 grayscale pointer-events-none select-none">
+                <div className="p-6 bg-surface border border-border rounded-xl">
+                  <div className="font-bold text-gray-500 mb-2">Módulo 1</div>
+                  <div className="h-2 bg-gray-800 rounded-full" />
+                </div>
+                <div className="p-6 bg-surface border border-border rounded-xl">
+                  <div className="font-bold text-gray-500 mb-2">Módulo 2</div>
+                  <div className="h-2 bg-gray-800 rounded-full" />
+                </div>
+                <div className="p-6 bg-surface border border-border rounded-xl">
+                  <div className="font-bold text-gray-500 mb-2">Módulo 3</div>
+                  <div className="h-2 bg-gray-800 rounded-full" />
                 </div>
               </div>
             </div>

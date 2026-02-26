@@ -481,9 +481,9 @@ export default function NodeConfigModal({
                     placeholder="Deixe vazio para aceitar todas as mensagens"
                     className="w-full px-4 py-2.5 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500 font-mono"
                   />
-                  <p className="text-xs text-gray-400 mt-1.5">
+                  <p className="text-xs text-gray-400 mt-1.5 font-medium">
                     {config.pattern && config.pattern.trim() !== ''
-                      ? 'A mensagem que dispara este workflow'
+                      ? `Filtro ativo: dispara quando mensagem for [${config.pattern}]`
                       : '⚠️ Sem filtro: Este trigger aceitará TODAS as mensagens recebidas'}
                   </p>
                 </div>
@@ -499,6 +499,7 @@ export default function NodeConfigModal({
                       className="w-full px-4 py-2.5 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
                     >
                       <option value="exact">Correspondência Exata</option>
+                      <option value="starts_with">Começa com</option>
                       <option value="contains">Contém</option>
                       <option value="regex">Expressão Regular (Regex)</option>
                     </select>
