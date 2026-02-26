@@ -46,7 +46,7 @@ function WorkspaceUsersPageContent() {
     name: '',
     email: '',
     password: '',
-    role: UserRole.ADMIN as string,
+    role: UserRole.USER as string,
   })
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -102,7 +102,7 @@ function WorkspaceUsersPageContent() {
       setSuccess('User created successfully')
       await loadUsers()
       setShowModal(false)
-      setFormData({ name: '', email: '', password: '', role: UserRole.ADMIN })
+      setFormData({ name: '', email: '', password: '', role: UserRole.USER })
       setTimeout(() => setSuccess(null), 3000)
     } catch (error: any) {
       setError(error.response?.data?.message || 'Failed to create user')
@@ -131,7 +131,7 @@ function WorkspaceUsersPageContent() {
       await loadUsers()
       setShowModal(false)
       setEditingUser(null)
-      setFormData({ name: '', email: '', password: '', role: UserRole.ADMIN })
+      setFormData({ name: '', email: '', password: '', role: UserRole.USER })
       setTimeout(() => setSuccess(null), 3000)
     } catch (error: any) {
       setError(error.response?.data?.message || 'Failed to update user')
@@ -156,7 +156,7 @@ function WorkspaceUsersPageContent() {
 
   const openCreateModal = () => {
     setEditingUser(null)
-    setFormData({ name: '', email: '', password: '', role: UserRole.ADMIN })
+    setFormData({ name: '', email: '', password: '', role: UserRole.USER })
     setError(null)
     setShowModal(true)
   }
@@ -190,9 +190,17 @@ function WorkspaceUsersPageContent() {
   }
 
   const getRoleBadgeColor = (role: string) => {
-    return role === UserRole.SUPER_ADMIN
-      ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-      : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+    switch (role) {
+      case UserRole.SUPER_ADMIN:
+        return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+      case UserRole.ADMIN:
+        return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+      case UserRole.VIP:
+        return 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+      case UserRole.USER:
+      default:
+        return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+    }
   }
 
   if (loading && !workspace) {
@@ -398,6 +406,8 @@ function WorkspaceUsersPageContent() {
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     className="w-full px-4 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
                   >
+                    <option value={UserRole.USER}>USER</option>
+                    <option value={UserRole.VIP}>VIP</option>
                     <option value={UserRole.ADMIN}>ADMIN</option>
                     <option value={UserRole.SUPER_ADMIN}>SUPER_ADMIN</option>
                   </select>
@@ -409,7 +419,7 @@ function WorkspaceUsersPageContent() {
                   onClick={() => {
                     setShowModal(false)
                     setEditingUser(null)
-                    setFormData({ name: '', email: '', password: '', role: 'ADMIN' })
+                    setFormData({ name: '', email: '', password: '', role: UserRole.USER })
                     setError(null)
                   }}
                   className="flex-1 px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 transition"
