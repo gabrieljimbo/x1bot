@@ -2,92 +2,36 @@ import {
     Injectable,
     CanActivate,
     ExecutionContext,
-    ForbiddenException,
-    Logger,
 } from '@nestjs/common';
-import { UserRole } from '../types/roles.enum';
 
 @Injectable()
 export class LicenseGuard implements CanActivate {
-    private readonly logger = new Logger(LicenseGuard.name);
-
     canActivate(context: ExecutionContext): boolean {
         const request = context.switchToHttp().getRequest();
         const user = request.user;
 
-        if (!user) {
-            this.logger.warn('LicenseGuard: No user found in request');
-            return false;
-        }
+        if (!user) return true; // public routes
 
-        const role = user.role;
-
-        // SUPER_ADMIN and ADMIN ALWAYS bypass — check both enum and string values
-        // to handle old JWT tokens that might have legacy role names
+        // SUPER_ADMIN and ADMIN always pass
         if (
-            role === UserRole.SUPER_ADMIN ||
-            role === UserRole.ADMIN ||
-            role === 'SUPER_ADMIN' ||
-            role === 'ADMIN' ||
-            role === 'SUPERADMIN' // legacy format before standardization
-        ) {
+            user.role === 'SUPER_ADMIN' ||
+            user.role === 'ADMIN'
+        ) return true;
+
+        // VIP - check active license
+        if (user.role === 'VIP') {
+            if (user.licenseStatus !== 'ACTIVE') return false;
+            if (user.licenseExpiresAt && new Date(user.licenseExpiresAt) < new Date()) return false;
             return true;
         }
 
-        const now = new Date();
-
-        // Check VIP license
-        if (role === UserRole.VIP || role === 'VIP') {
-            // If licenseStatus is not set, allow access (avoid blocking on null)
-            if (!user.licenseStatus || user.licenseStatus === 'ACTIVE') {
-                if (user.licenseExpiresAt && new Date(user.licenseExpiresAt) < now) {
-                    throw new ForbiddenException(
-                        'Seu acesso expirou. Entre em contato para renovar.',
-                    );
-                }
-                return true;
-            }
-
-            if (user.licenseStatus === 'EXPIRED' || user.licenseStatus === 'SUSPENDED') {
-                throw new ForbiddenException(
-                    'Seu acesso expirou. Entre em contato para renovar.',
-                );
-            }
-
-            // TRIAL status for VIP — check trial expiry
-            if (user.licenseStatus === 'TRIAL') {
-                if (user.trialEndsAt && new Date(user.trialEndsAt) < now) {
-                    throw new ForbiddenException(
-                        'Seu período de teste expirou. Entre em contato para renovar.',
-                    );
-                }
-                return true;
-            }
-
+        // USER - check trial
+        if (user.role === 'USER') {
+            if (!user.trialEndsAt) return true;
+            if (new Date(user.trialEndsAt) < new Date()) return false;
             return true;
         }
 
-        // Check USER trial
-        if (role === UserRole.USER || role === 'USER') {
-            // If licenseStatus is EXPIRED or SUSPENDED, block
-            if (user.licenseStatus === 'EXPIRED' || user.licenseStatus === 'SUSPENDED') {
-                throw new ForbiddenException(
-                    'Seu acesso expirou. Entre em contato para renovar.',
-                );
-            }
-
-            // Check trial expiry
-            if (user.trialEndsAt && new Date(user.trialEndsAt) < now) {
-                throw new ForbiddenException(
-                    'Seu período de teste expirou. Entre em contato para renovar.',
-                );
-            }
-
-            return true;
-        }
-
-        // Unknown role — allow access (don't block unexpectedly)
-        this.logger.warn(`LicenseGuard: Unknown role "${role}" for user ${user.id}, allowing access`);
-        return true;
+        return false;
     }
 }

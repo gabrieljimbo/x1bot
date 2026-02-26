@@ -22,10 +22,9 @@ import { Tenant } from '../auth/decorators/tenant.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { CurrentUser } from '../auth/decorators/user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { LicenseGuard } from '../auth/guards/license.guard';
 
 @Controller('api')
-@UseGuards(JwtAuthGuard, LicenseGuard)
+@UseGuards(JwtAuthGuard)
 export class WorkflowController {
   constructor(
     private workflowService: WorkflowService,
