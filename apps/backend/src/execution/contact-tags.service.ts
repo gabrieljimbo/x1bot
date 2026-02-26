@@ -11,14 +11,14 @@ export class ContactTagsService {
   async getTags(
     tenantId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
   ): Promise<string[]> {
     const record = await this.prisma.contactTag.findUnique({
       where: {
-        tenantId_sessionId_contactId: {
+        tenantId_sessionId_contactPhone: {
           tenantId,
           sessionId,
-          contactId,
+          contactPhone,
         },
       },
     });
@@ -32,24 +32,24 @@ export class ContactTagsService {
   async addTags(
     tenantId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
     tagsToAdd: string[],
   ): Promise<string[]> {
-    const currentTags = await this.getTags(tenantId, sessionId, contactId);
+    const currentTags = await this.getTags(tenantId, sessionId, contactPhone);
     const newTags = [...new Set([...currentTags, ...tagsToAdd])]; // Remove duplicates
 
     await this.prisma.contactTag.upsert({
       where: {
-        tenantId_sessionId_contactId: {
+        tenantId_sessionId_contactPhone: {
           tenantId,
           sessionId,
-          contactId,
+          contactPhone,
         },
       },
       create: {
         tenantId,
         sessionId,
-        contactId,
+        contactPhone,
         tags: newTags,
       },
       update: {
@@ -67,24 +67,24 @@ export class ContactTagsService {
   async removeTags(
     tenantId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
     tagsToRemove: string[],
   ): Promise<string[]> {
-    const currentTags = await this.getTags(tenantId, sessionId, contactId);
+    const currentTags = await this.getTags(tenantId, sessionId, contactPhone);
     const newTags = currentTags.filter((tag) => !tagsToRemove.includes(tag));
 
     await this.prisma.contactTag.upsert({
       where: {
-        tenantId_sessionId_contactId: {
+        tenantId_sessionId_contactPhone: {
           tenantId,
           sessionId,
-          contactId,
+          contactPhone,
         },
       },
       create: {
         tenantId,
         sessionId,
-        contactId,
+        contactPhone,
         tags: newTags,
       },
       update: {
@@ -102,23 +102,23 @@ export class ContactTagsService {
   async setTags(
     tenantId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
     tags: string[],
   ): Promise<string[]> {
     const uniqueTags = [...new Set(tags)]; // Remove duplicates
 
     await this.prisma.contactTag.upsert({
       where: {
-        tenantId_sessionId_contactId: {
+        tenantId_sessionId_contactPhone: {
           tenantId,
           sessionId,
-          contactId,
+          contactPhone,
         },
       },
       create: {
         tenantId,
         sessionId,
-        contactId,
+        contactPhone,
         tags: uniqueTags,
       },
       update: {
@@ -136,20 +136,20 @@ export class ContactTagsService {
   async clearTags(
     tenantId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
   ): Promise<void> {
     await this.prisma.contactTag.upsert({
       where: {
-        tenantId_sessionId_contactId: {
+        tenantId_sessionId_contactPhone: {
           tenantId,
           sessionId,
-          contactId,
+          contactPhone,
         },
       },
       create: {
         tenantId,
         sessionId,
-        contactId,
+        contactPhone,
         tags: [],
       },
       update: {
@@ -165,10 +165,10 @@ export class ContactTagsService {
   async hasTag(
     tenantId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
     tag: string,
   ): Promise<boolean> {
-    const tags = await this.getTags(tenantId, sessionId, contactId);
+    const tags = await this.getTags(tenantId, sessionId, contactPhone);
     return tags.includes(tag);
   }
 
@@ -178,10 +178,10 @@ export class ContactTagsService {
   async hasAnyTag(
     tenantId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
     tagsToCheck: string[],
   ): Promise<boolean> {
-    const tags = await this.getTags(tenantId, sessionId, contactId);
+    const tags = await this.getTags(tenantId, sessionId, contactPhone);
     return tagsToCheck.some((tag) => tags.includes(tag));
   }
 
@@ -191,10 +191,10 @@ export class ContactTagsService {
   async hasAllTags(
     tenantId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
     tagsToCheck: string[],
   ): Promise<boolean> {
-    const tags = await this.getTags(tenantId, sessionId, contactId);
+    const tags = await this.getTags(tenantId, sessionId, contactPhone);
     return tagsToCheck.every((tag) => tags.includes(tag));
   }
 }

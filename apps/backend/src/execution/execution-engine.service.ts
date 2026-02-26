@@ -114,12 +114,12 @@ export class ExecutionEngineService implements OnModuleInit {
     tenantId: string,
     workflowId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
     triggerMessage?: string,
     triggerPayload?: any, // TriggerMessagePayload
   ): Promise<WorkflowExecution> {
     // Acquire lock to prevent duplicate executions
-    const lockKey = `execution:lock:${tenantId}:${sessionId}:${contactId}`;
+    const lockKey = `execution:lock:${tenantId}:${sessionId}:${contactPhone}`;
     const lockAcquired = await this.redis.acquireLock(lockKey, 30);
 
     if (!lockAcquired) {
@@ -131,7 +131,7 @@ export class ExecutionEngineService implements OnModuleInit {
       const existingExecution = await this.executionService.getActiveExecution(
         tenantId,
         sessionId,
-        contactId,
+        contactPhone,
       );
 
       if (existingExecution) {
@@ -194,20 +194,20 @@ export class ExecutionEngineService implements OnModuleInit {
       const contactTags = await this.contactTagsService.getTags(
         tenantId,
         sessionId,
-        contactId,
+        contactPhone,
       );
       // Create execution with normalized payload
       const execution = await this.executionService.createExecution(
         tenantId,
         workflowId,
         sessionId,
-        contactId,
+        contactPhone,
         {
           variables: {
             triggerMessage: triggerMessage || '',
             triggerPayload: triggerPayload || {
               messageId: `text-${Date.now()}`,
-              from: contactId,
+              from: contactPhone,
               type: 'text',
               text: triggerMessage || '',
               media: null,
@@ -225,7 +225,7 @@ export class ExecutionEngineService implements OnModuleInit {
         executionId: execution.id,
         workflowId,
         sessionId,
-        contactId,
+        contactPhone,
         timestamp: new Date(),
       });
 
@@ -256,7 +256,7 @@ export class ExecutionEngineService implements OnModuleInit {
     triggerPayload?: any, // TriggerMessagePayload
   ): Promise<void> {
     // Acquire lock
-    const lockKey = `execution:lock:${execution.tenantId}:${execution.sessionId}:${execution.contactId}`;
+    const lockKey = `execution:lock:${execution.tenantId}:${execution.sessionId}:${execution.contactPhone}`;
     const lockAcquired = await this.redis.acquireLock(lockKey, 30);
 
     if (!lockAcquired) {
@@ -278,7 +278,7 @@ export class ExecutionEngineService implements OnModuleInit {
       await this.prisma.contactFlowState.deleteMany({
         where: {
           sessionId: execution.sessionId,
-          contactId: execution.contactId,
+          contactPhone: execution.contactPhone,
         },
       });
 
@@ -361,7 +361,7 @@ export class ExecutionEngineService implements OnModuleInit {
         executionId: execution.id,
         workflowId: execution.workflowId,
         sessionId: execution.sessionId,
-        contactId: execution.contactId,
+        contactPhone: execution.contactPhone,
         previousStatus: ExecutionStatus.WAITING,
         timestamp: new Date(),
       });
@@ -423,11 +423,11 @@ export class ExecutionEngineService implements OnModuleInit {
               currentNodeId: nextNodeId,
               context: execution.context,
             });
-            // Reload execution to ensure we have latest sessionId and contactId
+            // Reload execution to ensure we have latest sessionId and contactPhone
             const updatedExecution = await this.executionService.getExecution(execution.tenantId, execution.id);
             if (updatedExecution) {
               execution.sessionId = updatedExecution.sessionId;
-              execution.contactId = updatedExecution.contactId;
+              execution.contactPhone = updatedExecution.contactPhone;
             }
             continue;
           } else {
@@ -489,11 +489,11 @@ export class ExecutionEngineService implements OnModuleInit {
                 currentNodeId: nextNodeId,
                 context: execution.context,
               });
-              // Reload execution to ensure we have latest sessionId and contactId
+              // Reload execution to ensure we have latest sessionId and contactPhone
               const updatedExecution = await this.executionService.getExecution(execution.tenantId, execution.id);
               if (updatedExecution) {
                 execution.sessionId = updatedExecution.sessionId;
-                execution.contactId = updatedExecution.contactId;
+                execution.contactPhone = updatedExecution.contactPhone;
               }
               // Continue execution with next iteration
               continue;
@@ -517,11 +517,11 @@ export class ExecutionEngineService implements OnModuleInit {
                 currentNodeId: doneNodeId,
                 context: execution.context,
               });
-              // Reload execution to ensure we have latest sessionId and contactId
+              // Reload execution to ensure we have latest sessionId and contactPhone
               const updatedExecution = await this.executionService.getExecution(execution.tenantId, execution.id);
               if (updatedExecution) {
                 execution.sessionId = updatedExecution.sessionId;
-                execution.contactId = updatedExecution.contactId;
+                execution.contactPhone = updatedExecution.contactPhone;
               }
               // Continue execution after loop
               continue;
@@ -536,12 +536,12 @@ export class ExecutionEngineService implements OnModuleInit {
 
       const startTime = Date.now();
 
-      // Ensure we have valid sessionId and contactId - reload from DB if needed
-      if (!execution.sessionId || !execution.contactId) {
+      // Ensure we have valid sessionId and contactPhone - reload from DB if needed
+      if (!execution.sessionId || !execution.contactPhone) {
         const refreshedExecution = await this.executionService.getExecution(execution.tenantId, execution.id);
         if (refreshedExecution) {
           execution.sessionId = refreshedExecution.sessionId;
-          execution.contactId = refreshedExecution.contactId;
+          execution.contactPhone = refreshedExecution.contactPhone;
         }
       }
 
@@ -559,7 +559,7 @@ export class ExecutionEngineService implements OnModuleInit {
           execution.context,
           workflow.edges,
           execution.sessionId,
-          execution.contactId,
+          execution.contactPhone,
         );
       } catch (nodeError: any) {
         console.error(`[EXECUTION] Node ${currentNode.id} (${currentNode.type}) failed:`, nodeError.message);
@@ -587,7 +587,7 @@ export class ExecutionEngineService implements OnModuleInit {
         executionId: execution.id,
         workflowId: execution.workflowId,
         sessionId: execution.sessionId,
-        contactId: execution.contactId,
+        contactPhone: execution.contactPhone,
         nodeId: currentNode.id,
         nodeType: currentNode.type,
         duration,
@@ -626,14 +626,14 @@ export class ExecutionEngineService implements OnModuleInit {
           const expiresAt = new Date(Date.now() + waitMs);
           await this.prisma.contactFlowState.upsert({
             where: {
-              sessionId_contactId: {
+              sessionId_contactPhone: {
                 sessionId: execution.sessionId,
-                contactId: execution.contactId,
+                contactPhone: execution.contactPhone,
               },
             },
             create: {
               sessionId: execution.sessionId,
-              contactId: execution.contactId,
+              contactPhone: execution.contactPhone,
               workflowId: execution.workflowId,
               currentNodeId: currentNode.id,
               executionId: execution.id,
@@ -686,7 +686,7 @@ export class ExecutionEngineService implements OnModuleInit {
           executionId: execution.id,
           workflowId: execution.workflowId,
           sessionId: execution.sessionId,
-          contactId: execution.contactId,
+          contactPhone: execution.contactPhone,
           currentNodeId: execution.currentNodeId!,
           timeoutSeconds: result.waitTimeoutSeconds || 0,
           timestamp: new Date(),
@@ -736,11 +736,11 @@ export class ExecutionEngineService implements OnModuleInit {
                   currentNodeId: nextNodeId,
                   context: execution.context,
                 });
-                // Reload execution to ensure we have latest sessionId and contactId
+                // Reload execution to ensure we have latest sessionId and contactPhone
                 const updatedExecution = await this.executionService.getExecution(execution.tenantId, execution.id);
                 if (updatedExecution) {
                   execution.sessionId = updatedExecution.sessionId;
-                  execution.contactId = updatedExecution.contactId;
+                  execution.contactPhone = updatedExecution.contactPhone;
                 }
                 // Continue execution with next iteration
                 continue;
@@ -820,11 +820,11 @@ export class ExecutionEngineService implements OnModuleInit {
                 currentNodeId: nextNodeId,
                 context: execution.context,
               });
-              // Reload execution to ensure we have latest sessionId and contactId
+              // Reload execution to ensure we have latest sessionId and contactPhone
               const updatedExecution = await this.executionService.getExecution(execution.tenantId, execution.id);
               if (updatedExecution) {
                 execution.sessionId = updatedExecution.sessionId;
-                execution.contactId = updatedExecution.contactId;
+                execution.contactPhone = updatedExecution.contactPhone;
               }
               // Continue execution with next iteration
               continue;
@@ -848,11 +848,11 @@ export class ExecutionEngineService implements OnModuleInit {
                 currentNodeId: doneNodeId,
                 context: execution.context,
               });
-              // Reload execution to ensure we have latest sessionId and contactId
+              // Reload execution to ensure we have latest sessionId and contactPhone
               const updatedExecution = await this.executionService.getExecution(execution.tenantId, execution.id);
               if (updatedExecution) {
                 execution.sessionId = updatedExecution.sessionId;
-                execution.contactId = updatedExecution.contactId;
+                execution.contactPhone = updatedExecution.contactPhone;
               }
               // Continue execution after loop
               continue;
@@ -895,7 +895,7 @@ export class ExecutionEngineService implements OnModuleInit {
     await this.prisma.contactFlowState.deleteMany({
       where: {
         sessionId: execution.sessionId,
-        contactId: execution.contactId,
+        contactPhone: execution.contactPhone,
       },
     });
 
@@ -909,7 +909,7 @@ export class ExecutionEngineService implements OnModuleInit {
       executionId: execution.id,
       workflowId: execution.workflowId,
       sessionId: execution.sessionId,
-      contactId: execution.contactId,
+      contactPhone: execution.contactPhone,
       output: execution.context.output,
       timestamp: new Date(),
     });
@@ -926,7 +926,7 @@ export class ExecutionEngineService implements OnModuleInit {
     await this.prisma.contactFlowState.deleteMany({
       where: {
         sessionId: execution.sessionId,
-        contactId: execution.contactId,
+        contactPhone: execution.contactPhone,
       },
     });
 
@@ -940,7 +940,7 @@ export class ExecutionEngineService implements OnModuleInit {
       executionId: execution.id,
       workflowId: execution.workflowId,
       sessionId: execution.sessionId,
-      contactId: execution.contactId,
+      contactPhone: execution.contactPhone,
       currentNodeId: execution.currentNodeId,
       timestamp: new Date(),
     });
@@ -957,7 +957,7 @@ export class ExecutionEngineService implements OnModuleInit {
     await this.prisma.contactFlowState.deleteMany({
       where: {
         sessionId: execution.sessionId,
-        contactId: execution.contactId,
+        contactPhone: execution.contactPhone,
       },
     });
 
@@ -972,7 +972,7 @@ export class ExecutionEngineService implements OnModuleInit {
       executionId: execution.id,
       workflowId: execution.workflowId,
       sessionId: execution.sessionId,
-      contactId: execution.contactId,
+      contactPhone: execution.contactPhone,
       error,
       currentNodeId: execution.currentNodeId,
       timestamp: new Date(),
@@ -987,7 +987,7 @@ export class ExecutionEngineService implements OnModuleInit {
   private async sendMessageWithRetry(
     messageToSend: {
       sessionId: string;
-      contactId: string;
+      contactPhone: string;
       message?: string;
       media?: {
         type: 'image' | 'video' | 'audio' | 'document';
@@ -999,7 +999,7 @@ export class ExecutionEngineService implements OnModuleInit {
     },
     maxRetries = 3,
   ): Promise<void> {
-    const { sessionId, contactId, message, media } = messageToSend;
+    const { sessionId, contactPhone, message, media } = messageToSend;
     const retryDelays = [2000, 4000, 8000]; // Exponential backoff
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -1007,7 +1007,7 @@ export class ExecutionEngineService implements OnModuleInit {
         if (media) {
           await this.whatsappSender.sendMedia(
             sessionId,
-            contactId,
+            contactPhone,
             media.type,
             media.url,
             {
@@ -1023,7 +1023,7 @@ export class ExecutionEngineService implements OnModuleInit {
             if (parsed.type === 'buttons') {
               await this.whatsappSender.sendButtons(
                 sessionId,
-                contactId,
+                contactPhone,
                 parsed.message,
                 parsed.buttons,
                 parsed.footer,
@@ -1031,18 +1031,18 @@ export class ExecutionEngineService implements OnModuleInit {
             } else if (parsed.type === 'list') {
               await this.whatsappSender.sendList(
                 sessionId,
-                contactId,
+                contactPhone,
                 parsed.message,
                 parsed.buttonText,
                 parsed.sections,
                 parsed.footer,
               );
             } else {
-              await this.whatsappSender.sendMessage(sessionId, contactId, message);
+              await this.whatsappSender.sendMessage(sessionId, contactPhone, message);
             }
           } catch (parseErr) {
             // Not JSON, send as regular message
-            await this.whatsappSender.sendMessage(sessionId, contactId, message);
+            await this.whatsappSender.sendMessage(sessionId, contactPhone, message);
           }
         }
         // Success — exit retry loop
@@ -1121,7 +1121,7 @@ export class ExecutionEngineService implements OnModuleInit {
         }
 
         // Acquire lock before resuming to prevent race conditions
-        lockKey = `execution:lock:${updatedExecution.tenantId}:${updatedExecution.sessionId}:${updatedExecution.contactId}`;
+        lockKey = `execution:lock:${updatedExecution.tenantId}:${updatedExecution.sessionId}:${updatedExecution.contactPhone}`;
         lockAcquired = await this.redis.acquireLock(lockKey, 120);
         if (!lockAcquired) {
           console.warn(`[WAIT] Could not acquire lock for execution ${executionId}, retrying in 2s...`);
@@ -1183,7 +1183,7 @@ export class ExecutionEngineService implements OnModuleInit {
             executionId: recheckExecution.id,
             workflowId: recheckExecution.workflowId,
             sessionId: recheckExecution.sessionId,
-            contactId: recheckExecution.contactId,
+            contactPhone: recheckExecution.contactPhone,
             output: recheckExecution.context.output,
             timestamp: new Date(),
           });
@@ -1204,7 +1204,7 @@ export class ExecutionEngineService implements OnModuleInit {
           executionId: recheckExecution.id,
           workflowId: recheckExecution.workflowId,
           sessionId: recheckExecution.sessionId,
-          contactId: recheckExecution.contactId,
+          contactPhone: recheckExecution.contactPhone,
           previousStatus: ExecutionStatus.WAITING,
           timestamp: new Date(),
         });
@@ -1271,7 +1271,7 @@ export class ExecutionEngineService implements OnModuleInit {
         }
 
         // Acquire lock
-        lockKey = `execution:lock:${execution.tenantId}:${execution.sessionId}:${execution.contactId}`;
+        lockKey = `execution:lock:${execution.tenantId}:${execution.sessionId}:${execution.contactPhone}`;
         lockAcquired = await this.redis.acquireLock(lockKey, 120);
         if (!lockAcquired) {
           console.warn(`[WAIT_REPLY] Could not acquire lock for execution ${executionId}, retrying in 2s...`);
@@ -1307,7 +1307,7 @@ export class ExecutionEngineService implements OnModuleInit {
             executionId: recheckExecution.id,
             workflowId: recheckExecution.workflowId,
             sessionId: recheckExecution.sessionId,
-            contactId: recheckExecution.contactId,
+            contactPhone: recheckExecution.contactPhone,
             output: recheckExecution.context.output,
             timestamp: new Date(),
           });
@@ -1350,7 +1350,7 @@ export class ExecutionEngineService implements OnModuleInit {
             executionId: recheckExecution.id,
             workflowId: recheckExecution.workflowId,
             sessionId: recheckExecution.sessionId,
-            contactId: recheckExecution.contactId,
+            contactPhone: recheckExecution.contactPhone,
             previousStatus: ExecutionStatus.WAITING,
             timestamp: new Date(),
           });

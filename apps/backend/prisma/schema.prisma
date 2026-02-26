@@ -10,9 +10,9 @@ datasource db {
 model Conversation {
   id            String             @id @default(cuid())
   sessionId     String
-  contactId     String
-  contactName   String?
   contactPhone  String
+  contactName   String?
+  phoneNumber   String
   contactAvatar String?
   lastMessage   String?
   lastMessageAt DateTime?
@@ -29,9 +29,9 @@ model Conversation {
   messages      Message[]
 
   @@index([tenantId])
-  @@index([sessionId, contactId])
+  @@index([sessionId, contactPhone])
   @@index([sessionId])
-  @@unique([sessionId, contactId])
+  @@unique([sessionId, contactPhone])
   @@map("conversations")
 }
 
@@ -55,7 +55,7 @@ model Message {
 model ContactFlowState {
   id              String   @id @default(cuid())
   sessionId       String
-  contactId       String
+  contactPhone    String
   workflowId      String
   currentNodeId   String
   executionId     String?
@@ -64,7 +64,7 @@ model ContactFlowState {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@unique([sessionId, contactId])
+  @@unique([sessionId, contactPhone])
   @@map("contact_flow_states")
 }
 
@@ -92,7 +92,7 @@ model WorkflowExecution {
   tenantId          String
   workflowId        String
   sessionId         String
-  contactId         String
+  contactPhone      String
   currentNodeId     String?
   status            String
   context           Json
@@ -108,7 +108,7 @@ model WorkflowExecution {
 
   @@index([status, expiresAt])
   @@index([tenantId])
-  @@index([tenantId, sessionId, contactId, status])
+  @@index([tenantId, sessionId, contactPhone, status])
   @@index([tenantId, workflowId])
   @@map("workflow_executions")
 }
@@ -285,14 +285,14 @@ model ContactTag {
   id        String   @id @default(cuid())
   tenantId  String
   sessionId String
-  contactId String
+  contactPhone String
   tags      String[] @default([])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([tenantId, sessionId, contactId])
+  @@unique([tenantId, sessionId, contactPhone])
   @@index([tenantId])
-  @@index([tenantId, sessionId, contactId])
+  @@index([tenantId, sessionId, contactPhone])
   @@index([tenantId, sessionId])
   @@map("contact_tags")
 }

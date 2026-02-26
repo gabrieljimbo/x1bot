@@ -58,7 +58,7 @@ export interface WorkflowExecution {
     tenantId: string;
     workflowId: string;
     sessionId: string;
-    contactId: string;
+    contactPhone: string;
     currentNodeId: string | null;
     status: ExecutionStatus;
     context: ExecutionContext;

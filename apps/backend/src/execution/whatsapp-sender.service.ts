@@ -24,50 +24,50 @@ export interface MediaData {
 
 @Injectable()
 export class WhatsappSenderService {
-  private sendMessageCallback: ((sessionId: string, contactId: string, message: string) => Promise<void>) | null = null;
-  private sendButtonsCallback: ((sessionId: string, contactId: string, message: string, buttons: ButtonData[], footer?: string) => Promise<void>) | null = null;
-  private sendListCallback: ((sessionId: string, contactId: string, message: string, buttonText: string, sections: ListSection[], footer?: string) => Promise<void>) | null = null;
-  private sendMediaCallback: ((sessionId: string, contactId: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) => Promise<void>) | null = null;
+  private sendMessageCallback: ((sessionId: string, contactPhone: string, message: string) => Promise<void>) | null = null;
+  private sendButtonsCallback: ((sessionId: string, contactPhone: string, message: string, buttons: ButtonData[], footer?: string) => Promise<void>) | null = null;
+  private sendListCallback: ((sessionId: string, contactPhone: string, message: string, buttonText: string, sections: ListSection[], footer?: string) => Promise<void>) | null = null;
+  private sendMediaCallback: ((sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) => Promise<void>) | null = null;
 
   /**
    * Register the send message callback
    */
-  registerSendMessage(callback: (sessionId: string, contactId: string, message: string) => Promise<void>) {
+  registerSendMessage(callback: (sessionId: string, contactPhone: string, message: string) => Promise<void>) {
     this.sendMessageCallback = callback;
   }
 
   /**
    * Register the send buttons callback
    */
-  registerSendButtons(callback: (sessionId: string, contactId: string, message: string, buttons: ButtonData[], footer?: string) => Promise<void>) {
+  registerSendButtons(callback: (sessionId: string, contactPhone: string, message: string, buttons: ButtonData[], footer?: string) => Promise<void>) {
     this.sendButtonsCallback = callback;
   }
 
   /**
    * Register the send list callback
    */
-  registerSendList(callback: (sessionId: string, contactId: string, message: string, buttonText: string, sections: ListSection[], footer?: string) => Promise<void>) {
+  registerSendList(callback: (sessionId: string, contactPhone: string, message: string, buttonText: string, sections: ListSection[], footer?: string) => Promise<void>) {
     this.sendListCallback = callback;
   }
 
   /**
    * Register the send media callback
    */
-  registerSendMedia(callback: (sessionId: string, contactId: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) => Promise<void>) {
+  registerSendMedia(callback: (sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) => Promise<void>) {
     this.sendMediaCallback = callback;
   }
 
   /**
    * Send WhatsApp message
    */
-  async sendMessage(sessionId: string, contactId: string, message: string): Promise<void> {
+  async sendMessage(sessionId: string, contactPhone: string, message: string): Promise<void> {
     if (!this.sendMessageCallback) {
       console.warn('WhatsApp send message callback not registered yet');
       return;
     }
 
     try {
-      await this.sendMessageCallback(sessionId, contactId, message);
+      await this.sendMessageCallback(sessionId, contactPhone, message);
     } catch (error) {
       console.error('Error sending WhatsApp message:', error);
       throw error;
@@ -77,14 +77,14 @@ export class WhatsappSenderService {
   /**
    * Send WhatsApp message with buttons
    */
-  async sendButtons(sessionId: string, contactId: string, message: string, buttons: ButtonData[], footer?: string): Promise<void> {
+  async sendButtons(sessionId: string, contactPhone: string, message: string, buttons: ButtonData[], footer?: string): Promise<void> {
     if (!this.sendButtonsCallback) {
       console.warn('WhatsApp send buttons callback not registered yet');
       return;
     }
 
     try {
-      await this.sendButtonsCallback(sessionId, contactId, message, buttons, footer);
+      await this.sendButtonsCallback(sessionId, contactPhone, message, buttons, footer);
     } catch (error) {
       console.error('Error sending WhatsApp buttons:', error);
       throw error;
@@ -94,14 +94,14 @@ export class WhatsappSenderService {
   /**
    * Send WhatsApp list message
    */
-  async sendList(sessionId: string, contactId: string, message: string, buttonText: string, sections: ListSection[], footer?: string): Promise<void> {
+  async sendList(sessionId: string, contactPhone: string, message: string, buttonText: string, sections: ListSection[], footer?: string): Promise<void> {
     if (!this.sendListCallback) {
       console.warn('WhatsApp send list callback not registered yet');
       return;
     }
 
     try {
-      await this.sendListCallback(sessionId, contactId, message, buttonText, sections, footer);
+      await this.sendListCallback(sessionId, contactPhone, message, buttonText, sections, footer);
     } catch (error) {
       console.error('Error sending WhatsApp list:', error);
       throw error;
@@ -113,7 +113,7 @@ export class WhatsappSenderService {
    */
   async sendMedia(
     sessionId: string, 
-    contactId: string, 
+    contactPhone: string, 
     mediaType: 'image' | 'video' | 'audio' | 'document',
     mediaUrl: string,
     options?: {
@@ -128,7 +128,7 @@ export class WhatsappSenderService {
     }
 
     try {
-      await this.sendMediaCallback(sessionId, contactId, mediaType, mediaUrl, options);
+      await this.sendMediaCallback(sessionId, contactPhone, mediaType, mediaUrl, options);
     } catch (error) {
       console.error('Error sending WhatsApp media:', error);
       throw error;

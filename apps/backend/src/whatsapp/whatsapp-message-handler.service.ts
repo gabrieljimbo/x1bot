@@ -22,14 +22,14 @@ export class WhatsappMessageHandler {
   async handleMessage(
     tenantId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
     payload: TriggerMessagePayload | string,
   ): Promise<void> {
     // Normalize payload
     const normalizedPayload: TriggerMessagePayload = typeof payload === 'string'
       ? {
         messageId: `text-${Date.now()}`,
-        from: contactId,
+        from: contactPhone,
         fromMe: false, // Default for simple string messages
         type: 'text',
         text: payload,
@@ -46,10 +46,10 @@ export class WhatsappMessageHandler {
 
     // --- CRM / Inbox Registration ---
     const mediaPayload = normalizedPayload.media as any;
-    const isGroup = contactId.endsWith('@g.us');
+    const isGroup = contactPhone.endsWith('@g.us');
 
     // Use InboxService to upsert conversation and save message
-    const conversation = await this.inboxService.upsertConversation(tenantId, sessionId, contactId, {
+    const conversation = await this.inboxService.upsertConversation(tenantId, sessionId, contactPhone, {
       lastMessage: normalizedPayload.text || (normalizedPayload.media ? `[${mediaPayload?.type || mediaPayload?.mediaType || 'media'}]` : ''),
       lastMessageAt: new Date(normalizedPayload.timestamp),
       unreadCount: { increment: 1 } as any,
@@ -74,14 +74,14 @@ export class WhatsappMessageHandler {
         where: {
           sessionId_groupId: {
             sessionId,
-            groupId: contactId,
+            groupId: contactPhone,
           },
         },
       });
 
       // 3. Whitelist Check: Discard if group not authorized or disabled
       if (!groupConfig || !groupConfig.enabled) {
-        console.log(`[IGNORE] Session ${sessionId}: Group ${contactId} not in whitelist or disabled`);
+        console.log(`[IGNORE] Session ${sessionId}: Group ${contactPhone} not in whitelist or disabled`);
         return;
       }
 
@@ -93,9 +93,9 @@ export class WhatsappMessageHandler {
     // Fetch if there's an active waiting flow for this contact
     const flowState = await this.prisma.contactFlowState.findUnique({
       where: {
-        sessionId_contactId: {
+        sessionId_contactPhone: {
           sessionId,
-          contactId: contactId,
+          contactPhone: contactPhone,
         },
       },
     });
@@ -103,19 +103,19 @@ export class WhatsappMessageHandler {
     if (flowState) {
       if (new Date() > flowState.expiresAt) {
         // State expired, delete it and proceed to match triggers
-        console.log(`[STATE] Session ${sessionId}: ContactFlowState for ${contactId} expired, deleting`);
+        console.log(`[STATE] Session ${sessionId}: ContactFlowState for ${contactPhone} expired, deleting`);
         await this.prisma.contactFlowState.delete({
           where: { id: flowState.id },
         });
       } else if (flowState.executionId) {
         // State is active, load execution and resume
-        console.log(`[STATE] Session ${sessionId}: Found active ContactFlowState for ${contactId}, resuming execution ${flowState.executionId}`);
+        console.log(`[STATE] Session ${sessionId}: Found active ContactFlowState for ${contactPhone}, resuming execution ${flowState.executionId}`);
         const activeExecution = await this.executionService.getExecution(tenantId, flowState.executionId);
 
         if (activeExecution) {
           // If in a group, verify workflow is allowed
           if (isGroup && !whitelistedWorkflows.includes(activeExecution.workflowId)) {
-            console.log(`[IGNORE] Session ${sessionId}: Active workflow ${activeExecution.workflowId} not permitted in group ${contactId}`);
+            console.log(`[IGNORE] Session ${sessionId}: Active workflow ${activeExecution.workflowId} not permitted in group ${contactPhone}`);
             return;
           }
 
@@ -135,13 +135,13 @@ export class WhatsappMessageHandler {
     const activeExecution = await this.executionService.getActiveExecution(
       tenantId,
       sessionId,
-      contactId,
+      contactPhone,
     );
 
     if (activeExecution) {
       // 5. Workflow Check for Groups (Resume): Ensure the active workflow is permitted in this group
       if (isGroup && !whitelistedWorkflows.includes(activeExecution.workflowId)) {
-        console.log(`[IGNORE] Session ${sessionId}: Active workflow ${activeExecution.workflowId} not permitted in group ${contactId}`);
+        console.log(`[IGNORE] Session ${sessionId}: Active workflow ${activeExecution.workflowId} not permitted in group ${contactPhone}`);
         return;
       }
 
@@ -152,7 +152,7 @@ export class WhatsappMessageHandler {
       }
     } else {
       // Try to match trigger
-      await this.matchTriggerAndStart(tenantId, sessionId, contactId, normalizedPayload, isGroup, whitelistedWorkflows);
+      await this.matchTriggerAndStart(tenantId, sessionId, contactPhone, normalizedPayload, isGroup, whitelistedWorkflows);
     }
   }
 
@@ -162,7 +162,7 @@ export class WhatsappMessageHandler {
   private async matchTriggerAndStart(
     tenantId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
     payload: TriggerMessagePayload,
     isGroup: boolean = false,
     whitelistedWorkflows: string[] = [],
@@ -207,7 +207,7 @@ export class WhatsappMessageHandler {
 
       // 4. Workflow Check for Groups (Start): If in a group, only trigger if workflow is whitelisted
       if (isGroup && !whitelistedWorkflows.includes(workflow.id)) {
-        console.log(`[IGNORE] Session ${sessionId}: Workflow ${workflow.id} not whitelisted for group ${contactId}`);
+        console.log(`[IGNORE] Session ${sessionId}: Workflow ${workflow.id} not whitelisted for group ${contactPhone}`);
         continue;
       }
 
@@ -285,7 +285,7 @@ export class WhatsappMessageHandler {
           tenantId,
           workflow.id,
           sessionId,
-          contactId,
+          contactPhone,
           messageText, // Keep for backward compatibility
           payload, // Pass full payload
         );

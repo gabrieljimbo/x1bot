@@ -239,14 +239,14 @@ export class WorkflowService {
 
     // Generate a unique contact ID for this manual execution
     const timestamp = Date.now();
-    const contactId = `manual-${workflowId}-${timestamp}`;
+    const contactPhone = `manual-${workflowId}-${timestamp}`;
 
     // Start execution
     const execution = await this.executionEngine.startExecution(
       tenantId,
       workflowId,
       sessionId,
-      contactId,
+      contactPhone,
       undefined, // no trigger message for manual executions
     );
 
@@ -324,7 +324,7 @@ export class WorkflowService {
     // For testing, we can create a mock session ID if none exists
     // This allows testing nodes that don't require WhatsApp interaction
     const sessionId = session?.id || `test-session-${tenantId}`;
-    const contactId = existingExecution.contactId || `test-${nodeId}-${Date.now()}`;
+    const contactPhone = existingExecution.contactPhone || `test-${nodeId}-${Date.now()}`;
 
     // Create a new execution with the same context but starting from the specified node
     const newExecution = await this.prisma.workflowExecution.create({
@@ -332,7 +332,7 @@ export class WorkflowService {
         tenantId,
         workflowId,
         sessionId,
-        contactId,
+        contactPhone,
         currentNodeId: nodeId,
         status: 'RUNNING',
         context: existingExecution.context as any, // Reuse context from previous execution

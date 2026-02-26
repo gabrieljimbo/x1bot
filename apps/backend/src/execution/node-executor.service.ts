@@ -39,7 +39,7 @@ export interface NodeExecutionResult {
   output?: Record<string, any>;
   messageToSend?: {
     sessionId: string;
-    contactId: string;
+    contactPhone: string;
     message?: string;
     media?: {
       type: 'image' | 'video' | 'audio' | 'document';
@@ -74,20 +74,20 @@ export class NodeExecutorService {
     context: ExecutionContext,
     edges: any[],
     sessionId?: string,
-    contactId?: string,
+    contactPhone?: string,
   ): Promise<NodeExecutionResult> {
     switch (node.type) {
       case WorkflowNodeType.SEND_MESSAGE:
-        return this.executeSendMessage(node, context, edges, sessionId, contactId);
+        return this.executeSendMessage(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.SEND_MEDIA:
-        return this.executeSendMedia(node, context, edges, sessionId, contactId);
+        return this.executeSendMedia(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.SEND_BUTTONS:
-        return this.executeSendButtons(node, context, edges, sessionId, contactId);
+        return this.executeSendButtons(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.SEND_LIST:
-        return this.executeSendList(node, context, edges, sessionId, contactId);
+        return this.executeSendList(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.HTTP_REQUEST:
         return this.executeHttpRequest(node, context, edges);
@@ -102,7 +102,7 @@ export class NodeExecutorService {
         return this.executeEditFields(node, context, edges);
 
       case WorkflowNodeType.MANAGE_LABELS:
-        return this.executeManageLabels(node, context, edges, sessionId, contactId);
+        return this.executeManageLabels(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.CONDITION:
         return this.executeCondition(node, context, edges);
@@ -117,7 +117,7 @@ export class NodeExecutorService {
         return this.executeWait(node, context, edges);
 
       case WorkflowNodeType.SET_TAGS:
-        return await this.executeSetTags(node, context, edges, sessionId, contactId);
+        return await this.executeSetTags(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.LOOP:
         return this.executeLoop(node, context, edges);
@@ -145,7 +145,7 @@ export class NodeExecutorService {
     context: ExecutionContext,
     edges: any[],
     defaultSessionId?: string,
-    defaultContactId?: string,
+    defaultcontactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as SendMessageConfig;
 
@@ -156,13 +156,13 @@ export class NodeExecutorService {
     const sessionId = config.sessionId || defaultSessionId;
 
     // Determine recipient (config overrides default)
-    let contactId = defaultContactId;
+    let contactPhone = defaultcontactPhone;
     if (config.to) {
-      contactId = this.contextService.interpolate(config.to, context);
+      contactPhone = this.contextService.interpolate(config.to, context);
     }
 
     // Store message in output
-    this.contextService.setOutput(context, { message, sentTo: contactId, sessionId });
+    this.contextService.setOutput(context, { message, sentTo: contactPhone, sessionId });
 
     // Add delay if configured
     if (config.delay) {
@@ -176,9 +176,9 @@ export class NodeExecutorService {
     return {
       nextNodeId,
       shouldWait: false,
-      messageToSend: sessionId && contactId ? {
+      messageToSend: sessionId && contactPhone ? {
         sessionId,
-        contactId,
+        contactPhone,
         message,
       } : undefined,
     };
@@ -192,7 +192,7 @@ export class NodeExecutorService {
     context: ExecutionContext,
     edges: any[],
     defaultSessionId?: string,
-    defaultContactId?: string,
+    defaultcontactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as SendMediaConfig;
 
@@ -205,9 +205,9 @@ export class NodeExecutorService {
     const sessionId = config.sessionId || defaultSessionId;
 
     // Determine recipient (config overrides default)
-    let contactId = defaultContactId;
+    let contactPhone = defaultcontactPhone;
     if (config.to) {
-      contactId = this.contextService.interpolate(config.to, context);
+      contactPhone = this.contextService.interpolate(config.to, context);
     }
 
     // Store in output
@@ -217,7 +217,7 @@ export class NodeExecutorService {
       caption,
       fileName,
       sendAudioAsVoice: config.sendAudioAsVoice,
-      sentTo: contactId,
+      sentTo: contactPhone,
       sessionId,
     });
 
@@ -233,9 +233,9 @@ export class NodeExecutorService {
     return {
       nextNodeId,
       shouldWait: false,
-      messageToSend: sessionId && contactId ? {
+      messageToSend: sessionId && contactPhone ? {
         sessionId,
-        contactId,
+        contactPhone,
         media: {
           type: config.mediaType,
           url: mediaUrl,
@@ -255,7 +255,7 @@ export class NodeExecutorService {
     context: ExecutionContext,
     edges: any[],
     sessionId?: string,
-    contactId?: string,
+    contactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as SendButtonsConfig;
 
@@ -293,9 +293,9 @@ export class NodeExecutorService {
       nextNodeId,
       shouldWait: false,
       output: { message, buttons, footer },
-      messageToSend: sessionId && contactId ? {
+      messageToSend: sessionId && contactPhone ? {
         sessionId,
-        contactId,
+        contactPhone,
         message: JSON.stringify({ type: 'buttons', message, buttons, footer }),
       } : undefined,
     };
@@ -309,7 +309,7 @@ export class NodeExecutorService {
     context: ExecutionContext,
     edges: any[],
     sessionId?: string,
-    contactId?: string,
+    contactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as SendListConfig;
 
@@ -355,9 +355,9 @@ export class NodeExecutorService {
       nextNodeId,
       shouldWait: false,
       output: { message, buttonText, sections, footer },
-      messageToSend: sessionId && contactId ? {
+      messageToSend: sessionId && contactPhone ? {
         sessionId,
-        contactId,
+        contactPhone,
         message: JSON.stringify({ type: 'list', message, buttonText, sections, footer }),
       } : undefined,
     };
@@ -371,12 +371,12 @@ export class NodeExecutorService {
     context: ExecutionContext,
     edges: any[],
     sessionId?: string,
-    contactId?: string,
+    contactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as ManageLabelsConfig;
     const action = config.action || 'add'; // Default to 'add' if not specified
 
-    if (!sessionId || !contactId) {
+    if (!sessionId || !contactPhone) {
       throw new Error('Session ID and Contact ID are required for MANAGE_LABELS node');
     }
 
@@ -388,19 +388,19 @@ export class NodeExecutorService {
     try {
       if (action === 'list') {
         // Get current chat labels
-        const chatLabels = await this.whatsappSessionManager.getChatLabels(sessionId, contactId);
+        const chatLabels = await this.whatsappSessionManager.getChatLabels(sessionId, contactPhone);
         const saveAs = config.saveLabelsAs || 'chatLabels';
         this.contextService.setVariable(context, saveAs, chatLabels);
 
       } else if (action === 'add') {
         // Add labels
         if (config.labelIds && config.labelIds.length > 0) {
-          await this.whatsappSessionManager.addLabels(sessionId, contactId, config.labelIds);
+          await this.whatsappSessionManager.addLabels(sessionId, contactPhone, config.labelIds);
         }
       } else if (action === 'remove') {
         // Remove labels
         if (config.labelIds && config.labelIds.length > 0) {
-          await this.whatsappSessionManager.removeLabels(sessionId, contactId, config.labelIds);
+          await this.whatsappSessionManager.removeLabels(sessionId, contactPhone, config.labelIds);
         }
       }
 
@@ -1591,17 +1591,17 @@ export class NodeExecutorService {
     context: ExecutionContext,
     edges: any[],
     sessionId?: string,
-    contactId?: string,
+    contactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as SetTagsConfig;
 
-    if (!sessionId || !contactId) {
-      console.error('[SET_TAGS] Missing sessionId or contactId');
+    if (!sessionId || !contactPhone) {
+      console.error('[SET_TAGS] Missing sessionId or contactPhone');
       const nextEdge = edges.find((e) => e.source === node.id);
       return {
         nextNodeId: nextEdge?.target || null,
         shouldWait: false,
-        output: { error: 'Missing sessionId or contactId' },
+        output: { error: 'Missing sessionId or contactPhone' },
       };
     }
 
@@ -1614,7 +1614,7 @@ export class NodeExecutorService {
           resultTags = await this.contactTagsService.addTags(
             tenantId,
             sessionId,
-            contactId,
+            contactPhone,
             config.tags || [],
           );
           break;
@@ -1623,7 +1623,7 @@ export class NodeExecutorService {
           resultTags = await this.contactTagsService.removeTags(
             tenantId,
             sessionId,
-            contactId,
+            contactPhone,
             config.tags || [],
           );
           break;
@@ -1632,13 +1632,13 @@ export class NodeExecutorService {
           resultTags = await this.contactTagsService.setTags(
             tenantId,
             sessionId,
-            contactId,
+            contactPhone,
             config.tags || [],
           );
           break;
 
         case 'clear':
-          await this.contactTagsService.clearTags(tenantId, sessionId, contactId);
+          await this.contactTagsService.clearTags(tenantId, sessionId, contactPhone);
           resultTags = [];
           break;
 

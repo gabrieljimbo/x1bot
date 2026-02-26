@@ -21,7 +21,7 @@ export interface ExecutionEvent extends BaseEvent {
     executionId: string;
     workflowId: string;
     sessionId: string;
-    contactId: string;
+    contactPhone: string;
 }
 export interface ExecutionStartedEvent extends ExecutionEvent {
     type: EventType.EXECUTION_STARTED;
@@ -57,7 +57,7 @@ export interface NodeExecutedEvent extends ExecutionEvent {
 export interface WhatsappMessageReceivedEvent extends BaseEvent {
     type: EventType.WHATSAPP_MESSAGE_RECEIVED;
     sessionId: string;
-    contactId: string;
+    contactPhone: string;
     message: string;
     timestamp: Date;
 }

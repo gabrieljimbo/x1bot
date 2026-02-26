@@ -73,7 +73,7 @@ export class MessageQueueService implements OnModuleInit {
 
     async enqueue(
         sessionId: string,
-        contactId: string,
+        contactPhone: string,
         socket: any,
         job: MessageJob,
         sendFn: () => Promise<any>,
@@ -88,7 +88,7 @@ export class MessageQueueService implements OnModuleInit {
                 this.logger.debug(`[QUEUE] Session ${sessionId}: Waiting ${waitTime}ms for humanization`);
 
                 // Start presence update
-                const presenceInterval = this.startPresenceUpdate(sessionId, contactId, socket, job);
+                const presenceInterval = this.startPresenceUpdate(sessionId, contactPhone, socket, job);
 
                 try {
                     await new Promise((resolve) => setTimeout(resolve, waitTime));
@@ -96,7 +96,7 @@ export class MessageQueueService implements OnModuleInit {
                     // Stop presence update before send
                     if (presenceInterval) clearInterval(presenceInterval);
                     if (socket?.sendPresenceUpdate) {
-                        await socket.sendPresenceUpdate('paused', contactId);
+                        await socket.sendPresenceUpdate('paused', contactPhone);
                     }
                 } catch (error) {
                     if (presenceInterval) clearInterval(presenceInterval);
@@ -136,7 +136,7 @@ export class MessageQueueService implements OnModuleInit {
         return baseDelay + randomExtra;
     }
 
-    private startPresenceUpdate(sessionId: string, contactId: string, socket: any, job: MessageJob): NodeJS.Timeout | null {
+    private startPresenceUpdate(sessionId: string, contactPhone: string, socket: any, job: MessageJob): NodeJS.Timeout | null {
         if (!socket?.sendPresenceUpdate) return null;
 
         let presenceType: 'composing' | 'recording' | null = null;
@@ -158,12 +158,12 @@ export class MessageQueueService implements OnModuleInit {
         if (!presenceType) return null;
 
         // Initial update
-        socket.sendPresenceUpdate(presenceType, contactId).catch(() => { });
+        socket.sendPresenceUpdate(presenceType, contactPhone).catch(() => { });
 
         // Renew every 3s
         return setInterval(() => {
             if (socket?.sendPresenceUpdate) {
-                socket.sendPresenceUpdate(presenceType, contactId).catch(() => { });
+                socket.sendPresenceUpdate(presenceType, contactPhone).catch(() => { });
             }
         }, 3000);
     }

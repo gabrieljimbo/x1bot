@@ -137,7 +137,7 @@ export class InboxService {
         if (body.mediaUrl && body.mediaType) {
             await this.whatsappSessionManager.sendMedia(
                 conversation.sessionId,
-                conversation.contactId,
+                conversation.contactPhone,
                 body.mediaType,
                 body.mediaUrl,
                 { caption: body.text, bypassDelay: true }
@@ -145,7 +145,7 @@ export class InboxService {
         } else if (body.text) {
             await this.whatsappSessionManager.sendMessage(
                 conversation.sessionId,
-                conversation.contactId,
+                conversation.contactPhone,
                 body.text,
                 true
             );
@@ -199,7 +199,7 @@ export class InboxService {
         const activeExecution = await this.executionService.getActiveExecution(
             tenantId,
             conversation.sessionId,
-            conversation.contactId,
+            conversation.contactPhone,
         );
 
         if (activeExecution) {
@@ -210,7 +210,7 @@ export class InboxService {
         // Create a normalized payload mimicking an initial trigger event
         const mockPayload = {
             messageId: `manual-${Date.now()}`,
-            from: conversation.contactId,
+            from: conversation.contactPhone,
             fromMe: false,
             type: 'text',
             text: '/iniciar_manual',
@@ -222,7 +222,7 @@ export class InboxService {
             tenantId,
             workflowId,
             conversation.sessionId,
-            conversation.contactId,
+            conversation.contactPhone,
             { variables: {}, input: mockPayload }
         );
 
@@ -231,7 +231,7 @@ export class InboxService {
             tenantId,
             workflowId,
             conversation.sessionId,
-            conversation.contactId,
+            conversation.contactPhone,
             mockPayload.text,
             mockPayload
         );
@@ -290,14 +290,14 @@ export class InboxService {
         return { success: true };
     }
 
-    async upsertConversation(tenantId: string, sessionId: string, contactId: string, data: Partial<Conversation>) {
-        const isGroup = contactId.endsWith('@g.us');
+    async upsertConversation(tenantId: string, sessionId: string, contactPhone: string, data: Partial<Conversation>) {
+        const isGroup = contactPhone.endsWith('@g.us');
 
         const conversation = await this.prisma.conversation.upsert({
             where: {
-                sessionId_contactId: {
+                sessionId_contactPhone: {
                     sessionId,
-                    contactId,
+                    contactPhone,
                 },
             },
             update: {
@@ -307,8 +307,8 @@ export class InboxService {
             create: {
                 tenantId,
                 sessionId,
-                contactId,
-                contactPhone: contactId.split('@')[0],
+                contactPhone,
+                phoneNumber: contactPhone.split('@')[0],
                 isGroup,
                 status: PrismaConvStatus.OPEN,
                 ...data,

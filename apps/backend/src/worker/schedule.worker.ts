@@ -251,17 +251,17 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
       // For scheduled workflows, use a unique contact ID for each execution
       // This prevents conflicts when multiple scheduled executions run
       const timestamp = Date.now();
-      const contactId = `scheduled-${workflowId}-${timestamp}`;
+      const contactPhone = `scheduled-${workflowId}-${timestamp}`;
 
       await this.executionEngine.startExecution(
         tenantId,
         workflowId,
         sessionId,
-        contactId,
+        contactPhone,
         undefined, // no trigger message for scheduled workflows
       );
 
-      console.log(`[SCHEDULE WORKER] Successfully started execution for workflow ${workflowId} with contactId: ${contactId}`);
+      console.log(`[SCHEDULE WORKER] Successfully started execution for workflow ${workflowId} with contactPhone: ${contactPhone}`);
     } catch (error) {
       console.error(`[SCHEDULE WORKER] Error executing workflow ${workflowId}:`, error);
     }

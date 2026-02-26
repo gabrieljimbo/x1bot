@@ -17,7 +17,7 @@ export class ExecutionService {
     tenantId: string,
     workflowId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
     initialContext: Partial<ExecutionContext> = {},
   ): Promise<WorkflowExecution> {
     const ttlHours = this.configService.get('EXECUTION_DEFAULT_TTL_HOURS', 24);
@@ -36,7 +36,7 @@ export class ExecutionService {
         tenantId,
         workflowId,
         sessionId,
-        contactId,
+        contactPhone,
         status: ExecutionStatus.RUNNING,
         context: context as any,
         interactionCount: 0,
@@ -53,13 +53,13 @@ export class ExecutionService {
   async getActiveExecution(
     tenantId: string,
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
   ): Promise<WorkflowExecution | null> {
     const execution = await this.prisma.workflowExecution.findFirst({
       where: {
         tenantId,
         sessionId,
-        contactId,
+        contactPhone,
         status: {
           in: [ExecutionStatus.RUNNING, ExecutionStatus.WAITING],
         },
@@ -184,7 +184,7 @@ export class ExecutionService {
       tenantId: data.tenantId,
       workflowId: data.workflowId,
       sessionId: data.sessionId,
-      contactId: data.contactId,
+      contactPhone: data.contactPhone,
       currentNodeId: data.currentNodeId,
       status: data.status as ExecutionStatus,
       context: data.context as ExecutionContext,

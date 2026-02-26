@@ -71,26 +71,26 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     // Register send message callback
     this.whatsappSender.registerSendMessage(
-      (sessionId: string, contactId: string, message: string) =>
-        this.sendMessage(sessionId, contactId, message)
+      (sessionId: string, contactPhone: string, message: string) =>
+        this.sendMessage(sessionId, contactPhone, message)
     );
 
     // Register send buttons callback
     this.whatsappSender.registerSendButtons(
-      (sessionId: string, contactId: string, message: string, buttons: any[], footer?: string) =>
-        this.sendButtons(sessionId, contactId, message, buttons, footer)
+      (sessionId: string, contactPhone: string, message: string, buttons: any[], footer?: string) =>
+        this.sendButtons(sessionId, contactPhone, message, buttons, footer)
     );
 
     // Register send list callback
     this.whatsappSender.registerSendList(
-      (sessionId: string, contactId: string, message: string, buttonText: string, sections: any[], footer?: string) =>
-        this.sendList(sessionId, contactId, message, buttonText, sections, footer)
+      (sessionId: string, contactPhone: string, message: string, buttonText: string, sections: any[], footer?: string) =>
+        this.sendList(sessionId, contactPhone, message, buttonText, sections, footer)
     );
 
     // Register send media callback
     this.whatsappSender.registerSendMedia(
-      (sessionId: string, contactId: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) =>
-        this.sendMedia(sessionId, contactId, mediaType, mediaUrl, options)
+      (sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) =>
+        this.sendMedia(sessionId, contactPhone, mediaType, mediaUrl, options)
     );
 
     // Auto-reconnect active sessions with staggered delay
@@ -172,10 +172,10 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   /**
    * Send presence update (composing, recording, etc)
    */
-  async sendPresenceUpdate(sessionId: string, contactId: string, presence: 'composing' | 'recording' | 'paused'): Promise<void> {
+  async sendPresenceUpdate(sessionId: string, contactPhone: string, presence: 'composing' | 'recording' | 'paused'): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (session && session.socket) {
-      await session.socket.sendPresenceUpdate(presence, contactId);
+      await session.socket.sendPresenceUpdate(presence, contactPhone);
     }
   }
 
@@ -240,7 +240,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   /**
    * Send message
    */
-  async sendMessage(sessionId: string, contactId: string, message: string, bypassDelay: boolean = false): Promise<void> {
+  async sendMessage(sessionId: string, contactPhone: string, message: string, bypassDelay: boolean = false): Promise<void> {
     const sessionClient = this.resolveSessionClient(sessionId);
 
     if (!sessionClient) {
@@ -251,7 +251,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       throw new Error('Session not connected');
     }
 
-    const jid = this.formatJid(contactId);
+    const jid = this.formatJid(contactPhone);
 
     await this.messageQueue.enqueue(
       sessionId,
@@ -268,7 +268,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   /**
    * Send WhatsApp message with buttons
    */
-  async sendButtons(sessionId: string, contactId: string, message: string, buttons: any[], footer?: string): Promise<void> {
+  async sendButtons(sessionId: string, contactPhone: string, message: string, buttons: any[], footer?: string): Promise<void> {
     const sessionClient = this.resolveSessionClient(sessionId);
 
     if (!sessionClient) {
@@ -279,7 +279,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       throw new Error('Session not connected');
     }
 
-    const jid = this.formatJid(contactId);
+    const jid = this.formatJid(contactPhone);
 
     await this.messageQueue.enqueue(
       sessionId,
@@ -305,7 +305,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   /**
    * Send WhatsApp list message
    */
-  async sendList(sessionId: string, contactId: string, message: string, buttonText: string, sections: any[], footer?: string): Promise<void> {
+  async sendList(sessionId: string, contactPhone: string, message: string, buttonText: string, sections: any[], footer?: string): Promise<void> {
     const sessionClient = this.resolveSessionClient(sessionId);
 
     if (!sessionClient) {
@@ -316,7 +316,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       throw new Error('Session not connected');
     }
 
-    const jid = this.formatJid(contactId);
+    const jid = this.formatJid(contactPhone);
 
     await this.messageQueue.enqueue(
       sessionId,
@@ -355,7 +355,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
    */
   async sendMedia(
     sessionId: string,
-    contactId: string,
+    contactPhone: string,
     mediaType: 'image' | 'video' | 'audio' | 'document',
     mediaUrl: string,
     options?: {
@@ -375,7 +375,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       throw new Error('Session not connected');
     }
 
-    const jid = this.formatJid(contactId);
+    const jid = this.formatJid(contactPhone);
 
     await this.messageQueue.enqueue(
       sessionId,
@@ -448,7 +448,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   /**
    * Label management
    */
-  async addLabels(sessionId: string, contactId: string, labelIds: string[]): Promise<void> {
+  async addLabels(sessionId: string, contactPhone: string, labelIds: string[]): Promise<void> {
     const sessionClient = this.sessions.get(sessionId);
     if (!sessionClient) throw new Error(`Session ${sessionId} not found`);
 
@@ -459,23 +459,23 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     try {
       await sessionClient.socket.chatModify(
         { addChatLabel: { labelId: labelIds[0] } }, // Baileys currently supports one at a time for high-level? or we can loop
-        contactId
+        contactPhone
       );
 
       // If multiple, Baileys might need separate calls or a different structure. 
       // Most common use case is adding one or we loop.
       for (let i = 1; i < labelIds.length; i++) {
-        await sessionClient.socket.chatModify({ addChatLabel: { labelId: labelIds[i] } }, contactId);
+        await sessionClient.socket.chatModify({ addChatLabel: { labelId: labelIds[i] } }, contactPhone);
       }
 
-      await this.whatsappService.addChatLabels(sessionId, contactId, labelIds);
+      await this.whatsappService.addChatLabels(sessionId, contactPhone, labelIds);
     } catch (error: any) {
       console.error(`[LABELS] Failed to add labels for session ${sessionId}:`, error.message);
       throw error;
     }
   }
 
-  async removeLabels(sessionId: string, contactId: string, labelIds: string[]): Promise<void> {
+  async removeLabels(sessionId: string, contactPhone: string, labelIds: string[]): Promise<void> {
     const sessionClient = this.sessions.get(sessionId);
     if (!sessionClient) throw new Error(`Session ${sessionId} not found`);
 
@@ -487,10 +487,10 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       for (const labelId of labelIds) {
         await sessionClient.socket.chatModify(
           { removeChatLabel: { labelId } },
-          contactId
+          contactPhone
         );
       }
-      await this.whatsappService.removeChatLabels(sessionId, contactId, labelIds);
+      await this.whatsappService.removeChatLabels(sessionId, contactPhone, labelIds);
     } catch (error: any) {
       console.error(`[LABELS] Failed to remove labels for session ${sessionId}:`, error.message);
       throw error;
@@ -501,8 +501,8 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     return this.whatsappService.getLabels(sessionId);
   }
 
-  async getChatLabels(sessionId: string, contactId: string): Promise<any[]> {
-    return this.whatsappService.getChatLabels(sessionId, contactId);
+  async getChatLabels(sessionId: string, contactPhone: string): Promise<any[]> {
+    return this.whatsappService.getChatLabels(sessionId, contactPhone);
   }
 
   /**
@@ -739,24 +739,24 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
    * Handle incoming message
    */
   private async handleIncomingMessage(tenantId: string, sessionId: string, msg: WAMessage): Promise<void> {
-    const contactId = msg.key.remoteJid!;
+    const contactPhone = msg.key.remoteJid!;
     const messageId = msg.key.id!;
 
     try {
       const payload = await this.processMessage(msg, tenantId, sessionId);
 
-      console.log(`Message received on session ${sessionId} from ${contactId}:`, payload.type);
+      console.log(`Message received on session ${sessionId} from ${contactPhone}:`, payload.type);
 
       await this.eventBus.emit({
         type: EventType.WHATSAPP_MESSAGE_RECEIVED,
         tenantId,
         sessionId,
-        contactId,
+        contactPhone,
         message: payload.text || '',
         timestamp: new Date(),
       });
 
-      await this.messageHandler.handleMessage(tenantId, sessionId, contactId, payload);
+      await this.messageHandler.handleMessage(tenantId, sessionId, contactPhone, payload);
     } catch (error) {
       console.error('[BAILEYS] Error processing incoming message:', error);
     }
@@ -878,9 +878,9 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     return 'document';
   }
 
-  private formatJid(contactId: string): string {
-    if (contactId.includes('@')) return contactId;
-    return `${contactId.replace('+', '')}@s.whatsapp.net`;
+  private formatJid(contactPhone: string): string {
+    if (contactPhone.includes('@')) return contactPhone;
+    return `${contactPhone.replace('+', '')}@s.whatsapp.net`;
   }
 
   private getMimeTypeForMedia(url: string): string {

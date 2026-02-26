@@ -219,9 +219,9 @@ export class WorkflowController {
   @Post('whatsapp/sessions/:id/send')
   async sendMessage(
     @Param('id') sessionId: string,
-    @Body() body: { contactId: string; message: string },
+    @Body() body: { contactPhone: string; message: string },
   ) {
-    await this.whatsappSessionManager.sendMessage(sessionId, body.contactId, body.message);
+    await this.whatsappSessionManager.sendMessage(sessionId, body.contactPhone, body.message);
     return { success: true };
   }
 
@@ -229,7 +229,7 @@ export class WorkflowController {
   async sendMedia(
     @Param('id') sessionId: string,
     @Body() body: {
-      contactId: string;
+      contactPhone: string;
       mediaType: 'image' | 'video' | 'audio' | 'document';
       mediaUrl: string;
       caption?: string;
@@ -239,7 +239,7 @@ export class WorkflowController {
   ) {
     await this.whatsappSessionManager.sendMedia(
       sessionId,
-      body.contactId,
+      body.contactPhone,
       body.mediaType,
       body.mediaUrl,
       {
