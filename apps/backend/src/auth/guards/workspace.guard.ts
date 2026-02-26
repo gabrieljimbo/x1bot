@@ -12,7 +12,7 @@ export class WorkspaceGuard implements CanActivate {
     }
 
     // SUPER_ADMIN bypasses workspace restrictions
-    if (user.role === UserRole.SUPER_ADMIN) {
+    if (user.role === UserRole.SUPER_ADMIN || user.role === 'SUPER_ADMIN' || user.role === 'SUPERADMIN') {
       return true;
     }
 

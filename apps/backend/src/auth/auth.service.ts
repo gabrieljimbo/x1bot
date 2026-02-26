@@ -187,6 +187,10 @@ export class AuthService {
       name: user.name,
       tenantId: user.tenantId,
       role: (user as any).role || UserRole.ADMIN,
+      licenseStatus: (user as any).licenseStatus,
+      trialStartedAt: (user as any).trialStartedAt,
+      trialEndsAt: (user as any).trialEndsAt,
+      licenseExpiresAt: (user as any).licenseExpiresAt,
       tenant: {
         id: user.tenant.id,
         name: user.tenant.name,
