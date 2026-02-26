@@ -13,7 +13,7 @@ export const hasRole = (userRole: string | undefined, requiredRole: UserRole): b
   }
 
   if (userRole === UserRole.SUPER_ADMIN) return true
-  if (userRole === UserRole.ADMIN && requiredRole !== UserRole.SUPER_ADMIN) return true
+  if (userRole === UserRole.ADMIN) return true
 
   return userRole === requiredRole
 }
