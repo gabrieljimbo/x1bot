@@ -597,7 +597,30 @@ function InboxContent() {
                         </span>
                     )}
                 </div>
+
                 <div className="flex-1" />
+
+                {/* Session Toggle */}
+                <div className="flex items-center bg-[#1a1a1a] p-1 rounded-xl border border-white/5">
+                    <button
+                        onClick={() => setFilterSession('')}
+                        className={`px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all ${!filterSession ? 'bg-[#00ff88] text-black shadow-lg shadow-[#00ff88]/10' : 'text-gray-500 hover:text-white'}`}
+                    >
+                        Todas as Sessões
+                    </button>
+                    <div className="w-px h-4 bg-white/5 mx-1" />
+                    <select
+                        value={filterSession}
+                        onChange={(e) => setFilterSession(e.target.value)}
+                        className={`bg-transparent text-[11px] font-medium outline-none px-2 py-1.5 transition-all ${filterSession ? 'text-[#00ff88]' : 'text-gray-500 hover:text-white cursor-pointer'}`}
+                    >
+                        <option value="" disabled className="bg-[#1a1a1a] text-gray-500">Selecionar Sessão</option>
+                        {sessions.map((s) => (
+                            <option key={s.id} value={s.id} className="bg-[#1a1a1a] text-white">{s.name}</option>
+                        ))}
+                    </select>
+                </div>
+
                 <button
                     onClick={loadConversations}
                     className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors"

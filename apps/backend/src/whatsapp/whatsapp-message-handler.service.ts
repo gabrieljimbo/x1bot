@@ -3,8 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ExecutionService } from '../execution/execution.service';
 import { ExecutionEngineService } from '../execution/execution-engine.service';
 import { WorkflowNodeType, ExecutionStatus, TriggerMessagePayload } from '@n9n/shared';
-import { EventBusService } from '../event-bus/event-bus.service';
-import { ConversationStatus, MessageStatus } from '@prisma/client';
+import { InboxService } from '../inbox/inbox.service';
+import { MessageStatus } from '@prisma/client';
 
 @Injectable()
 export class WhatsappMessageHandler {
@@ -12,7 +12,7 @@ export class WhatsappMessageHandler {
     private prisma: PrismaService,
     private executionService: ExecutionService,
     private executionEngine: ExecutionEngineService,
-    private eventBus: EventBusService,
+    private inboxService: InboxService,
   ) { }
 
   /**
@@ -44,75 +44,24 @@ export class WhatsappMessageHandler {
     }
 
     // --- CRM / Inbox Registration ---
-    // Extract a phone name if possible (this expects contact name/pushName if available, omitting for brevity or using phone)
-    const activeSession = await this.prisma.whatsappSession.findUnique({
-      where: { id: sessionId },
-      select: { tenantId: true }
-    });
-
-
-    if (activeSession) {
-      const isGroupParam = contactId.endsWith('@g.us');
-    }
-
-    // Proper CRM / Inbox Registration
-    const isGroup = contactId.endsWith('@g.us');
-    let conversation = await this.prisma.conversation.findFirst({
-      where: { sessionId, contactId },
-    });
-
-    if (!conversation) {
-      conversation = await this.prisma.conversation.create({
-        data: {
-          sessionId,
-          tenantId: activeSession ? activeSession.tenantId : tenantId,
-          contactId,
-          contactPhone: contactId.split('@')[0],
-          isGroup,
-          status: ConversationStatus.OPEN,
-        }
-      });
-    }
-
-    // Create the message in history
     const mediaPayload = normalizedPayload.media as any;
+    const isGroup = contactId.endsWith('@g.us');
 
-    await this.prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        content: normalizedPayload.text || '',
-        mediaUrl: normalizedPayload.media?.url,
-        mediaType: mediaPayload?.type || mediaPayload?.mediaType || undefined,
-        fromMe: false,
-        timestamp: new Date(normalizedPayload.timestamp),
-        status: MessageStatus.DELIVERED,
-      }
+    // Use InboxService to upsert conversation and save message
+    const conversation = await this.inboxService.upsertConversation(tenantId, sessionId, contactId, {
+      lastMessage: normalizedPayload.text || (normalizedPayload.media ? `[${mediaPayload?.type || mediaPayload?.mediaType || 'media'}]` : ''),
+      lastMessageAt: new Date(normalizedPayload.timestamp),
+      unreadCount: { increment: 1 } as any,
     });
 
-    // Update conversation last message & unread 
-    await this.prisma.conversation.update({
-      where: { id: conversation.id },
-      data: {
-        lastMessage: normalizedPayload.text || (normalizedPayload.media ? `[${mediaPayload?.type || mediaPayload?.mediaType || 'media'}]` : ''),
-        lastMessageAt: new Date(normalizedPayload.timestamp),
-        unreadCount: { increment: 1 },
-      }
+    await this.inboxService.saveMessage(conversation.id, {
+      content: normalizedPayload.text || '',
+      mediaUrl: normalizedPayload.media?.url,
+      mediaType: mediaPayload?.type || mediaPayload?.mediaType || undefined,
+      fromMe: false,
+      timestamp: new Date(normalizedPayload.timestamp),
+      status: MessageStatus.DELIVERED,
     });
-
-    // Notify Frontend
-    await this.eventBus.emit({
-      type: 'conversation:updated' as any,
-      tenantId: activeSession ? activeSession.tenantId : tenantId,
-      conversationId: conversation.id,
-      timestamp: new Date(),
-    } as any);
-
-    await this.eventBus.emit({
-      type: 'message:received' as any,
-      tenantId: activeSession ? activeSession.tenantId : tenantId,
-      conversationId: conversation.id,
-      timestamp: new Date(),
-    } as any);
     // --- End CRM / Inbox Registration ---
 
     // 2. Group Filtering: Check if message is from a group

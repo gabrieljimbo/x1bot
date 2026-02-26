@@ -8,7 +8,7 @@ import { ExecutionEngineService } from '../execution/execution-engine.service';
 import { EventType } from '@n9n/shared';
 // We assume we cast the Prisma Enums or matching @n9n/shared enums.
 // The Prisma schemas use String for statuses or Enums. Let's use the Prisma generated enum format.
-import { ConversationStatus as PrismaConvStatus, MessageStatus as PrismaMsgStatus } from '@prisma/client';
+import { ConversationStatus as PrismaConvStatus, MessageStatus as PrismaMsgStatus, Conversation, Message } from '@prisma/client';
 
 export interface GetConversationsOptions {
     sessionId?: string;
@@ -158,7 +158,7 @@ export class InboxService {
 
         // Broadcast update
         await this.eventBus.emit({
-            type: 'conversation:updated' as any,
+            type: 'inbox:conversation-updated' as any,
             tenantId,
             conversationId: conversation.id,
             timestamp: new Date(),
@@ -226,7 +226,7 @@ export class InboxService {
         });
 
         await this.eventBus.emit({
-            type: 'conversation:updated' as any,
+            type: 'inbox:conversation-updated' as any,
             tenantId,
             conversationId: conversation.id,
             timestamp: new Date(),
@@ -244,7 +244,7 @@ export class InboxService {
         if (conversation.count === 0) throw new NotFoundException();
 
         await this.eventBus.emit({
-            type: 'conversation:updated' as any,
+            type: 'inbox:conversation-updated' as any,
             tenantId,
             conversationId,
             timestamp: new Date(),
@@ -262,12 +262,77 @@ export class InboxService {
         if (res.count === 0) throw new NotFoundException();
 
         await this.eventBus.emit({
-            type: 'conversation:updated' as any,
+            type: 'inbox:conversation-updated' as any,
             tenantId,
             conversationId,
             timestamp: new Date(),
         } as any);
 
         return { success: true };
+    }
+
+    async upsertConversation(tenantId: string, sessionId: string, contactId: string, data: Partial<Conversation>) {
+        const isGroup = contactId.endsWith('@g.us');
+
+        const conversation = await this.prisma.conversation.upsert({
+            where: {
+                sessionId_contactId: {
+                    sessionId,
+                    contactId,
+                },
+            },
+            update: {
+                ...data,
+                tenantId,
+            },
+            create: {
+                tenantId,
+                sessionId,
+                contactId,
+                contactPhone: contactId.split('@')[0],
+                isGroup,
+                status: PrismaConvStatus.OPEN,
+                ...data,
+            },
+        });
+
+        await this.eventBus.emit({
+            type: 'inbox:conversation-updated' as any,
+            tenantId,
+            conversationId: conversation.id,
+            timestamp: new Date(),
+        } as any);
+
+        return conversation;
+    }
+
+    async saveMessage(conversationId: string, data: Partial<Message>) {
+        const conversation = await this.prisma.conversation.findUnique({
+            where: { id: conversationId },
+            select: { tenantId: true }
+        });
+
+        if (!conversation) throw new NotFoundException('Conversation not found');
+
+        const message = await this.prisma.message.create({
+            data: {
+                conversationId,
+                content: data.content || '',
+                mediaUrl: data.mediaUrl,
+                mediaType: data.mediaType,
+                fromMe: data.fromMe ?? false,
+                timestamp: data.timestamp || new Date(),
+                status: data.status || PrismaMsgStatus.SENT,
+            },
+        });
+
+        await this.eventBus.emit({
+            type: 'inbox:message-received' as any,
+            tenantId: conversation.tenantId,
+            conversationId,
+            timestamp: new Date(),
+        } as any);
+
+        return message;
     }
 }

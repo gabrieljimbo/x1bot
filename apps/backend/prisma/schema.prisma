@@ -291,8 +291,8 @@ model ContactFlowState {
 
 model Conversation {
   id            String    @id @default(cuid())
+  tenantId      String
   sessionId     String
-  session       WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   contactId     String
   contactName   String?
   contactPhone  String
@@ -303,31 +303,36 @@ model Conversation {
   isGroup       Boolean   @default(false)
   status        ConversationStatus @default(OPEN)
   activeFlowId  String?
-  labels        String[]
-  tenantId      String
-  tenant        Tenant @relation(fields: [tenantId], references: [id])
-  messages      Message[]
+  labels        String[]  @default([])
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  session  WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([sessionId, contactId])
   @@index([tenantId])
-  @@index([sessionId])
-  @@index([sessionId, contactId])
+  @@index([tenantId, sessionId])
+  @@index([tenantId, status])
+  @@index([lastMessageAt])
   @@map("conversations")
 }
 
 model Message {
-  id             String      @id @default(cuid())
+  id             String        @id @default(cuid())
   conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   content        String
   mediaUrl       String?
   mediaType      String?
-  fromMe         Boolean     @default(false)
+  fromMe         Boolean       @default(false)
   timestamp      DateTime
   status         MessageStatus @default(SENT)
-  createdAt      DateTime    @default(now())
+  createdAt      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
+  @@index([conversationId, timestamp])
   @@map("messages")
 }
