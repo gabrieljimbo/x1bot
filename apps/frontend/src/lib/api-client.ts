@@ -321,4 +321,54 @@ export const apiClient = {
     const { data } = await client.put(`/api/admin/users/${userId}/license`, updates)
     return data
   },
+
+  // Inbox / CRM
+  getConversations: async (params?: {
+    sessionId?: string
+    status?: string
+    label?: string
+    type?: string
+    page?: number
+    limit?: number
+    search?: string
+  }) => {
+    const { data } = await client.get('/api/inbox', { params })
+    return data
+  },
+
+  getConversation: async (conversationId: string) => {
+    const { data } = await client.get(`/api/inbox/${conversationId}`)
+    return data
+  },
+
+  getInboxMessages: async (conversationId: string, cursor?: string, limit?: number) => {
+    const { data } = await client.get(`/api/inbox/${conversationId}/messages`, {
+      params: { cursor, limit },
+    })
+    return data
+  },
+
+  sendInboxMessage: async (
+    conversationId: string,
+    body: { text?: string; mediaUrl?: string; mediaType?: string }
+  ) => {
+    const { data } = await client.post(`/api/inbox/${conversationId}/send`, body)
+    return data
+  },
+
+  triggerInboxFlow: async (conversationId: string, workflowId: string) => {
+    const { data } = await client.post(`/api/inbox/${conversationId}/trigger-flow`, { workflowId })
+    return data
+  },
+
+  updateConversationStatus: async (conversationId: string, status: string) => {
+    const { data } = await client.patch(`/api/inbox/${conversationId}/status`, { status })
+    return data
+  },
+
+  markConversationRead: async (conversationId: string) => {
+    const { data } = await client.patch(`/api/inbox/${conversationId}/read`, {})
+    return data
+  },
 }
+

@@ -1,7 +1,7 @@
 'use client'
 
 import { useAuth } from '@/contexts/AuthContext'
-import { LogOut, User, ShieldCheck, Star } from 'lucide-react'
+import { LogOut, User, ShieldCheck, Star, MessageSquare } from 'lucide-react'
 import { isSuperAdmin, UserRole } from '@/lib/permissions'
 import Link from 'next/link'
 
@@ -18,8 +18,24 @@ export default function AppHeader() {
           >
             N9N
           </Link>
+          {user && !isSuperAdmin(user?.role) && (
+            <Link
+              href="/inbox"
+              className="flex items-center gap-1.5 text-gray-400 hover:text-white transition text-sm"
+            >
+              <MessageSquare size={15} />
+              Inbox
+            </Link>
+          )}
           {isSuperAdmin(user?.role) && (
             <>
+              <Link
+                href="/inbox"
+                className="flex items-center gap-1.5 text-gray-400 hover:text-white transition text-sm"
+              >
+                <MessageSquare size={15} />
+                Inbox
+              </Link>
               <Link
                 href="/workspaces"
                 className="text-gray-400 hover:text-white transition text-sm"

@@ -6,6 +6,7 @@ const WS_URL = (process.env.NEXT_PUBLIC_WS_URL || 'https://api.n9n.archcode.spac
 class WebSocketClient {
   private socket: Socket | null = null
   private listeners: Map<string, Set<(event: WorkflowEvent) => void>> = new Map()
+  private rawListeners: Map<string, Set<(data: any) => void>> = new Map()
 
   connect(tenantId: string, token?: string) {
     if (this.socket?.connected) {
@@ -28,6 +29,12 @@ class WebSocketClient {
 
     this.socket.on('connect', () => {
       console.log('✅ WebSocket connected successfully!')
+      // Re-register raw listeners on reconnect
+      this.rawListeners.forEach((handlers, eventName) => {
+        handlers.forEach((handler) => {
+          this.socket?.on(eventName, handler)
+        })
+      })
     })
 
     this.socket.on('connect_error', (error) => {
@@ -79,7 +86,28 @@ class WebSocketClient {
       handlers.delete(handler)
     }
   }
+
+  // Raw socket event listeners (for inbox events like inbox:conversation-updated)
+  onRaw(eventName: string, handler: (data: any) => void) {
+    if (!this.rawListeners.has(eventName)) {
+      this.rawListeners.set(eventName, new Set())
+    }
+    this.rawListeners.get(eventName)!.add(handler)
+    // Register immediately if already connected
+    if (this.socket?.connected) {
+      this.socket.on(eventName, handler)
+    }
+  }
+
+  offRaw(eventName: string, handler: (data: any) => void) {
+    const handlers = this.rawListeners.get(eventName)
+    if (handlers) {
+      handlers.delete(handler)
+    }
+    this.socket?.off(eventName, handler)
+  }
 }
 
 export const wsClient = new WebSocketClient()
+
 

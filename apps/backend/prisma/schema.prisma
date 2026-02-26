@@ -19,8 +19,22 @@ model Tenant {
   workflows         Workflow[]
   executions        WorkflowExecution[]
   whatsappSessions  WhatsappSession[]
+  conversations     Conversation[]
 
   @@map("tenants")
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  BOT
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
 }
 
 enum Role {
@@ -124,6 +138,7 @@ model WhatsappSession {
   executions WorkflowExecution[]
   groupConfigs WhatsappGroupConfig[]
   labels       WhatsappLabel[]
+  conversations Conversation[]
   authState    WhatsappAuthState?
 
   @@index([tenantId])
@@ -274,3 +289,45 @@ model ContactFlowState {
   @@map("contact_flow_states")
 }
 
+model Conversation {
+  id            String    @id @default(cuid())
+  sessionId     String
+  session       WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contactId     String
+  contactName   String?
+  contactPhone  String
+  contactAvatar String?
+  lastMessage   String?
+  lastMessageAt DateTime?
+  unreadCount   Int       @default(0)
+  isGroup       Boolean   @default(false)
+  status        ConversationStatus @default(OPEN)
+  activeFlowId  String?
+  labels        String[]
+  tenantId      String
+  tenant        Tenant @relation(fields: [tenantId], references: [id])
+  messages      Message[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([sessionId])
+  @@index([sessionId, contactId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  content        String
+  mediaUrl       String?
+  mediaType      String?
+  fromMe         Boolean     @default(false)
+  timestamp      DateTime
+  status         MessageStatus @default(SENT)
+  createdAt      DateTime    @default(now())
+
+  @@index([conversationId])
+  @@map("messages")
+}
