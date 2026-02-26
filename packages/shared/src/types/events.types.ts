@@ -8,15 +8,19 @@ export enum EventType {
   EXECUTION_COMPLETED = 'execution.completed',
   EXECUTION_EXPIRED = 'execution.expired',
   EXECUTION_ERROR = 'execution.error',
-  
+
   // Node events
   NODE_EXECUTED = 'node.executed',
-  
+
   // WhatsApp events
   WHATSAPP_MESSAGE_RECEIVED = 'whatsapp.message.received',
   WHATSAPP_SESSION_CONNECTED = 'whatsapp.session.connected',
   WHATSAPP_SESSION_DISCONNECTED = 'whatsapp.session.disconnected',
   WHATSAPP_QR_CODE = 'whatsapp.qr.code',
+
+  // Inbox events
+  INBOX_CONVERSATION_UPDATED = 'inbox:conversation-updated',
+  INBOX_MESSAGE_RECEIVED = 'inbox:message-received',
 }
 
 export interface BaseEvent {

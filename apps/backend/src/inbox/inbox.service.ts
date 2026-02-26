@@ -177,7 +177,7 @@ export class InboxService {
 
         // Broadcast update
         await this.eventBus.emit({
-            type: 'inbox:conversation-updated' as any,
+            type: EventType.INBOX_CONVERSATION_UPDATED,
             tenantId,
             conversationId: conversation.id,
             timestamp: new Date(),
@@ -245,7 +245,7 @@ export class InboxService {
         });
 
         await this.eventBus.emit({
-            type: 'inbox:conversation-updated' as any,
+            type: EventType.INBOX_CONVERSATION_UPDATED,
             tenantId,
             conversationId: conversation.id,
             timestamp: new Date(),
@@ -263,7 +263,7 @@ export class InboxService {
         if (conversation.count === 0) throw new NotFoundException();
 
         await this.eventBus.emit({
-            type: 'inbox:conversation-updated' as any,
+            type: EventType.INBOX_CONVERSATION_UPDATED,
             tenantId,
             conversationId,
             timestamp: new Date(),
@@ -281,7 +281,7 @@ export class InboxService {
         if (res.count === 0) throw new NotFoundException();
 
         await this.eventBus.emit({
-            type: 'inbox:conversation-updated' as any,
+            type: EventType.INBOX_CONVERSATION_UPDATED,
             tenantId,
             conversationId,
             timestamp: new Date(),
@@ -293,6 +293,9 @@ export class InboxService {
     async upsertConversation(tenantId: string, sessionId: string, contactPhone: string, data: Partial<Conversation>) {
         const isGroup = contactPhone.endsWith('@g.us');
 
+        const unreadIncrement = (data.unreadCount as any)?.increment || 0;
+        const { unreadCount, ...restData } = data;
+
         const conversation = await this.prisma.conversation.upsert({
             where: {
                 sessionId_contactPhone: {
@@ -301,7 +304,8 @@ export class InboxService {
                 },
             },
             update: {
-                ...data,
+                ...restData,
+                unreadCount: unreadIncrement ? { increment: unreadIncrement } : undefined,
                 tenantId,
             },
             create: {
@@ -311,12 +315,13 @@ export class InboxService {
                 phoneNumber: contactPhone.split('@')[0],
                 isGroup,
                 status: PrismaConvStatus.OPEN,
-                ...data,
+                ...restData,
+                unreadCount: unreadIncrement || 0,
             },
         });
 
         await this.eventBus.emit({
-            type: 'inbox:conversation-updated' as any,
+            type: EventType.INBOX_CONVERSATION_UPDATED,
             tenantId,
             conversationId: conversation.id,
             timestamp: new Date(),
@@ -346,7 +351,7 @@ export class InboxService {
         });
 
         await this.eventBus.emit({
-            type: 'inbox:message-received' as any,
+            type: EventType.INBOX_MESSAGE_RECEIVED,
             tenantId: conversation.tenantId,
             conversationId,
             timestamp: new Date(),

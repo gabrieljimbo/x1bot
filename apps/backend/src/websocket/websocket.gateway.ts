@@ -60,6 +60,11 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   private broadcastToTenant(tenantId: string, event: WorkflowEvent) {
     console.log(`Broadcasting event ${event.type} to tenant:${tenantId}`);
     this.server.to(`tenant:${tenantId}`).emit('workflow:event', event);
+
+    // Also emit with the event type as the event name for onRaw listeners
+    if (event.type.toString().startsWith('inbox:')) {
+      this.server.to(`tenant:${tenantId}`).emit(event.type, event);
+    }
   }
 
   /**
