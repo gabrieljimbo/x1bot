@@ -8,66 +8,37 @@ datasource db {
 }
 
 model Tenant {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id               String              @id @default(uuid())
+  name             String
+  email            String              @unique
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  conversations    Conversation[]
   users            User[]
-  workflows         Workflow[]
-  executions        WorkflowExecution[]
-  whatsappSessions  WhatsappSession[]
-  conversations     Conversation[]
+  whatsappSessions WhatsappSession[]
+  executions       WorkflowExecution[]
+  workflows        Workflow[]
 
   @@map("tenants")
 }
 
-enum ConversationStatus {
-  OPEN
-  PENDING
-  RESOLVED
-  BOT
-}
-
-enum MessageStatus {
-  SENT
-  DELIVERED
-  READ
-}
-
-enum Role {
-  SUPER_ADMIN
-  ADMIN
-  USER
-  VIP
-}
-
-enum LicenseStatus {
-  TRIAL
-  ACTIVE
-  EXPIRED
-  SUSPENDED
-}
-
 model User {
-  id               String        @id @default(uuid())
-  tenantId         String
-  email            String
-  password         String
-  name             String?
-  isActive         Boolean       @default(true)
-  role             Role          @default(USER)
-  trialStartedAt   DateTime?     @default(now())
-  trialEndsAt      DateTime?
-  licenseStatus    LicenseStatus @default(TRIAL)
-  licenseExpiresAt DateTime?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-
-  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                 String              @id @default(uuid())
+  tenantId           String
+  email              String
+  password           String
+  name               String?
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  licenseExpiresAt   DateTime?
+  licenseStatus      LicenseStatus       @default(TRIAL)
+  trialEndsAt        DateTime?
+  trialStartedAt     DateTime?           @default(now())
+  role               Role                @default(USER)
   shareableWorkflows ShareableWorkflow[]
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -77,19 +48,18 @@ model User {
 }
 
 model Workflow {
-  id          String   @id @default(uuid())
-  tenantId    String
-  name        String
-  description String?
-  nodes       Json     // WorkflowNode[]
-  edges       Json     // WorkflowEdge[]
-  isActive    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  executions WorkflowExecution[]
+  id                 String              @id @default(uuid())
+  tenantId           String
+  name               String
+  description        String?
+  nodes              Json
+  edges              Json
+  isActive           Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   shareableWorkflows ShareableWorkflow[]
+  executions         WorkflowExecution[]
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([tenantId, isActive])
@@ -97,24 +67,23 @@ model Workflow {
 }
 
 model WorkflowExecution {
-  id               String   @id @default(uuid())
+  id               String          @id @default(uuid())
   tenantId         String
   workflowId       String
   sessionId        String
   contactId        String
   currentNodeId    String?
-  status           String   // ExecutionStatus enum
-  context          Json     // ExecutionContext
-  interactionCount Int      @default(0)
-  startedAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  status           String
+  context          Json
+  interactionCount Int             @default(0)
+  startedAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
   expiresAt        DateTime
   completedAt      DateTime?
   error            String?
-
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  session  WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session          WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflow         Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([tenantId, workflowId])
@@ -124,22 +93,21 @@ model WorkflowExecution {
 }
 
 model WhatsappSession {
-  id          String   @id @default(uuid())
-  tenantId    String
-  name        String
-  status      String   // WhatsappSessionStatus enum
-  qrCode      String?
-  phoneNumber String?
-  isBusiness  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  executions WorkflowExecution[]
-  groupConfigs WhatsappGroupConfig[]
-  labels       WhatsappLabel[]
+  id            String                @id @default(uuid())
+  tenantId      String
+  name          String
+  status        String
+  qrCode        String?
+  phoneNumber   String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  isBusiness    Boolean               @default(false)
   conversations Conversation[]
-  authState    WhatsappAuthState?
+  authState     WhatsappAuthState?
+  groupConfigs  WhatsappGroupConfig[]
+  labels        WhatsappLabel[]
+  tenant        Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  executions    WorkflowExecution[]
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -147,27 +115,25 @@ model WhatsappSession {
 }
 
 model WhatsappAuthState {
-  id        String   @id @default(uuid())
-  sessionId String   @unique
+  id        String          @id @default(uuid())
+  sessionId String          @unique
   creds     Json
   keys      Json
-  updatedAt DateTime @updatedAt
-
-  session WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  updatedAt DateTime        @updatedAt
+  session   WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@map("whatsapp_auth_states")
 }
 
 model WhatsappLabel {
-  id          String   @id @default(uuid())
-  sessionId   String
-  labelId     String   // Original WhatsApp ID
-  name        String
-  color       Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  session WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id        String          @id @default(uuid())
+  sessionId String
+  labelId   String
+  name      String
+  color     Int?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  session   WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, labelId])
   @@index([sessionId])
@@ -175,11 +141,11 @@ model WhatsappLabel {
 }
 
 model WhatsappChatLabel {
-  id          String   @id @default(uuid())
-  sessionId   String
-  chatId      String   // Contact JID
-  labelId     String   // WhatsApp Label ID
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  sessionId String
+  chatId    String
+  labelId   String
+  createdAt DateTime @default(now())
 
   @@unique([sessionId, chatId, labelId])
   @@index([sessionId])
@@ -188,16 +154,15 @@ model WhatsappChatLabel {
 }
 
 model WhatsappGroupConfig {
-  id          String   @id @default(uuid())
+  id          String          @id @default(uuid())
   sessionId   String
-  groupId     String   // Group JID (e.g., xxx@g.us)
+  groupId     String
   name        String
-  enabled     Boolean  @default(false)
-  workflowIds String[] @default([])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  session WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  enabled     Boolean         @default(false)
+  workflowIds String[]        @default([])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  session     WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, groupId])
   @@index([sessionId])
@@ -263,35 +228,18 @@ model GlobalConfig {
 model ShareableWorkflow {
   id          String   @id @default(uuid())
   workflowId  String
-  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   createdBy   String
-  user        User     @relation(fields: [createdBy], references: [id])
   importCount Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [createdBy], references: [id])
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@map("shareable_workflows")
 }
 
-model ContactFlowState {
-  id            String   @id @default(cuid())
-  sessionId     String
-  contactPhone  String
-  workflowId    String
-  currentNodeId String
-  executionId   String?
-  variables     Json     @default("{}")
-  expiresAt     DateTime
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@unique([sessionId, contactPhone])
-  @@map("contact_flow_states")
-}
-
 model Conversation {
-  id            String    @id @default(cuid())
-  tenantId      String
+  id            String             @id @default(cuid())
   sessionId     String
   contactId     String
   contactName   String?
@@ -299,23 +247,21 @@ model Conversation {
   contactAvatar String?
   lastMessage   String?
   lastMessageAt DateTime?
-  unreadCount   Int       @default(0)
-  isGroup       Boolean   @default(false)
+  unreadCount   Int                @default(0)
+  isGroup       Boolean            @default(false)
   status        ConversationStatus @default(OPEN)
   activeFlowId  String?
-  labels        String[]  @default([])
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  labels        String[]           @default([])
+  tenantId      String
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  session       WhatsappSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tenant        Tenant             @relation(fields: [tenantId], references: [id])
+  messages      Message[]
 
-  session  WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  messages Message[]
-
-  @@unique([sessionId, contactId])
   @@index([tenantId])
-  @@index([tenantId, sessionId])
-  @@index([tenantId, status])
-  @@index([lastMessageAt])
+  @@index([sessionId, contactId])
+  @@index([sessionId])
   @@map("conversations")
 }
 
@@ -329,10 +275,35 @@ model Message {
   timestamp      DateTime
   status         MessageStatus @default(SENT)
   createdAt      DateTime      @default(now())
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
-  @@index([conversationId, timestamp])
   @@map("messages")
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  BOT
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  USER
+  VIP
+}
+
+enum LicenseStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  SUSPENDED
 }

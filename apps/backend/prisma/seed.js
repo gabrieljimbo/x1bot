@@ -97,9 +97,19 @@ async function main() {
     password: 'demo123', // Only for initial setup
   })
 
-  // Create sample workflow
-  const workflow = await prisma.workflow.create({
-    data: {
+  // Create sample workflow using upsert to avoid duplicate errors
+  const workflow = await prisma.workflow.upsert({
+    where: {
+      // Assuming name is unique per tenant if that's the constraint, 
+      // otherwise use an ID if available. 
+      // For this seed, we'll try to find by name and tenantId.
+      // If schema has no unique on name, we use findFirst check before as a fallback,
+      // but the user asked for .upsert().
+      id: 'welcome-flow-sample'
+    },
+    update: {},
+    create: {
+      id: 'welcome-flow-sample',
       tenantId: tenant.id,
       name: 'Welcome Flow',
       description: 'Simple welcome message flow',
@@ -174,7 +184,7 @@ async function main() {
     },
   })
 
-  console.log('Created sample workflow:', workflow)
+  console.log('Upserted sample workflow:', workflow.name)
 }
 
 main()

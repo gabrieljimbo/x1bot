@@ -1,0 +1,338 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users            User[]
+  workflows         Workflow[]
+  executions        WorkflowExecution[]
+  whatsappSessions  WhatsappSession[]
+  conversations     Conversation[]
+
+  @@map("tenants")
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  BOT
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  USER
+  VIP
+}
+
+enum LicenseStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+}
+
+model User {
+  id               String        @id @default(uuid())
+  tenantId         String
+  email            String
+  password         String
+  name             String?
+  isActive         Boolean       @default(true)
+  role             Role          @default(USER)
+  trialStartedAt   DateTime?     @default(now())
+  trialEndsAt      DateTime?
+  licenseStatus    LicenseStatus @default(TRIAL)
+  licenseExpiresAt DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shareableWorkflows ShareableWorkflow[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Workflow {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  nodes       Json     // WorkflowNode[]
+  edges       Json     // WorkflowEdge[]
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  executions WorkflowExecution[]
+  shareableWorkflows ShareableWorkflow[]
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@map("workflows")
+}
+
+model WorkflowExecution {
+  id               String   @id @default(uuid())
+  tenantId         String
+  workflowId       String
+  sessionId        String
+  contactId        String
+  currentNodeId    String?
+  status           String   // ExecutionStatus enum
+  context          Json     // ExecutionContext
+  interactionCount Int      @default(0)
+  startedAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  expiresAt        DateTime
+  completedAt      DateTime?
+  error            String?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  session  WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, workflowId])
+  @@index([tenantId, sessionId, contactId, status])
+  @@index([status, expiresAt])
+  @@map("workflow_executions")
+}
+
+model WhatsappSession {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  status      String   // WhatsappSessionStatus enum
+  qrCode      String?
+  phoneNumber String?
+  isBusiness  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  executions WorkflowExecution[]
+  groupConfigs WhatsappGroupConfig[]
+  labels       WhatsappLabel[]
+  conversations Conversation[]
+  authState    WhatsappAuthState?
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("whatsapp_sessions")
+}
+
+model WhatsappAuthState {
+  id        String   @id @default(uuid())
+  sessionId String   @unique
+  creds     Json
+  keys      Json
+  updatedAt DateTime @updatedAt
+
+  session WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_auth_states")
+}
+
+model WhatsappLabel {
+  id          String   @id @default(uuid())
+  sessionId   String
+  labelId     String   // Original WhatsApp ID
+  name        String
+  color       Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  session WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, labelId])
+  @@index([sessionId])
+  @@map("whatsapp_labels")
+}
+
+model WhatsappChatLabel {
+  id          String   @id @default(uuid())
+  sessionId   String
+  chatId      String   // Contact JID
+  labelId     String   // WhatsApp Label ID
+  createdAt   DateTime @default(now())
+
+  @@unique([sessionId, chatId, labelId])
+  @@index([sessionId])
+  @@index([sessionId, chatId])
+  @@map("whatsapp_chat_labels")
+}
+
+model WhatsappGroupConfig {
+  id          String   @id @default(uuid())
+  sessionId   String
+  groupId     String   // Group JID (e.g., xxx@g.us)
+  name        String
+  enabled     Boolean  @default(false)
+  workflowIds String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  session WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, groupId])
+  @@index([sessionId])
+  @@map("whatsapp_group_configs")
+}
+
+model ExecutionLog {
+  id          String   @id @default(uuid())
+  tenantId    String
+  executionId String
+  nodeId      String?
+  eventType   String
+  data        Json
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([executionId])
+  @@index([createdAt])
+  @@map("execution_logs")
+}
+
+model Tag {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  color       String?  @default("#8b5cf6")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("tags")
+}
+
+model ContactTag {
+  id        String   @id @default(uuid())
+  tenantId  String
+  sessionId String
+  contactId String
+  tags      String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, sessionId, contactId])
+  @@index([tenantId])
+  @@index([tenantId, sessionId])
+  @@index([tenantId, sessionId, contactId])
+  @@map("contact_tags")
+}
+
+model GlobalConfig {
+  id                       String   @id @default(uuid())
+  minDelay                 Int      @default(3000)
+  maxDelay                 Int      @default(8000)
+  maxMsgsPerMinute         Int      @default(20)
+  proportionalDelayEnabled Boolean  @default(true)
+  updatedAt                DateTime @updatedAt
+
+  @@map("global_configs")
+}
+
+model ShareableWorkflow {
+  id          String   @id @default(uuid())
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  createdBy   String
+  user        User     @relation(fields: [createdBy], references: [id])
+  importCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("shareable_workflows")
+}
+
+model ContactFlowState {
+  id            String   @id @default(cuid())
+  sessionId     String
+  contactPhone  String
+  workflowId    String
+  currentNodeId String
+  executionId   String?
+  variables     Json     @default("{}")
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([sessionId, contactPhone])
+  @@map("contact_flow_states")
+}
+
+model Conversation {
+  id            String    @id @default(cuid())
+  tenantId      String
+  sessionId     String
+  contactId     String
+  contactName   String?
+  contactPhone  String
+  contactAvatar String?
+  lastMessage   String?
+  lastMessageAt DateTime?
+  unreadCount   Int       @default(0)
+  isGroup       Boolean   @default(false)
+  status        ConversationStatus @default(OPEN)
+  activeFlowId  String?
+  labels        String[]  @default([])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  session  WhatsappSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([sessionId, contactId])
+  @@index([tenantId])
+  @@index([tenantId, sessionId])
+  @@index([tenantId, status])
+  @@index([lastMessageAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  content        String
+  mediaUrl       String?
+  mediaType      String?
+  fromMe         Boolean       @default(false)
+  timestamp      DateTime
+  status         MessageStatus @default(SENT)
+  createdAt      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([conversationId, timestamp])
+  @@map("messages")
+}
