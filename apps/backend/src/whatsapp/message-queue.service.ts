@@ -76,30 +76,38 @@ export class MessageQueueService implements OnModuleInit {
         contactId: string,
         socket: any,
         job: MessageJob,
-        sendFn: () => Promise<any>
+        sendFn: () => Promise<any>,
+        bypassDelay: boolean = false
     ) {
         const limiter = this.getLimiter(sessionId);
 
         return limiter.schedule(async () => {
-            const waitTime = this.calculateWaitTime(job);
-            this.logger.debug(`[QUEUE] Session ${sessionId}: Waiting ${waitTime}ms for humanization`);
+            const waitTime = bypassDelay ? 0 : this.calculateWaitTime(job);
 
-            // Start presence update
-            const presenceInterval = this.startPresenceUpdate(sessionId, contactId, socket, job);
+            if (waitTime > 0) {
+                this.logger.debug(`[QUEUE] Session ${sessionId}: Waiting ${waitTime}ms for humanization`);
+
+                // Start presence update
+                const presenceInterval = this.startPresenceUpdate(sessionId, contactId, socket, job);
+
+                try {
+                    await new Promise((resolve) => setTimeout(resolve, waitTime));
+
+                    // Stop presence update before send
+                    if (presenceInterval) clearInterval(presenceInterval);
+                    if (socket?.sendPresenceUpdate) {
+                        await socket.sendPresenceUpdate('paused', contactId);
+                    }
+                } catch (error) {
+                    if (presenceInterval) clearInterval(presenceInterval);
+                    throw error;
+                }
+            }
 
             try {
-                await new Promise((resolve) => setTimeout(resolve, waitTime));
-
-                // Stop presence update before send
-                if (presenceInterval) clearInterval(presenceInterval);
-                if (socket?.sendPresenceUpdate) {
-                    await socket.sendPresenceUpdate('paused', contactId);
-                }
-
                 return await sendFn();
             } catch (error) {
                 this.logger.error(`[QUEUE] Failed to send message in queue:`, error);
-                if (presenceInterval) clearInterval(presenceInterval);
                 throw error;
             }
         });

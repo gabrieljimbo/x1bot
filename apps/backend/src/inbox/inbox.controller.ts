@@ -8,6 +8,11 @@ import { ConversationStatus } from '@prisma/client';
 export class InboxController {
     constructor(private readonly inboxService: InboxService) { }
 
+    @Get('stats')
+    async getStats(@Request() req: any) {
+        return this.inboxService.getInboxStats(req.user.tenantId);
+    }
+
     @Get()
     async getConversations(
         @Request() req: any,

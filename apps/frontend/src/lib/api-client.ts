@@ -370,5 +370,10 @@ export const apiClient = {
     const { data } = await client.patch(`/api/inbox/${conversationId}/read`, {})
     return data
   },
+
+  getInboxStats: async () => {
+    const { data } = await client.get('/api/inbox/stats')
+    return data
+  },
 }
 

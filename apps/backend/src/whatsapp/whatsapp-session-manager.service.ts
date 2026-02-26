@@ -240,7 +240,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   /**
    * Send message
    */
-  async sendMessage(sessionId: string, contactId: string, message: string): Promise<void> {
+  async sendMessage(sessionId: string, contactId: string, message: string, bypassDelay: boolean = false): Promise<void> {
     const sessionClient = this.resolveSessionClient(sessionId);
 
     if (!sessionClient) {
@@ -260,7 +260,8 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       { type: 'text', payload: { text: message } },
       async () => {
         await sessionClient.socket.sendMessage(jid, { text: message });
-      }
+      },
+      bypassDelay
     );
   }
 
@@ -361,6 +362,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       caption?: string;
       fileName?: string;
       sendAudioAsVoice?: boolean;
+      bypassDelay?: boolean;
     }
   ): Promise<void> {
     const sessionClient = this.resolveSessionClient(sessionId);
@@ -382,7 +384,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       { type: 'media', payload: { caption: options?.caption }, options: { ...options, mediaType } },
       async () => {
         const messageContent: any = {};
-
+        // ... (existing switch logic remains the same)
         switch (mediaType) {
           case 'image':
             messageContent.image = { url: mediaUrl };
@@ -438,7 +440,8 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         }
 
         await sessionClient.socket.sendMessage(jid, messageContent);
-      }
+      },
+      options?.bypassDelay || false
     );
   }
 

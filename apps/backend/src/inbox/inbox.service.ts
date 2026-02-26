@@ -30,6 +30,23 @@ export class InboxService {
         private executionEngine: ExecutionEngineService,
     ) { }
 
+    async getInboxStats(tenantId: string) {
+        const [totalUnread, openCount, pendingCount] = await Promise.all([
+            this.prisma.conversation.aggregate({
+                where: { tenantId, unreadCount: { gt: 0 } },
+                _sum: { unreadCount: true }
+            }),
+            this.prisma.conversation.count({ where: { tenantId, status: PrismaConvStatus.OPEN } }),
+            this.prisma.conversation.count({ where: { tenantId, status: PrismaConvStatus.PENDING } }),
+        ]);
+
+        return {
+            totalUnread: totalUnread._sum.unreadCount || 0,
+            openCount,
+            pendingCount
+        };
+    }
+
     async getConversations(tenantId: string, filters: GetConversationsOptions) {
         const { sessionId, status, label, type, page, limit } = filters;
 
@@ -122,13 +139,14 @@ export class InboxService {
                 conversation.contactId,
                 body.mediaType,
                 body.mediaUrl,
-                { caption: body.text }
+                { caption: body.text, bypassDelay: true }
             );
         } else if (body.text) {
             await this.whatsappSessionManager.sendMessage(
                 conversation.sessionId,
                 conversation.contactId,
-                body.text
+                body.text,
+                true
             );
         } else {
             throw new Error('Message content or media required');

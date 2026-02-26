@@ -58,8 +58,8 @@ function WorkspaceDetailsPageContent() {
   const { user: currentUser } = useAuth()
 
   // Get initial tab from URL query param
-  const tabFromUrl = searchParams?.get('tab') as 'overview' | 'users' | 'workflows' | 'sessions' | 'course' | null
-  const initialTab = tabFromUrl && ['overview', 'users', 'workflows', 'sessions', 'course'].includes(tabFromUrl)
+  const tabFromUrl = searchParams?.get('tab') as 'overview' | 'users' | 'workflows' | 'sessions' | 'course' | 'inbox' | null
+  const initialTab = tabFromUrl && ['overview', 'users', 'workflows', 'sessions', 'course', 'inbox'].includes(tabFromUrl)
     ? tabFromUrl
     : 'overview'
 
@@ -74,8 +74,9 @@ function WorkspaceDetailsPageContent() {
   const [users, setUsers] = useState<WorkspaceUser[]>([])
   const [workflows, setWorkflows] = useState<WorkspaceWorkflow[]>([])
   const [sessions, setSessions] = useState<WorkspaceSession[]>([])
+  const [inboxStats, setInboxStats] = useState({ totalUnread: 0, openCount: 0, pendingCount: 0 })
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'workflows' | 'sessions' | 'course'>(initialTab)
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'workflows' | 'sessions' | 'course' | 'inbox'>(initialTab)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -119,8 +120,8 @@ function WorkspaceDetailsPageContent() {
 
   // Update activeTab when URL query param changes
   useEffect(() => {
-    const tabFromUrl = searchParams?.get('tab') as 'overview' | 'users' | 'workflows' | 'sessions' | 'course' | null
-    if (tabFromUrl && ['overview', 'users', 'workflows', 'sessions', 'course'].includes(tabFromUrl)) {
+    const tabFromUrl = searchParams?.get('tab') as 'overview' | 'users' | 'workflows' | 'sessions' | 'course' | 'inbox' | null
+    if (tabFromUrl && ['overview', 'users', 'workflows', 'sessions', 'course', 'inbox'].includes(tabFromUrl)) {
       setActiveTab(tabFromUrl)
     }
   }, [searchParams])
@@ -144,6 +145,10 @@ function WorkspaceDetailsPageContent() {
       const allUsers = await apiClient.getUsers()
       const workspaceUsers = allUsers.filter((u: any) => u.tenant?.id === workspaceId)
       setUsers(workspaceUsers)
+
+      // Load inbox stats
+      const stats = await apiClient.getInboxStats()
+      setInboxStats(stats)
 
     } catch (error: any) {
       console.error('Error loading workspace details:', error)
@@ -476,6 +481,37 @@ function WorkspaceDetailsPageContent() {
               </div>
               <p className="text-2xl font-bold">{workspace._count?.executions || 0}</p>
             </div>
+            <Link
+              href="/inbox"
+              className="bg-[#00ff88]/5 border border-[#00ff88]/20 rounded-lg p-6 hover:bg-[#00ff88]/10 transition group"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <MessageSquare size={20} className="text-[#00ff88]" />
+                  <h3 className="text-sm font-medium text-gray-300">Inbox</h3>
+                </div>
+                <div className="flex gap-2">
+                  {inboxStats.totalUnread > 0 && (
+                    <span className="bg-[#00ff88] text-black text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                      {inboxStats.totalUnread}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-end justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs text-gray-500 uppercase font-bold tracking-tighter">Status Ativos</p>
+                  <div className="flex gap-3 text-sm font-bold text-white">
+                    <span>{inboxStats.openCount} ABERTAS</span>
+                    <span className="text-gray-600">/</span>
+                    <span className="text-amber-400">{inboxStats.pendingCount} PENDENTES</span>
+                  </div>
+                </div>
+                <div className="text-[#00ff88] group-hover:translate-x-1 transition-transform">
+                  <ArrowLeft className="rotate-180" size={16} />
+                </div>
+              </div>
+            </Link>
           </div>
 
           {/* Tabs */}
@@ -536,6 +572,25 @@ function WorkspaceDetailsPageContent() {
                   }`}
               >
                 Sessions ({workspace._count?.whatsappSessions || 0})
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('inbox')
+                  const url = new URL(window.location.href)
+                  url.searchParams.set('tab', 'inbox')
+                  window.history.pushState({}, '', url.toString())
+                }}
+                className={`px-4 py-2 border-b-2 transition relative flex items-center gap-2 ${activeTab === 'inbox'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-400 hover:text-gray-300'
+                  }`}
+              >
+                Inbox
+                {inboxStats.totalUnread > 0 && (
+                  <span className="bg-[#00ff88] text-black text-[9px] font-bold rounded-full min-w-[15px] h-[15px] flex items-center justify-center border border-[#0a0a0a]">
+                    {inboxStats.totalUnread}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => {
@@ -785,6 +840,39 @@ function WorkspaceDetailsPageContent() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'inbox' && (
+            <div className="bg-[#151515] border border-gray-800 rounded-lg overflow-hidden flex flex-col items-center justify-center p-12 text-center">
+              <div className="w-16 h-16 bg-[#00ff88]/10 rounded-full flex items-center justify-center mb-4 border border-[#00ff88]/20">
+                <MessageSquare className="text-[#00ff88]" size={32} />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Central de Atendimento</h2>
+              <p className="text-gray-400 max-w-md mb-8">
+                Gerencie todas as conversas das suas sessões conectadas em tempo real.
+              </p>
+              <div className="grid grid-cols-3 gap-6 mb-8 w-full max-w-xl">
+                <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                  <p className="text-xs text-gray-500 uppercase font-bold mb-1">Abertas</p>
+                  <p className="text-2xl font-bold text-white">{inboxStats.openCount}</p>
+                </div>
+                <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                  <p className="text-xs text-gray-500 uppercase font-bold mb-1">Pendentes</p>
+                  <p className="text-2xl font-bold text-amber-400">{inboxStats.pendingCount}</p>
+                </div>
+                <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                  <p className="text-xs text-gray-500 uppercase font-bold mb-1">Não Lidas</p>
+                  <p className="text-2xl font-bold text-[#00ff88]">{inboxStats.totalUnread}</p>
+                </div>
+              </div>
+              <Link
+                href="/inbox"
+                className="px-8 py-3 bg-[#00ff88] text-black rounded-xl font-bold hover:bg-[#00ff88]/90 transition shadow-lg shadow-[#00ff88]/20 flex items-center gap-2"
+              >
+                Abrir CRM Inbox
+                <ArrowLeft className="rotate-180" size={18} />
+              </Link>
             </div>
           )}
 
