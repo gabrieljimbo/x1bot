@@ -7,6 +7,7 @@ RUN npm install -g pnpm@10 --registry=https://registry.npmjs.org/
 WORKDIR /app
 COPY .npmrc ./
 ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV npm_config_ignore_scripts=false
 
 # Install native build tools for canvas
 RUN apk add --no-cache \
