@@ -1,8 +1,8 @@
 'use client'
 
 import { useAuth } from '@/contexts/AuthContext'
-import { LogOut, User } from 'lucide-react'
-import { isSuperAdmin } from '@/lib/permissions'
+import { LogOut, User, ShieldCheck, Star } from 'lucide-react'
+import { isSuperAdmin, UserRole } from '@/lib/permissions'
 import Link from 'next/link'
 
 export default function AppHeader() {
@@ -40,7 +40,24 @@ export default function AppHeader() {
           {user && (
             <div className="flex items-center gap-3">
               <div className="text-right">
-                <p className="text-sm text-white font-medium">{user.name || user.email}</p>
+                <div className="flex items-center justify-end gap-2">
+                  {user.role === UserRole.SUPER_ADMIN && (
+                    <span className="flex items-center gap-1 text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30 uppercase font-bold">
+                      <ShieldCheck size={10} /> Super Admin
+                    </span>
+                  )}
+                  {user.role === UserRole.VIP && (
+                    <span className="flex items-center gap-1 text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/30 uppercase font-bold">
+                      <Star size={10} /> VIP
+                    </span>
+                  )}
+                  {user.role === UserRole.USER && (
+                    <span className="text-[10px] bg-slate-500/20 text-slate-400 px-1.5 py-0.5 rounded border border-slate-500/30 uppercase font-bold">
+                      Trial
+                    </span>
+                  )}
+                  <p className="text-sm text-white font-medium">{user.name || user.email}</p>
+                </div>
                 {tenant && (
                   <p className="text-xs text-gray-400">{tenant.name}</p>
                 )}

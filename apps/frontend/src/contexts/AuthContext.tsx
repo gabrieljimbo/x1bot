@@ -9,6 +9,10 @@ interface User {
   name?: string
   tenantId: string
   role?: string
+  trialStartedAt?: string
+  trialEndsAt?: string
+  licenseStatus?: string
+  licenseExpiresAt?: string
 }
 
 interface Tenant {
@@ -65,29 +69,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const response = await apiClient.login(email, password)
-    
+
     setToken(response.accessToken)
     setUser(response.user)
     setTenant(response.tenant)
-    
+
     localStorage.setItem(TOKEN_KEY, response.accessToken)
     localStorage.setItem(USER_KEY, JSON.stringify(response.user))
     localStorage.setItem(TENANT_KEY, JSON.stringify(response.tenant))
-    
+
     apiClient.setToken(response.accessToken)
   }
 
   const register = async (email: string, password: string, name?: string, tenantName?: string) => {
     const response = await apiClient.register(email, password, name, tenantName || '')
-    
+
     setToken(response.accessToken)
     setUser(response.user)
     setTenant(response.tenant)
-    
+
     localStorage.setItem(TOKEN_KEY, response.accessToken)
     localStorage.setItem(USER_KEY, JSON.stringify(response.user))
     localStorage.setItem(TENANT_KEY, JSON.stringify(response.tenant))
-    
+
     apiClient.setToken(response.accessToken)
   }
 
@@ -95,13 +99,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null)
     setUser(null)
     setTenant(null)
-    
+
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
     localStorage.removeItem(TENANT_KEY)
-    
+
     apiClient.setToken(null)
-    
+
     // Redirect to login page
     if (typeof window !== 'undefined') {
       window.location.href = '/login'

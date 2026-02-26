@@ -23,23 +23,36 @@ model Tenant {
   @@map("tenants")
 }
 
-enum UserRole {
-  SUPERADMIN
+enum Role {
+  SUPER_ADMIN
   ADMIN
+  USER
+  VIP
+}
+
+enum LicenseStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  SUSPENDED
 }
 
 model User {
-  id           String   @id @default(uuid())
-  tenantId     String
-  email        String
-  password     String
-  name         String?
-  isActive     Boolean  @default(true)
-  role         UserRole @default(ADMIN)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String        @id @default(uuid())
+  tenantId         String
+  email            String
+  password         String
+  name             String?
+  isActive         Boolean       @default(true)
+  role             Role          @default(USER)
+  trialStartedAt   DateTime?     @default(now())
+  trialEndsAt      DateTime?
+  licenseStatus    LicenseStatus @default(TRIAL)
+  licenseExpiresAt DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   shareableWorkflows ShareableWorkflow[]
 
   @@unique([tenantId, email])

@@ -21,11 +21,11 @@ export interface UpdateUserDto {
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async findAll(requesterRole: UserRole, requesterTenantId?: string) {
-    // SUPERADMIN can see all users
-    if (requesterRole === UserRole.SUPERADMIN) {
+    // SUPER_ADMIN can see all users
+    if (requesterRole === UserRole.SUPER_ADMIN) {
       return this.prisma.user.findMany({
         include: {
           tenant: {
@@ -93,8 +93,8 @@ export class UserService {
   }
 
   async create(createUserDto: CreateUserDto, requesterRole: UserRole) {
-    // Only SUPERADMIN can create users
-    if (requesterRole !== UserRole.SUPERADMIN) {
+    // Only SUPER_ADMIN can create users
+    if (requesterRole !== UserRole.SUPER_ADMIN) {
       throw new BadRequestException('Only super admin can create users');
     }
 
@@ -122,6 +122,10 @@ export class UserService {
     // Hash password
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
+    // Calculate trial ends at (5 days from now)
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + 5);
+
     // Create user
     const user = await this.prisma.user.create({
       data: {
@@ -129,7 +133,10 @@ export class UserService {
         password: hashedPassword,
         name: createUserDto.name || null,
         tenantId: createUserDto.tenantId,
-        role: createUserDto.role || UserRole.ADMIN,
+        role: (createUserDto.role as any) || (UserRole.USER as any),
+        trialStartedAt: new Date(),
+        trialEndsAt: trialEndsAt,
+        licenseStatus: 'TRIAL',
       },
       include: {
         tenant: {
@@ -166,8 +173,8 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    // Only SUPERADMIN can change roles
-    if (updateUserDto.role && requesterRole !== UserRole.SUPERADMIN) {
+    // Only SUPER_ADMIN can change roles
+    if (updateUserDto.role && requesterRole !== UserRole.SUPER_ADMIN) {
       throw new BadRequestException('Only super admin can change user roles');
     }
 
@@ -229,6 +236,90 @@ export class UserService {
     });
 
     return { message: 'User deleted successfully' };
+  }
+
+  async getLicenses(requesterRole: UserRole) {
+    if (requesterRole !== UserRole.SUPER_ADMIN) {
+      throw new BadRequestException('Only super admin can access license list');
+    }
+
+    const users = await this.prisma.user.findMany({
+      include: {
+        tenant: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    const now = new Date();
+
+    return users.map((user) => {
+      let daysRemaining = 0;
+      if (user.role === UserRole.VIP && user.licenseExpiresAt) {
+        daysRemaining = Math.max(
+          0,
+          Math.ceil(
+            (new Date(user.licenseExpiresAt).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+          ),
+        );
+      } else if (user.role === UserRole.USER && user.trialEndsAt) {
+        daysRemaining = Math.max(
+          0,
+          Math.ceil(
+            (new Date(user.trialEndsAt).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+          ),
+        );
+      }
+
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        licenseStatus: user.licenseStatus,
+        trialEndsAt: user.trialEndsAt,
+        licenseExpiresAt: user.licenseExpiresAt,
+        daysRestantes: daysRemaining,
+        tenantName: user.tenant.name,
+      };
+    });
+  }
+
+  async updateLicense(
+    id: string,
+    updateLicenseDto: {
+      role: UserRole;
+      licenseStatus: string;
+      licenseExpiresAt?: string;
+    },
+    requesterRole: UserRole,
+  ) {
+    if (requesterRole !== UserRole.SUPER_ADMIN) {
+      throw new BadRequestException('Only super admin can update licenses');
+    }
+
+    const data: any = {
+      role: updateLicenseDto.role,
+      licenseStatus: updateLicenseDto.licenseStatus,
+    };
+
+    if (updateLicenseDto.licenseExpiresAt) {
+      data.licenseExpiresAt = new Date(updateLicenseDto.licenseExpiresAt);
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id },
+      data,
+    });
+
+    return user;
   }
 }
 

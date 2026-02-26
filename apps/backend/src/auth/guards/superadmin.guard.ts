@@ -11,7 +11,7 @@ export class SuperAdminGuard implements CanActivate {
       throw new ForbiddenException('User not authenticated');
     }
 
-    if (user.role !== UserRole.SUPERADMIN) {
+    if (user.role !== UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Super admin access required');
     }
 

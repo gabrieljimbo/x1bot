@@ -11,8 +11,8 @@ export class WorkspaceGuard implements CanActivate {
       throw new ForbiddenException('User not authenticated');
     }
 
-    // SUPERADMIN bypasses workspace restrictions
-    if (user.role === UserRole.SUPERADMIN) {
+    // SUPER_ADMIN bypasses workspace restrictions
+    if (user.role === UserRole.SUPER_ADMIN) {
       return true;
     }
 

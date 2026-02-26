@@ -2,14 +2,11 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { LicenseBanner } from '@/components/LicenseBanner'
+import { ExpiredAccountScreen } from '@/components/ExpiredAccountScreen'
 
 const inter = Inter({ subsets: ['latin'] })
-
-export const metadata: Metadata = {
-  title: 'N9N - Conversation Workflow Engine',
-  description: 'Multi-tenant conversational workflow platform for WhatsApp',
-}
-
+// ... metadata
 export default function RootLayout({
   children,
 }: {
@@ -18,7 +15,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <LicenseBanner />
+          <ExpiredAccountScreen />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   )

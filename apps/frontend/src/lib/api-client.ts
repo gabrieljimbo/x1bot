@@ -310,4 +310,15 @@ export const apiClient = {
     const { data } = await client.post('/api/whatsapp/config', config)
     return data
   },
+
+  // Licensing
+  getLicenses: async () => {
+    const { data } = await client.get('/api/admin/users/licenses')
+    return data
+  },
+
+  updateLicense: async (userId: string, updates: { role: string; licenseStatus: string; licenseExpiresAt?: string }) => {
+    const { data } = await client.put(`/api/admin/users/${userId}/license`, updates)
+    return data
+  },
 }

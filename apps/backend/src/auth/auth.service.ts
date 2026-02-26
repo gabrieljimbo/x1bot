@@ -11,7 +11,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-  ) {}
+  ) { }
 
   async register(registerDto: RegisterDto) {
     const { email, password, name, tenantName } = registerDto;
@@ -46,6 +46,10 @@ export class AuthService {
         },
       });
 
+      // Calculate trial ends at (5 days from now)
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + 5);
+
       const user = await tx.user.create({
         data: {
           email,
@@ -53,6 +57,9 @@ export class AuthService {
           name: name || null,
           tenantId: tenant.id,
           role: UserRole.ADMIN,
+          trialStartedAt: new Date(),
+          trialEndsAt: trialEndsAt,
+          licenseStatus: 'TRIAL',
         } as any, // Type assertion needed until TypeScript reloads Prisma types
       });
 
@@ -114,6 +121,27 @@ export class AuthService {
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Initialize trial if not set (for existing users or first login)
+    if (!(user as any).trialStartedAt) {
+      const trialStartedAt = new Date();
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialStartedAt.getDate() + 5);
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          trialStartedAt,
+          trialEndsAt,
+          licenseStatus: 'TRIAL',
+        } as any,
+      });
+
+      // Update local object for the token payload
+      (user as any).trialStartedAt = trialStartedAt;
+      (user as any).trialEndsAt = trialEndsAt;
+      (user as any).licenseStatus = 'TRIAL';
     }
 
     // Generate JWT token
