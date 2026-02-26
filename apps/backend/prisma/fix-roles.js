@@ -3,21 +3,14 @@ const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
 /**
- * Data-fix script: Restore ADMIN role for users that were
- * incorrectly migrated to USER during the role standardization.
+ * Data-fix script: Restore correct roles and licenseStatus for existing users.
  * 
- * This script:
- * 1. Finds all users with role USER that are NOT the superadmin
- * 2. Sets them to ADMIN (their original role)
- * 3. Ensures licenseStatus is set for all users
- * 
- * Run with: npx ts-node prisma/fix-roles.js
- * Or:       node prisma/fix-roles.js
+ * Run with: node prisma/fix-roles.js
  */
 async function main() {
-    console.log('🔧 Starting role fix migration...\n')
+    console.log('🔧 Starting role and license fix...\n')
 
-    // List all users and their current roles
+    // List all users
     const allUsers = await prisma.user.findMany({
         select: {
             id: true,
@@ -36,52 +29,58 @@ async function main() {
     })
     console.log('')
 
-    // Fix users that should be ADMIN but got reset to USER
-    // (Exclude the superadmin user)
-    const usersToFix = allUsers.filter(u =>
+    // Fix 1: Users that should be ADMIN but got reset to USER
+    const usersToFixRole = allUsers.filter(u =>
         u.role === 'USER' &&
         !u.email.includes('superadmin')
     )
 
-    if (usersToFix.length === 0) {
-        console.log('✅ No users need role fixing.')
-    } else {
-        console.log(`🔄 Fixing ${usersToFix.length} user(s) from USER → ADMIN:`)
-        for (const user of usersToFix) {
+    if (usersToFixRole.length > 0) {
+        console.log(`🔄 Fixing ${usersToFixRole.length} user(s) from USER → ADMIN:`)
+        for (const user of usersToFixRole) {
             await prisma.user.update({
                 where: { id: user.id },
                 data: { role: 'ADMIN' },
             })
-            console.log(`  ✅ ${user.email} (${user.name || 'no name'}) → ADMIN`)
+            console.log(`  ✅ ${user.email} → ADMIN`)
         }
+    } else {
+        console.log('✅ No users need role fixing.')
     }
 
-    // Ensure all users have licenseStatus set
-    const usersWithoutLicense = allUsers.filter(u => !u.licenseStatus)
-    if (usersWithoutLicense.length > 0) {
-        console.log(`\n🔄 Setting licenseStatus for ${usersWithoutLicense.length} user(s):`)
-        for (const user of usersWithoutLicense) {
-            const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN'
+    // Fix 2: Set licenseStatus = 'ACTIVE' for all ADMIN and SUPER_ADMIN users
+    console.log('\n🔄 Setting licenseStatus=ACTIVE for ADMIN/SUPER_ADMIN users...')
+    const result = await prisma.$executeRawUnsafe(`
+    UPDATE "users" 
+    SET "licenseStatus" = 'ACTIVE' 
+    WHERE role IN ('ADMIN', 'SUPER_ADMIN')
+  `)
+    console.log(`  ✅ Updated ${result} admin/superadmin user(s) to licenseStatus=ACTIVE`)
+
+    // Fix 3: Ensure USER/VIP users have trial dates set
+    const usersNeedingTrial = allUsers.filter(u =>
+        (u.role === 'USER' || u.role === 'VIP') && !u.trialStartedAt
+    )
+    if (usersNeedingTrial.length > 0) {
+        console.log(`\n🔄 Setting trial dates for ${usersNeedingTrial.length} user(s):`)
+        for (const user of usersNeedingTrial) {
+            const trialStartedAt = new Date()
+            const trialEndsAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
             await prisma.user.update({
                 where: { id: user.id },
                 data: {
-                    licenseStatus: isAdmin ? 'ACTIVE' : 'TRIAL',
-                    trialStartedAt: user.trialStartedAt || new Date(),
-                    trialEndsAt: user.trialEndsAt || new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+                    trialStartedAt,
+                    trialEndsAt,
+                    licenseStatus: 'TRIAL',
                 },
             })
-            console.log(`  ✅ ${user.email} → licenseStatus: ${isAdmin ? 'ACTIVE' : 'TRIAL'}`)
+            console.log(`  ✅ ${user.email} → trial until ${trialEndsAt.toISOString()}`)
         }
     }
 
     // Show final state
     const finalUsers = await prisma.user.findMany({
-        select: {
-            email: true,
-            name: true,
-            role: true,
-            licenseStatus: true,
-        },
+        select: { email: true, name: true, role: true, licenseStatus: true },
     })
 
     console.log('\n📋 Final user state:')
@@ -89,7 +88,7 @@ async function main() {
         console.log(`  - ${u.email} | role: ${u.role} | license: ${u.licenseStatus}`)
     })
 
-    console.log('\n✅ Role fix migration complete!')
+    console.log('\n✅ Fix complete!')
 }
 
 main()

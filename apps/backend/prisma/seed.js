@@ -31,6 +31,7 @@ async function main() {
       password: superAdminPassword,
       isActive: true,
       role: 'SUPER_ADMIN',
+      licenseStatus: 'ACTIVE',
     },
     create: {
       email: 'superadmin@n9n.com',
@@ -39,6 +40,7 @@ async function main() {
       tenantId: superAdminTenant.id,
       isActive: true,
       role: 'SUPER_ADMIN',
+      licenseStatus: 'ACTIVE',
     },
   })
 
@@ -76,6 +78,7 @@ async function main() {
       password: defaultPassword,
       isActive: true,
       role: 'ADMIN',
+      licenseStatus: 'ACTIVE',
     },
     create: {
       email: 'admin@demo.com',
@@ -84,6 +87,7 @@ async function main() {
       tenantId: tenant.id,
       isActive: true,
       role: 'ADMIN',
+      licenseStatus: 'ACTIVE',
     },
   })
 
