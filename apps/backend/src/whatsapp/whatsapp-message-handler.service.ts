@@ -65,7 +65,49 @@ export class WhatsappMessageHandler {
       console.log(`[GROUP] Session ${sessionId}: Group authorized. Permitted workflows:`, whitelistedWorkflows);
     }
 
-    // Check for active execution
+    // 4. ContactFlowState Check (Resume waiting nodes)
+    // Fetch if there's an active waiting flow for this contact
+    const flowState = await this.prisma.contactFlowState.findUnique({
+      where: {
+        sessionId_contactPhone: {
+          sessionId,
+          contactPhone: contactId,
+        },
+      },
+    });
+
+    if (flowState) {
+      if (new Date() > flowState.expiresAt) {
+        // State expired, delete it and proceed to match triggers
+        console.log(`[STATE] Session ${sessionId}: ContactFlowState for ${contactId} expired, deleting`);
+        await this.prisma.contactFlowState.delete({
+          where: { id: flowState.id },
+        });
+      } else if (flowState.executionId) {
+        // State is active, load execution and resume
+        console.log(`[STATE] Session ${sessionId}: Found active ContactFlowState for ${contactId}, resuming execution ${flowState.executionId}`);
+        const activeExecution = await this.executionService.getExecution(tenantId, flowState.executionId);
+
+        if (activeExecution) {
+          // If in a group, verify workflow is allowed
+          if (isGroup && !whitelistedWorkflows.includes(activeExecution.workflowId)) {
+            console.log(`[IGNORE] Session ${sessionId}: Active workflow ${activeExecution.workflowId} not permitted in group ${contactId}`);
+            return;
+          }
+
+          const resumeText = normalizedPayload.text || '';
+          await this.executionEngine.resumeExecution(activeExecution, resumeText, normalizedPayload);
+          return; // Stop processing further here
+        } else {
+          console.log(`[STATE] Session ${sessionId}: Execution ${flowState.executionId} not found, deleting state`);
+          await this.prisma.contactFlowState.delete({
+            where: { id: flowState.id },
+          });
+        }
+      }
+    }
+
+    // Check for active execution (Fallback/Legacy check)
     const activeExecution = await this.executionService.getActiveExecution(
       tenantId,
       sessionId,
@@ -73,7 +115,7 @@ export class WhatsappMessageHandler {
     );
 
     if (activeExecution) {
-      // 4. Workflow Check for Groups (Resume): Ensure the active workflow is permitted in this group
+      // 5. Workflow Check for Groups (Resume): Ensure the active workflow is permitted in this group
       if (isGroup && !whitelistedWorkflows.includes(activeExecution.workflowId)) {
         console.log(`[IGNORE] Session ${sessionId}: Active workflow ${activeExecution.workflowId} not permitted in group ${contactId}`);
         return;

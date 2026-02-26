@@ -274,6 +274,14 @@ export class ExecutionEngineService implements OnModuleInit {
         delete execution.context.variables._waitResumeAt;
       }
 
+      // Clear out ContactFlowState if we are resuming
+      await this.prisma.contactFlowState.deleteMany({
+        where: {
+          sessionId: execution.sessionId,
+          contactPhone: execution.contactId,
+        },
+      });
+
       // Check if expired
       if (new Date() > execution.expiresAt) {
         await this.expireExecution(execution);
@@ -613,6 +621,32 @@ export class ExecutionEngineService implements OnModuleInit {
           const effectiveWaitMs = waitMs > 0 ? waitMs : 1000; // At least 1s
           this.scheduleWaitResume(execution.id, execution.tenantId, effectiveWaitMs);
         } else {
+          // For WAIT_REPLY and others, save to ContactFlowState
+          const waitMs = (result.waitTimeoutSeconds || 24 * 60 * 60) * 1000; // default 24h
+          const expiresAt = new Date(Date.now() + waitMs);
+          await this.prisma.contactFlowState.upsert({
+            where: {
+              sessionId_contactPhone: {
+                sessionId: execution.sessionId,
+                contactPhone: execution.contactId,
+              },
+            },
+            create: {
+              sessionId: execution.sessionId,
+              contactPhone: execution.contactId,
+              workflowId: execution.workflowId,
+              currentNodeId: currentNode.id,
+              executionId: execution.id,
+              expiresAt,
+            },
+            update: {
+              workflowId: execution.workflowId,
+              currentNodeId: currentNode.id,
+              executionId: execution.id,
+              expiresAt,
+            },
+          });
+
           // For WAIT_REPLY, keep currentNodeId as the WAIT_REPLY node
           // This is important so we can process the reply when resumed
           await this.executionService.updateExecution(execution.id, {
@@ -857,6 +891,14 @@ export class ExecutionEngineService implements OnModuleInit {
     // Clean up any active timeouts
     this.cleanupExecutionTimeouts(execution.id);
 
+    // Clean up ContactFlowState
+    await this.prisma.contactFlowState.deleteMany({
+      where: {
+        sessionId: execution.sessionId,
+        contactPhone: execution.contactId,
+      },
+    });
+
     await this.executionService.updateExecution(execution.id, {
       status: ExecutionStatus.COMPLETED,
     });
@@ -880,6 +922,14 @@ export class ExecutionEngineService implements OnModuleInit {
     // Clean up any active timeouts
     this.cleanupExecutionTimeouts(execution.id);
 
+    // Clean up ContactFlowState
+    await this.prisma.contactFlowState.deleteMany({
+      where: {
+        sessionId: execution.sessionId,
+        contactPhone: execution.contactId,
+      },
+    });
+
     await this.executionService.updateExecution(execution.id, {
       status: ExecutionStatus.EXPIRED,
     });
@@ -902,6 +952,14 @@ export class ExecutionEngineService implements OnModuleInit {
   private async failExecution(execution: WorkflowExecution, error: string): Promise<void> {
     // Clean up any active timeouts
     this.cleanupExecutionTimeouts(execution.id);
+
+    // Clean up ContactFlowState
+    await this.prisma.contactFlowState.deleteMany({
+      where: {
+        sessionId: execution.sessionId,
+        contactPhone: execution.contactId,
+      },
+    });
 
     await this.executionService.updateExecution(execution.id, {
       status: ExecutionStatus.ERROR,

@@ -258,3 +258,19 @@ model ShareableWorkflow {
   @@map("shareable_workflows")
 }
 
+model ContactFlowState {
+  id            String   @id @default(cuid())
+  sessionId     String
+  contactPhone  String
+  workflowId    String
+  currentNodeId String
+  executionId   String?
+  variables     Json     @default("{}")
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([sessionId, contactPhone])
+  @@map("contact_flow_states")
+}
+
