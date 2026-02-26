@@ -379,7 +379,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       sessionId,
       jid,
       sessionClient.socket,
-      { type: 'media', payload: { caption: options?.caption }, options },
+      { type: 'media', payload: { caption: options?.caption }, options: { ...options, mediaType } },
       async () => {
         const messageContent: any = {};
 

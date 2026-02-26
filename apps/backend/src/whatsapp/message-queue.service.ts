@@ -131,14 +131,32 @@ export class MessageQueueService implements OnModuleInit {
     private startPresenceUpdate(sessionId: string, contactId: string, socket: any, job: MessageJob): NodeJS.Timeout | null {
         if (!socket?.sendPresenceUpdate) return null;
 
-        const presenceType = job.type === 'media' && job.options?.sendAudioAsVoice ? 'recording' : 'composing';
+        let presenceType: 'composing' | 'recording' | null = null;
+
+        if (job.type === 'text' || job.type === 'buttons' || job.type === 'list') {
+            presenceType = 'composing';
+        } else if (job.type === 'media') {
+            const mediaType = job.options?.mediaType;
+            const isAudio = mediaType === 'audio' || job.options?.sendAudioAsVoice;
+
+            if (isAudio) {
+                presenceType = 'recording';
+            } else {
+                // For images, videos, documents, we don't send any presence update
+                return null;
+            }
+        }
+
+        if (!presenceType) return null;
 
         // Initial update
         socket.sendPresenceUpdate(presenceType, contactId).catch(() => { });
 
         // Renew every 3s
         return setInterval(() => {
-            socket.sendPresenceUpdate(presenceType, contactId).catch(() => { });
+            if (socket?.sendPresenceUpdate) {
+                socket.sendPresenceUpdate(presenceType, contactId).catch(() => { });
+            }
         }, 3000);
     }
 }

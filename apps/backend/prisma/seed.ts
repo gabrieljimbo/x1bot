@@ -15,11 +15,11 @@ import * as bcrypt from 'bcrypt'
  *    - email: email do usuário
  *    - password: hash bcrypt da senha (use bcrypt.hash('senha', 10))
  *    - name: nome do usuário
- *    - role: 'SUPERADMIN' ou 'ADMIN'
+ *    - role: 'SUPER_ADMIN' or 'ADMIN'
  *    - tenantId: ID do tenant
  *
  * 📌 ROLES DISPONÍVEIS:
- *    - SUPERADMIN: Acesso total ao sistema
+ *    - SUPER_ADMIN: Acesso total ao sistema
  *    - ADMIN: Acesso administrativo dentro do tenant
  *
  * 📌 EXEMPLO para adicionar um novo usuário:

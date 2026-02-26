@@ -10,7 +10,7 @@ export const Tenant = createParamDecorator(
       return null;
     }
 
-    // SUPERADMIN can access any tenant via query param or use their own
+    // SUPER_ADMIN can access any tenant via query param or use their own
     if (user.role === UserRole.SUPER_ADMIN) {
       const requestedTenantId = request.query?.tenantId || request.params?.tenantId;
       return requestedTenantId || user.tenantId;

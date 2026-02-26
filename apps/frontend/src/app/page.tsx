@@ -11,7 +11,7 @@ function HomeContent() {
   const { user, tenant } = useAuth()
 
   useEffect(() => {
-    // Redirect to workspaces if SUPERADMIN, otherwise redirect to user's workspace
+    // Redirect to workspaces if SUPER_ADMIN, otherwise redirect to user's workspace
     if (isSuperAdmin(user?.role)) {
       router.replace('/workspaces')
     } else if (tenant?.id) {

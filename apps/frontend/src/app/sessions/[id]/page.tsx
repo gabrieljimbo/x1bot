@@ -15,7 +15,7 @@ function SessionDetailPageContent({ params }: { params: { id: string } }) {
   const { token, tenant } = useAuth()
   const sessionId = params.id
 
-  // Get tenantId from URL query param (for SUPERADMIN viewing other workspaces) or from auth context
+  // Get tenantId from URL query param (for SUPER_ADMIN viewing other workspaces) or from auth context
   const tenantIdFromUrl = searchParams?.get('tenantId')
   const tenantId = tenantIdFromUrl || tenant?.id
 
@@ -71,7 +71,7 @@ function SessionDetailPageContent({ params }: { params: { id: string } }) {
 
   const loadSession = async () => {
     try {
-      // Pass tenantId if available (for SUPERADMIN viewing other workspaces)
+      // Only allow access if user is owner of workspace or is a SUPER_ADMIN viewing other workspaces)
       const data = await apiClient.getWhatsappSession(sessionId, tenantId || undefined)
       setSession(data)
     } catch (error) {

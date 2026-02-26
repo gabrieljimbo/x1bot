@@ -214,7 +214,7 @@ function WorkspaceDetailsPageContent() {
   const handleToggleWorkflow = async (workflow: WorkspaceWorkflow) => {
     try {
       setError(null)
-      // Pass tenantId as query param for SUPERADMIN
+      // Pass tenantId as query param for SUPER_ADMIN
       const updates = { isActive: !workflow.isActive }
       await apiClient.updateWorkflow(workflow.id, updates, workspaceId)
       setSuccess(`Workflow ${!workflow.isActive ? 'activated' : 'deactivated'} successfully`)
@@ -230,7 +230,7 @@ function WorkspaceDetailsPageContent() {
 
     try {
       setError(null)
-      // Pass tenantId as query param for SUPERADMIN
+      // Pass tenantId as query param for SUPER_ADMIN
       await apiClient.deleteWorkflow(deletingWorkflow.id, workspaceId)
       setSuccess('Workflow deleted successfully')
       setShowDeleteWorkflowModal(false)
@@ -314,7 +314,7 @@ function WorkspaceDetailsPageContent() {
     try {
       setCreatingWorkflow(true)
       setError(null)
-      // Pass tenantId as query param for SUPERADMIN
+      // Pass tenantId as query param for SUPER_ADMIN
       const workflow = await apiClient.createWorkflow(newWorkflowName, newWorkflowDescription || undefined, workspaceId)
       setSuccess('Workflow created successfully')
       setShowCreateWorkflowModal(false)
@@ -1261,7 +1261,7 @@ function WorkspaceAccessGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoading && user) {
-      // SUPERADMIN can access any workspace
+      // SUPER_ADMIN can access any workspace
       if (isSuperAdmin(user.role)) {
         return
       }
@@ -1291,7 +1291,7 @@ function WorkspaceAccessGuard({ children }: { children: React.ReactNode }) {
     return null
   }
 
-  // SUPERADMIN can access any workspace
+  // SUPER_ADMIN can access any workspace
   if (isSuperAdmin(user.role)) {
     return <>{children}</>
   }

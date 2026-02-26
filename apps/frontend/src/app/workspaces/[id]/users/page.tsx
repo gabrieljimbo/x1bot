@@ -302,8 +302,8 @@ function WorkspaceUsersPageContent() {
                     <td className="px-6 py-4">
                       <span
                         className={`px-3 py-1 rounded text-xs font-medium ${user.isActive
-                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                            : 'bg-gray-700/50 text-gray-400 border border-gray-700'
+                          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                          : 'bg-gray-700/50 text-gray-400 border border-gray-700'
                           }`}
                       >
                         {user.isActive ? 'Active' : 'Inactive'}
@@ -399,7 +399,7 @@ function WorkspaceUsersPageContent() {
                     className="w-full px-4 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
                   >
                     <option value={UserRole.ADMIN}>ADMIN</option>
-                    <option value={UserRole.SUPER_ADMIN}>SUPERADMIN</option>
+                    <option value={UserRole.SUPER_ADMIN}>SUPER_ADMIN</option>
                   </select>
                 </div>
               </div>

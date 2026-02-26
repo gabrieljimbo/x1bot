@@ -239,7 +239,7 @@ export const apiClient = {
     await client.delete(`/api/tags/${tagId}`)
   },
 
-  // Admin - Tenants (SUPERADMIN only)
+  // Admin - Tenants (SUPER_ADMIN only)
   getTenants: async () => {
     const { data } = await client.get('/api/admin/tenants')
     return data

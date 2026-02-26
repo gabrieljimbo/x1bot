@@ -26,7 +26,7 @@ function WorkflowPageContent() {
   const workflowId = params.id as string
   const { tenant, token } = useAuth()
 
-  // Get tenantId from URL query param (for SUPERADMIN viewing other workspaces) or from auth context
+  // Get tenantId from URL query param (for SUPER_ADMIN viewing other workspaces) or from auth context
   const tenantIdFromUrl = searchParams?.get('tenantId')
   const tenantId = tenantIdFromUrl || tenant?.id
 
@@ -276,7 +276,7 @@ function WorkflowPageContent() {
   const loadWorkflow = async () => {
     try {
       setError(null)
-      // Pass tenantId if available (for SUPERADMIN viewing other workspaces)
+      // Pass tenantId if available (for SUPER_ADMIN viewing other workspaces)
       const data = await apiClient.getWorkflow(workflowId, tenantId || undefined)
       setWorkflow(data)
 
@@ -302,7 +302,7 @@ function WorkflowPageContent() {
 
     try {
       setSaveStatus('saving')
-      // Pass tenantId if available (for SUPERADMIN viewing other workspaces)
+      // Pass tenantId if available (for SUPER_ADMIN viewing other workspaces)
       await apiClient.updateWorkflow(workflowId, { nodes, edges }, tenantId || undefined)
       // Sync parent state so initialNodes/initialEdges stay current
       // This is critical for pasted/deleted nodes to be recognized by the parent
@@ -343,7 +343,7 @@ function WorkflowPageContent() {
         node.id === nodeId ? { ...node, config } : node
       )
 
-      // Pass tenantId if available (for SUPERADMIN viewing other workspaces)
+      // Pass tenantId if available (for SUPER_ADMIN viewing other workspaces)
       await apiClient.updateWorkflow(workflowId, { nodes: updatedNodes, edges: currentEdges }, tenantId || undefined)
 
       // Update refs
@@ -569,7 +569,7 @@ function WorkflowPageContent() {
 
   const toggleActive = async () => {
     try {
-      // Pass tenantId if available (for SUPERADMIN viewing other workspaces)
+      // Pass tenantId if available (for SUPER_ADMIN viewing other workspaces)
       const updated = await apiClient.updateWorkflow(
         workflowId,
         {

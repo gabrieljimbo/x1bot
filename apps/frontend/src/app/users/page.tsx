@@ -66,7 +66,7 @@ function UsersPageContent() {
         ? await apiClient.getLicenses()
         : await apiClient.getUsers()
 
-      // Filter users by current user's tenant (for ADMIN) or show all (for SUPERADMIN)
+      // Filter users by current user's tenant (for ADMIN) or show all (for SUPER_ADMIN)
       let filteredUsers = allUsers
       if (!isSuperAdmin(currentUser?.role) && tenant) {
         filteredUsers = allUsers.filter((u: WorkspaceUser) => u.tenant.id === tenant.id)
@@ -91,7 +91,7 @@ function UsersPageContent() {
       return
     }
 
-    // Only SUPERADMIN can create users
+    // Only SUPER_ADMIN can create users
     if (!isSuperAdmin(currentUser?.role)) {
       setError('Only super admin can create users')
       return
@@ -134,7 +134,7 @@ function UsersPageContent() {
       }
       // ADMIN cannot change roles
       if (isSuperAdmin(currentUser?.role) && editingUser.role) {
-        // SUPERADMIN can change roles, but we'll keep the current role for now
+        // SUPER_ADMIN can change roles, but we'll keep the current role for now
         // This would need backend support to change roles
       }
       await apiClient.updateUser(editingUser.id, updates)
@@ -152,7 +152,7 @@ function UsersPageContent() {
   const handleDelete = async () => {
     if (!deletingUser) return
 
-    // Only SUPERADMIN can delete users
+    // Only SUPER_ADMIN can delete users
     if (!isSuperAdmin(currentUser?.role)) {
       setError('Only super admin can delete users')
       return
