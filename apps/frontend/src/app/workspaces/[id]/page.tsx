@@ -8,7 +8,7 @@ import { apiClient } from '@/lib/api-client'
 import { SuperAdminGuardWrapper } from '@/components/SuperAdminGuard'
 import { useAuth } from '@/contexts/AuthContext'
 import { AuthGuard } from '@/components/AuthGuard'
-import { isSuperAdmin } from '@/lib/permissions'
+import { isSuperAdmin, UserRole } from '@/lib/permissions'
 import AppHeader from '@/components/AppHeader'
 
 interface Workspace {
@@ -631,7 +631,7 @@ function WorkspaceDetailsPageContent() {
                         </div>
                         <div className="flex items-center gap-3">
                           <span
-                            className={`px-2 py-1 rounded text-xs ${user.role === 'SUPERADMIN'
+                            className={`px-2 py-1 rounded text-xs ${user.role === UserRole.SUPER_ADMIN
                               ? 'bg-purple-500/20 text-purple-400'
                               : 'bg-blue-500/20 text-blue-400'
                               }`}
@@ -1267,7 +1267,7 @@ function WorkspaceAccessGuard({ children }: { children: React.ReactNode }) {
       }
 
       // ADMIN can only access their own workspace
-      if (user.role === 'ADMIN' && tenant?.id === workspaceId) {
+      if (user.role === UserRole.ADMIN && tenant?.id === workspaceId) {
         return
       }
 
@@ -1297,7 +1297,7 @@ function WorkspaceAccessGuard({ children }: { children: React.ReactNode }) {
   }
 
   // ADMIN can only access their own workspace
-  if (user.role === 'ADMIN' && tenant?.id === workspaceId) {
+  if (user.role === UserRole.ADMIN && tenant?.id === workspaceId) {
     return <>{children}</>
   }
 

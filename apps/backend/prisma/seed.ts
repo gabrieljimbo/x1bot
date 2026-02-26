@@ -69,7 +69,7 @@ async function main() {
     update: {
       password: superAdminPassword,
       isActive: true,
-      role: 'SUPERADMIN',
+      role: 'SUPER_ADMIN',
     } as any,
     create: {
       email: 'superadmin@gmail.com',
@@ -77,7 +77,7 @@ async function main() {
       name: 'Super Admin',
       tenantId: superAdminTenant.id,
       isActive: true,
-      role: 'SUPERADMIN',
+      role: 'SUPER_ADMIN',
     } as any,
   })
 

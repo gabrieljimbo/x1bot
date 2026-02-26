@@ -18,9 +18,9 @@ import { UserRole } from '../auth/types/roles.enum';
 
 @Controller('api/admin/tenants')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SUPERADMIN)
+@Roles(UserRole.SUPER_ADMIN)
 export class TenantController {
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(private readonly tenantService: TenantService) { }
 
   @Get()
   findAll() {

@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { Plus, Trash2, Edit2, User, ArrowLeft } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { SuperAdminGuardWrapper } from '@/components/SuperAdminGuard'
-import { isSuperAdmin } from '@/lib/permissions'
+import { isSuperAdmin, UserRole } from '@/lib/permissions'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface WorkspaceUser {
@@ -46,7 +46,7 @@ function WorkspaceUsersPageContent() {
     name: '',
     email: '',
     password: '',
-    role: 'ADMIN' as string,
+    role: UserRole.ADMIN as string,
   })
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -102,7 +102,7 @@ function WorkspaceUsersPageContent() {
       setSuccess('User created successfully')
       await loadUsers()
       setShowModal(false)
-      setFormData({ name: '', email: '', password: '', role: 'ADMIN' })
+      setFormData({ name: '', email: '', password: '', role: UserRole.ADMIN })
       setTimeout(() => setSuccess(null), 3000)
     } catch (error: any) {
       setError(error.response?.data?.message || 'Failed to create user')
@@ -131,7 +131,7 @@ function WorkspaceUsersPageContent() {
       await loadUsers()
       setShowModal(false)
       setEditingUser(null)
-      setFormData({ name: '', email: '', password: '', role: 'ADMIN' })
+      setFormData({ name: '', email: '', password: '', role: UserRole.ADMIN })
       setTimeout(() => setSuccess(null), 3000)
     } catch (error: any) {
       setError(error.response?.data?.message || 'Failed to update user')
@@ -156,7 +156,7 @@ function WorkspaceUsersPageContent() {
 
   const openCreateModal = () => {
     setEditingUser(null)
-    setFormData({ name: '', email: '', password: '', role: 'ADMIN' })
+    setFormData({ name: '', email: '', password: '', role: UserRole.ADMIN })
     setError(null)
     setShowModal(true)
   }
@@ -190,7 +190,7 @@ function WorkspaceUsersPageContent() {
   }
 
   const getRoleBadgeColor = (role: string) => {
-    return role === 'SUPERADMIN'
+    return role === UserRole.SUPER_ADMIN
       ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
       : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
   }
@@ -301,11 +301,10 @@ function WorkspaceUsersPageContent() {
                     </td>
                     <td className="px-6 py-4">
                       <span
-                        className={`px-3 py-1 rounded text-xs font-medium ${
-                          user.isActive
+                        className={`px-3 py-1 rounded text-xs font-medium ${user.isActive
                             ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                             : 'bg-gray-700/50 text-gray-400 border border-gray-700'
-                        }`}
+                          }`}
                       >
                         {user.isActive ? 'Active' : 'Inactive'}
                       </span>
@@ -399,8 +398,8 @@ function WorkspaceUsersPageContent() {
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     className="w-full px-4 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
                   >
-                    <option value="ADMIN">ADMIN</option>
-                    <option value="SUPERADMIN">SUPERADMIN</option>
+                    <option value={UserRole.ADMIN}>ADMIN</option>
+                    <option value={UserRole.SUPER_ADMIN}>SUPERADMIN</option>
                   </select>
                 </div>
               </div>
