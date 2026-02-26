@@ -1,4 +1,4 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Module, OnModuleInit, forwardRef } from '@nestjs/common';
 import { WhatsappService } from './whatsapp.service';
 import { WhatsappSessionManager } from './whatsapp-session-manager.service';
 import { WhatsappMessageHandler } from './whatsapp-message-handler.service';
@@ -9,9 +9,14 @@ import { NodeExecutorService } from '../execution/node-executor.service';
 
 import { MessageQueueService } from './message-queue.service';
 import { WhatsappController } from './whatsapp.controller';
+import { InboxModule } from '../inbox/inbox.module';
 
 @Module({
-  imports: [ExecutionModule, StorageModule],
+  imports: [
+    ExecutionModule,
+    StorageModule,
+    forwardRef(() => InboxModule)
+  ],
   controllers: [WhatsappController],
   providers: [
     WhatsappService,

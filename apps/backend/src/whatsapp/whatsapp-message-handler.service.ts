@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExecutionService } from '../execution/execution.service';
 import { ExecutionEngineService } from '../execution/execution-engine.service';
@@ -12,6 +12,7 @@ export class WhatsappMessageHandler {
     private prisma: PrismaService,
     private executionService: ExecutionService,
     private executionEngine: ExecutionEngineService,
+    @Inject(forwardRef(() => InboxService))
     private inboxService: InboxService,
   ) { }
 
