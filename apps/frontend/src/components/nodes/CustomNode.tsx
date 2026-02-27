@@ -648,7 +648,7 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
               </div>
             </>
           ) : isPix ? (
-            <div className="absolute -right-3 top-0 bottom-0 flex flex-col justify-around py-4 pointer-events-none w-24">
+            <div className="absolute -right-3 top-3 bottom-3 flex flex-col justify-between pointer-events-none w-28">
               <div className="relative flex items-center justify-end translate-x-3">
                 <span className="mr-2 text-[10px] font-bold text-green-400 bg-[#0f172a] px-1.5 py-0.5 rounded border border-green-500/30 whitespace-nowrap shadow-sm backdrop-blur-sm">
                   PAGO
@@ -658,6 +658,17 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
                   position={Position.Right}
                   id="success"
                   className="w-3 h-3 !bg-green-500 border-2 border-[#1a1c2e] hover:!bg-green-400 transition-colors !cursor-crosshair pointer-events-auto"
+                />
+              </div>
+              <div className="relative flex items-center justify-end translate-x-3">
+                <span className="mr-2 text-[10px] font-bold text-blue-400 bg-[#0f172a] px-1.5 py-0.5 rounded border border-blue-500/30 whitespace-nowrap shadow-sm backdrop-blur-sm">
+                  DOCUMENTO
+                </span>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id="document"
+                  className="w-3 h-3 !bg-blue-500 border-2 border-[#1a1c2e] hover:!bg-blue-400 transition-colors !cursor-crosshair pointer-events-auto"
                 />
               </div>
               <div className="relative flex items-center justify-end translate-x-3">

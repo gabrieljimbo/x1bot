@@ -432,34 +432,60 @@ export class ExecutionEngineService implements OnModuleInit {
         const config = currentNode.config as PixConfig;
         const replyText = message.trim().toLowerCase();
 
-        // Check if message matches keywords (or if any message matches)
-        const keywords = config.palavrasChave || [];
-        const isMatch = keywords.length === 0 || keywords.some(k => replyText.includes(k.toLowerCase()));
+        // Check for image/document/pdf first
+        const isMedia = triggerPayload?.type === 'media';
+        const mediaType = triggerPayload?.media?.mediaType || '';
+        const isImage = mediaType === 'image';
+        const isDocument = mediaType === 'document';
 
-        if (isMatch) {
-          console.log(`[RESUME] SEND_PIX matched payment confirmation for execution ${execution.id}`);
+        if (isMedia && (isImage || isDocument)) {
+          console.log(`[RESUME] SEND_PIX detected media (${mediaType}) for execution ${execution.id}, routing to document edge`);
 
           // Cancel timeout in Redis
           const timeoutKey = `execution:timeout:${execution.id}`;
           await this.redis.delete(timeoutKey).catch(() => { });
 
-          // Send confirmation message if configured and enabled
-          if (config.enviarMensagensAutomaticas && config.mensagemConfirmacao) {
-            await this.sendMessageWithRetry({
-              sessionId: execution.sessionId,
-              contactPhone: execution.contactPhone,
-              message: config.mensagemConfirmacao
-            });
-          }
+          // Save media in context as requested
+          execution.context.variables.triggerMessage = {
+            text: message,
+            media: {
+              url: triggerPayload.media?.url
+            }
+          };
 
-          // Move to success output
-          const successEdge = workflow.edges.find(e => e.source === currentNode.id && e.condition === 'success');
-          execution.currentNodeId = successEdge ? successEdge.target : null;
+          // Move to document output
+          const documentEdge = workflow.edges.find(e => e.source === currentNode.id && e.condition === 'document');
+          execution.currentNodeId = documentEdge ? documentEdge.target : null;
         } else {
-          // No match, stay in current node (still waiting)
-          console.log(`[RESUME] SEND_PIX message "${message}" did not match keywords, staying in node`);
-          await this.redis.releaseLock(lockKey);
-          return;
+          // Check if message matches keywords (or if any message matches)
+          const keywords = config.palavrasChave || [];
+          const isMatch = keywords.length === 0 || keywords.some(k => replyText.includes(k.toLowerCase()));
+
+          if (isMatch) {
+            console.log(`[RESUME] SEND_PIX matched payment confirmation for execution ${execution.id}`);
+
+            // Cancel timeout in Redis
+            const timeoutKey = `execution:timeout:${execution.id}`;
+            await this.redis.delete(timeoutKey).catch(() => { });
+
+            // Send confirmation message if configured and enabled
+            if (config.enviarMensagensAutomaticas && config.mensagemConfirmacao) {
+              await this.sendMessageWithRetry({
+                sessionId: execution.sessionId,
+                contactPhone: execution.contactPhone,
+                message: config.mensagemConfirmacao
+              });
+            }
+
+            // Move to success output
+            const successEdge = workflow.edges.find(e => e.source === currentNode.id && e.condition === 'success');
+            execution.currentNodeId = successEdge ? successEdge.target : null;
+          } else {
+            // No match, stay in current node (still waiting)
+            console.log(`[RESUME] SEND_PIX message "${message}" did not match keywords, staying in node`);
+            await this.redis.releaseLock(lockKey);
+            return;
+          }
         }
       }
 
