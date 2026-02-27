@@ -21,11 +21,10 @@ export default function AppHeader() {
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (user) {
-      loadStats()
-    }
-  }, [user])
+    loadStats()
+  }, [])
 
   useEffect(() => {
     const handler = () => {

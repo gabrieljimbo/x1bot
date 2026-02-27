@@ -19,7 +19,7 @@ async function main() {
     });
 
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma.user.findFirst({
             where: { email }
         });
 
@@ -31,7 +31,7 @@ async function main() {
         console.log(`Current hash: ${user.password}`);
 
         const updated = await prisma.user.update({
-            where: { email },
+            where: { id: user.id },
             data: { password: hash }
         });
 
