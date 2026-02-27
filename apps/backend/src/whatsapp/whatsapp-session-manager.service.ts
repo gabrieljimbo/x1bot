@@ -293,17 +293,30 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       sessionClient.socket,
       { type: 'buttons', payload: { text: message, buttons } },
       async () => {
-        // Fallback: formatted text (Baileys buttons are often not supported by WA anymore)
+        // Fallback: formatted text with numbered emojis
+        const emojiNumbers = ['1️⃣', '2️⃣', '3️⃣'];
         let formattedMessage = `${message}\n\n`;
         buttons.forEach((btn, index) => {
-          formattedMessage += `${index + 1}. ${btn.text}\n`;
+          formattedMessage += `${emojiNumbers[index] || (index + 1 + '.')} ${btn.text}\n`;
         });
+
         if (footer) {
           formattedMessage += `\n_${footer}_`;
         }
-        formattedMessage += `\n\n_Responda com o número da opção desejada_`;
 
-        await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
+        formattedMessage += `\n\n_Dica: Você pode clicar em um botão ou digitar o número correspondente._`;
+
+        // Send with native buttons + fallback text in the same message
+        await sessionClient.socket.sendMessage(jid, {
+          text: formattedMessage,
+          footer: footer,
+          buttons: buttons.map(b => ({
+            buttonId: b.id,
+            buttonText: { displayText: b.text },
+            type: 1
+          })),
+          headerType: 1
+        });
       }
     );
   }

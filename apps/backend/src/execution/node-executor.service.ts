@@ -297,8 +297,9 @@ export class NodeExecutorService {
     const nextNodeId = nextEdge ? nextEdge.target : null;
 
     return {
-      nextNodeId,
-      shouldWait: false,
+      nextNodeId: null, // Clear nextNodeId because we wait for response
+      shouldWait: true,
+      waitTimeoutSeconds: config.delay ? (config.delay / 1000) + 3600 : 3600, // Wait 1h
       output: { message, buttons, footer },
       messageToSend: sessionId && contactPhone ? {
         sessionId,

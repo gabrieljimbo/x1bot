@@ -210,9 +210,11 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
   const isCondition = data.type === 'CONDITION'
   const isSwitch = data.type === 'SWITCH'
   const isLoop = data.type === 'LOOP'
+  const isButtons = data.type === 'SEND_BUTTONS'
 
   // Get switch rules for dynamic handles
   const switchRules = isSwitch && data.config.rules ? data.config.rules : []
+  const buttonsNode = isButtons && data.config.buttons ? data.config.buttons : []
 
   const handleDelete = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -513,6 +515,20 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
           </div>
         )}
 
+        {/* Buttons Preview */}
+        {isButtons && buttonsNode.length > 0 && (
+          <div className="mt-2 space-y-1.5 pt-2 border-t border-gray-700/50">
+            {buttonsNode.map((btn: any, idx: number) => (
+              <div
+                key={idx}
+                className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-[10px] text-emerald-400 text-center font-medium truncate"
+              >
+                {btn.text || `Botão ${idx + 1}`}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Start Button for TRIGGER_MANUAL */}
         {data.type === 'TRIGGER_MANUAL' && (
           <div className="mt-3 pt-3 border-t border-gray-700/50">
@@ -639,6 +655,34 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
               <div className="absolute -bottom-5 left-0 right-0 flex justify-around text-[9px] font-bold">
                 <span className="text-blue-400">Loop</span>
                 <span className="text-green-400">Done</span>
+              </div>
+            </>
+          ) : isButtons ? (
+            <>
+              {/* Dynamic handles for each button */}
+              {buttonsNode.map((button: any, index: number) => {
+                const total = buttonsNode.length
+                const position = ((index + 1) / (total + 1)) * 100
+                return (
+                  <Handle
+                    key={button.id || index}
+                    type="source"
+                    position={Position.Right}
+                    id={button.id || String(index)}
+                    style={{ top: `${position}%` }}
+                    className="!w-3 !h-3 !bg-emerald-400 !border-2 !border-emerald-600 hover:!bg-emerald-300 transition-colors"
+                  />
+                )
+              })}
+              {/* Labels for buttons on the side */}
+              <div className="absolute -right-2 top-0 bottom-0 flex flex-col justify-around text-[8px] font-bold py-2 translate-x-full">
+                {buttonsNode.map((button: any, index: number) => (
+                  <div key={button.id || index} className="flex items-center">
+                    <div className="bg-[#151515] px-1.5 py-0.5 rounded border border-emerald-900/50 text-emerald-400 truncate max-w-[80px] shadow-sm">
+                      {button.text || `Btn ${index + 1}`}
+                    </div>
+                  </div>
+                ))}
               </div>
             </>
           ) : (

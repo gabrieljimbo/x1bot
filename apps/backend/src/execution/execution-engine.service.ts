@@ -380,6 +380,52 @@ export class ExecutionEngineService implements OnModuleInit {
         }
       }
 
+      // Process reply if current node is SEND_BUTTONS
+      if (currentNode.type === WorkflowNodeType.SEND_BUTTONS) {
+        // Cancel timeout in Redis
+        const timeoutKey = `execution:timeout:${execution.id}`;
+        await this.redis.delete(timeoutKey).catch(() => { });
+
+        // Get button mapping from context
+        const buttonMapping = execution.context.variables._buttonMapping || {};
+        const replyText = message.trim();
+
+        // Try to match: direct ID, index number, or button text
+        let matchedButtonId = null;
+
+        if (buttonMapping[replyText]) {
+          // Matched by index number ("1") or exactly by text ("Opção 1")
+          matchedButtonId = buttonMapping[replyText];
+        } else {
+          // Maybe it's a raw button ID (buttonsResponseMessage returns this)
+          const allButtonIds = Object.values(buttonMapping) as string[];
+          if (allButtonIds.includes(replyText)) {
+            matchedButtonId = replyText;
+          }
+        }
+
+        if (matchedButtonId) {
+          console.log(`[RESUME] SEND_BUTTONS matched button ID: ${matchedButtonId}`);
+          // Find edge with this sourceHandle
+          const nextEdge = workflow.edges.find(
+            (e) => e.source === currentNode.id && e.condition === matchedButtonId
+          );
+
+          if (nextEdge) {
+            execution.currentNodeId = nextEdge.target;
+          } else {
+            console.warn(`[RESUME] No specific edge found for button ID ${matchedButtonId}, falling back to default`);
+            const fallbackEdge = workflow.edges.find((e) => e.source === currentNode.id);
+            execution.currentNodeId = fallbackEdge ? fallbackEdge.target : null;
+          }
+        } else {
+          // No match, follow first available edge
+          console.log(`[RESUME] No button match for "${replyText}", following first available edge`);
+          const nextEdge = workflow.edges.find((e) => e.source === currentNode.id);
+          execution.currentNodeId = nextEdge ? nextEdge.target : null;
+        }
+      }
+
       // Update status to RUNNING
       execution.status = ExecutionStatus.RUNNING;
       await this.executionService.updateExecution(execution.id, {

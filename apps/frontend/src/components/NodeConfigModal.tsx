@@ -1022,9 +1022,11 @@ export default function NodeConfigModal({
             </div>
 
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-              <p className="text-xs text-blue-300 leading-relaxed">
-                💡 <strong>Dica:</strong> Os botões aparecem abaixo da mensagem. Quando o usuário clicar em um botão,
-                a resposta será o ID do botão (btn-xxx). Use um node WAIT_REPLY após este para capturar a resposta.
+              <p className="text-xs text-blue-300 leading-relaxed mb-2">
+                💡 <strong>Dica:</strong> Cada botão adicionado cria uma <strong>saída automática</strong> no node lateral no editor. O fluxo seguirá pelo caminho correspondente ao botão que o contato clicar ou digitar.
+              </p>
+              <p className="text-[10px] text-blue-400/80 leading-relaxed">
+                ⚠️ Para contas pessoais, os botões serão enviados como uma lista numerada (1, 2, 3) e o sistema detectará a resposta automaticamente.
               </p>
             </div>
           </div>
