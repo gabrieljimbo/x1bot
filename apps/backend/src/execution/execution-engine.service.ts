@@ -7,6 +7,7 @@ import {
   WorkflowNodeType,
   EventType,
   RmktConfig,
+  PixConfig,
 } from '@n9n/shared';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';

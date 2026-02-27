@@ -12,7 +12,7 @@ import type {
   makeWASocket,
   DisconnectReason
 } from '@whiskeysockets/baileys';
-import { WhatsappSessionStatus, EventType, TriggerMessagePayload } from '@n9n/shared';
+import { WhatsappSessionStatus, EventType, TriggerMessagePayload, PixConfig } from '@n9n/shared';
 import { WhatsappService } from './whatsapp.service';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { WhatsappMessageHandler } from './whatsapp-message-handler.service';
