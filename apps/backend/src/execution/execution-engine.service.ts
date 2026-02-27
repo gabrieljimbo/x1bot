@@ -443,8 +443,8 @@ export class ExecutionEngineService implements OnModuleInit {
           const timeoutKey = `execution:timeout:${execution.id}`;
           await this.redis.delete(timeoutKey).catch(() => { });
 
-          // Send confirmation message if configured
-          if (config.mensagemConfirmacao) {
+          // Send confirmation message if configured and enabled
+          if (config.enviarMensagensAutomaticas && config.mensagemConfirmacao) {
             await this.sendMessageWithRetry({
               sessionId: execution.sessionId,
               contactPhone: execution.contactPhone,
@@ -1488,8 +1488,8 @@ export class ExecutionEngineService implements OnModuleInit {
               finalTargetNodeId = timeoutEdge.target;
               console.log(`[WAIT_REPLY] SEND_PIX timeout routing to edge: ${finalTargetNodeId}`);
 
-              // Send timeout message if configured
-              if (config.mensagemTimeout) {
+              // Send timeout message if configured and enabled
+              if (config.enviarMensagensAutomaticas && config.mensagemTimeout) {
                 await this.sendMessageWithRetry({
                   sessionId: recheckExecution.sessionId,
                   contactPhone: recheckExecution.contactPhone,

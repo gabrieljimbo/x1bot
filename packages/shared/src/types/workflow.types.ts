@@ -345,5 +345,6 @@ export interface PixConfig {
   mensagemTimeout?: string;
   autoRetry?: boolean;
   retryCount?: number;
+  enviarMensagensAutomaticas?: boolean;
 }
 

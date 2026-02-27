@@ -4319,33 +4319,49 @@ return {
               {node.type === WorkflowNodeType.SEND_PIX && (
                 <div className="space-y-6">
                   <div className="bg-[#151515] border border-gray-700 rounded-lg p-4 space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-200 border-b border-gray-700 pb-2">Mensagens de Resposta</h3>
-
-                    <div>
-                      <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                        Mensagem ao receber comprovante
-                      </label>
-                      <textarea
-                        value={config.mensagemConfirmacao || ''}
-                        onChange={(e) => setConfig({ ...config, mensagemConfirmacao: e.target.value })}
-                        placeholder="✅ Comprovante recebido! Em breve confirmaremos seu pagamento."
-                        rows={2}
-                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white resize-none"
-                      />
+                    <div className="flex items-center justify-between border-b border-gray-700 pb-4">
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-200">Enviar mensagens automáticas</h3>
+                        <p className="text-[10px] text-gray-500">Envia uma mensagem ao receber comprovante e ao expirar o tempo</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setConfig({ ...config, enviarMensagensAutomaticas: !config.enviarMensagensAutomaticas })}
+                        className={`w-12 h-6 rounded-full transition-all relative ${config.enviarMensagensAutomaticas ? 'bg-primary' : 'bg-gray-700'}`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${config.enviarMensagensAutomaticas ? 'left-7' : 'left-1'}`} />
+                      </button>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                        Mensagem ao expirar (Timeout)
-                      </label>
-                      <textarea
-                        value={config.mensagemTimeout || ''}
-                        onChange={(e) => setConfig({ ...config, mensagemTimeout: e.target.value })}
-                        placeholder="⏰ Seu PIX expirou. Entre em contato para gerar um novo."
-                        rows={2}
-                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white resize-none"
-                      />
-                    </div>
+                    {config.enviarMensagensAutomaticas && (
+                      <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <div>
+                          <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                            Mensagem ao receber comprovante
+                          </label>
+                          <textarea
+                            value={config.mensagemConfirmacao || ''}
+                            onChange={(e) => setConfig({ ...config, mensagemConfirmacao: e.target.value })}
+                            placeholder="✅ Comprovante recebido! Em breve confirmaremos seu pagamento."
+                            rows={2}
+                            className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white resize-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                            Mensagem ao expirar (Timeout)
+                          </label>
+                          <textarea
+                            value={config.mensagemTimeout || ''}
+                            onChange={(e) => setConfig({ ...config, mensagemTimeout: e.target.value })}
+                            placeholder="⏰ Seu PIX expirou. Entre em contato para gerar um novo."
+                            rows={2}
+                            className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white resize-none"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="bg-[#151515] border border-gray-700 rounded-lg p-4 space-y-4">
