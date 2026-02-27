@@ -12,6 +12,7 @@ export default function AppHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   const loadStats = async () => {
+    if (!user || !tenant) return;
     try {
       const stats = await apiClient.getInboxStats()
       setUnreadCount(stats.totalUnread || 0)
@@ -21,10 +22,11 @@ export default function AppHeader() {
     }
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    loadStats()
-  }, [])
+    if (user && tenant) {
+      loadStats()
+    }
+  }, [user, tenant])
 
   useEffect(() => {
     const handler = () => {
