@@ -24,6 +24,7 @@ export class WhatsappMessageHandler {
     sessionId: string,
     contactPhone: string,
     payload: TriggerMessagePayload | string,
+    skipTrigger: boolean = false,
   ): Promise<void> {
     // Normalize payload
     const normalizedPayload: TriggerMessagePayload = typeof payload === 'string'
@@ -38,12 +39,6 @@ export class WhatsappMessageHandler {
       }
       : payload;
 
-    // 1. Loop Protection: Ignore messages from bot itself
-    if (normalizedPayload.fromMe) {
-      console.log(`[IGNORE] Session ${sessionId}: Ignoring message from self (loop protection)`);
-      return;
-    }
-
     // --- CRM / Inbox Registration ---
     const mediaPayload = normalizedPayload.media as any;
     const isGroup = contactPhone.endsWith('@g.us');
@@ -52,18 +47,25 @@ export class WhatsappMessageHandler {
     const conversation = await this.inboxService.upsertConversation(tenantId, sessionId, contactPhone, {
       lastMessage: normalizedPayload.text || (normalizedPayload.media ? `[${mediaPayload?.type || mediaPayload?.mediaType || 'media'}]` : ''),
       lastMessageAt: new Date(normalizedPayload.timestamp),
-      unreadCount: { increment: 1 } as any,
+      unreadCount: normalizedPayload.fromMe ? 0 : { increment: 1 } as any, // Don't increment unread for our own messages
     });
 
     await this.inboxService.saveMessage(conversation.id, {
       content: normalizedPayload.text || '',
       mediaUrl: normalizedPayload.media?.url,
       mediaType: mediaPayload?.type || mediaPayload?.mediaType || undefined,
-      fromMe: false,
+      fromMe: normalizedPayload.fromMe,
       timestamp: new Date(normalizedPayload.timestamp),
       status: MessageStatus.DELIVERED,
     });
     // --- End CRM / Inbox Registration ---
+
+    // 1. Loop Protection & Skip Trigger: Ignore messages from bot itself for workflow triggering
+    // or if skipTrigger is explicitly requested (e.g. for history sync)
+    if (normalizedPayload.fromMe || skipTrigger) {
+      console.log(`[IGNORE] Session ${sessionId}: Ignoring message fromMe: ${normalizedPayload.fromMe} or skipTrigger: ${skipTrigger} (loop protection/manual skip)`);
+      return;
+    }
 
     // 2. Group Filtering: Check if message is from a group
     let whitelistedWorkflows: string[] = [];

@@ -688,26 +688,49 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       if (m.type === 'notify') {
         const sessionClient = this.sessions.get(sessionId);
         for (const msg of m.messages) {
-          // Skip messages from the bot itself
-          if (msg.key.fromMe) continue;
-
           // Skip status broadcasts (stories/status updates)
           const remoteJid = msg.key.remoteJid || '';
           if (remoteJid === 'status@broadcast') continue;
 
-          // Skip messages from the connected number itself (prevents infinite loops)
-          if (sessionClient?.ownJid) {
-            const senderNumber = remoteJid.split('@')[0];
-            const ownNumber = sessionClient.ownJid.split('@')[0];
-            if (senderNumber === ownNumber) {
-              console.log(`[SESSION] Ignoring self-message from ${senderNumber}`);
-              continue;
-            }
-          }
-
           await this.handleIncomingMessage(tenantId, sessionId, msg);
         }
       }
+    });
+
+    socket.ev.on('messaging-history.set', async ({ messages, chats }) => {
+      console.log(`[HISTORY] Session ${sessionId}: Received historical data (${messages.length} messages, ${chats.length} chats)`);
+
+      // Group messages by remoteJid
+      const messagesByJid: { [jid: string]: any[] } = {};
+
+      for (const msg of messages) {
+        const jid = msg.key.remoteJid;
+        if (!jid || jid === 'status@broadcast') continue;
+
+        if (!messagesByJid[jid]) {
+          messagesByJid[jid] = [];
+        }
+        messagesByJid[jid].push(msg);
+      }
+
+      // Process up to 50 most recent messages per conversation
+      for (const jid in messagesByJid) {
+        // Sort by timestamp descending and take 50
+        const sortedMsgs = messagesByJid[jid]
+          .sort((a, b) => Number(b.messageTimestamp) - Number(a.messageTimestamp))
+          .slice(0, 50);
+
+        // Process them (in chronological order for the handler if it mattered, but handleMessage is independent)
+        for (const msg of sortedMsgs.reverse()) {
+          try {
+            await this.handleIncomingMessage(tenantId, sessionId, msg, true);
+          } catch (e) {
+            console.error(`[HISTORY] Error processing message ${msg.key.id}:`, e);
+          }
+        }
+      }
+
+      console.log(`[HISTORY] Session ${sessionId}: Finished processing historical messages`);
     });
 
     // Label Events
@@ -738,25 +761,25 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   /**
    * Handle incoming message
    */
-  private async handleIncomingMessage(tenantId: string, sessionId: string, msg: WAMessage): Promise<void> {
+  private async handleIncomingMessage(tenantId: string, sessionId: string, msg: WAMessage, skipTrigger: boolean = false): Promise<void> {
     const contactPhone = msg.key.remoteJid!;
     const messageId = msg.key.id!;
 
     try {
       const payload = await this.processMessage(msg, tenantId, sessionId);
 
-      console.log(`Message received on session ${sessionId} from ${contactPhone}:`, payload.type);
+      if (!skipTrigger) {
+        await this.eventBus.emit({
+          type: EventType.WHATSAPP_MESSAGE_RECEIVED,
+          tenantId,
+          sessionId,
+          contactPhone,
+          message: payload.text || '',
+          timestamp: new Date(),
+        });
+      }
 
-      await this.eventBus.emit({
-        type: EventType.WHATSAPP_MESSAGE_RECEIVED,
-        tenantId,
-        sessionId,
-        contactPhone,
-        message: payload.text || '',
-        timestamp: new Date(),
-      });
-
-      await this.messageHandler.handleMessage(tenantId, sessionId, contactPhone, payload);
+      await this.messageHandler.handleMessage(tenantId, sessionId, contactPhone, payload, skipTrigger);
     } catch (error) {
       console.error('[BAILEYS] Error processing incoming message:', error);
     }
