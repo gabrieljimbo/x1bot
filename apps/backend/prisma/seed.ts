@@ -45,12 +45,12 @@ const prisma = new PrismaClient()
 async function main() {
   // ── Super Admin Tenant ──────────────────────────────────
   const superAdminTenant = await prisma.tenant.upsert({
-    where: { email: 'superadmin@gmail.com' },
+    where: { email: 'superadmin@n9n.com' },
     update: {},
     create: {
       id: 'superadmin-tenant',
       name: 'Super Admin Tenant',
-      email: 'superadmin@gmail.com',
+      email: 'superadmin@n9n.com',
       isActive: true,
     },
   })
@@ -64,7 +64,7 @@ async function main() {
     where: {
       tenantId_email: {
         tenantId: superAdminTenant.id,
-        email: 'superadmin@gmail.com',
+        email: 'superadmin@n9n.com',
       },
     },
     update: {
@@ -72,7 +72,7 @@ async function main() {
       role: 'SUPER_ADMIN',
     } as any,
     create: {
-      email: 'superadmin@gmail.com',
+      email: 'superadmin@n9n.com',
       password: superAdminPassword,
       name: 'Super Admin',
       tenantId: superAdminTenant.id,
