@@ -113,6 +113,15 @@ export default function NodesSidebar({ onAddNode, onClose }: NodesSidebarProps) 
         description: 'Usa OCR para ler e validar comprovantes de PIX'
       },
       {
+        type: 'RMKT' as WorkflowNodeType,
+        label: 'Remarketing',
+        icon: '🎯',
+        color: 'from-red-600 to-red-700',
+        bgColor: 'bg-[#2a1a1a]',
+        borderColor: 'border-[#7d3b3b]',
+        description: 'Aguarda um tempo e envia mensagem automática (remarketing)'
+      },
+      {
         type: 'CODE' as WorkflowNodeType,
         label: 'Code',
         icon: '{}',

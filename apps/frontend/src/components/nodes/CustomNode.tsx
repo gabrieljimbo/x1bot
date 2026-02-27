@@ -156,6 +156,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#3b7d63]',
     iconBg: 'bg-gradient-to-br from-emerald-400 to-emerald-500',
   },
+  'RMKT': {
+    label: 'Remarketing',
+    subtitle: 'AÇÃO',
+    icon: '🎯',
+    bgColor: 'bg-[#2a1a1a]',
+    borderColor: 'border-[#7d3b3b]',
+    iconBg: 'bg-gradient-to-br from-red-600 to-red-700',
+  },
   'END': {
     label: 'Finalizar',
     subtitle: 'FIM',
@@ -369,6 +377,14 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
       return validate
         ? `💸 Validar R$ ${amount || '?'}`
         : '💸 Ler comprovante PIX'
+    }
+    if (data.type === 'RMKT') {
+      const amount = data.config.amount || 0
+      const unit = data.config.unit || 'seconds'
+      const type = data.config.messageType || 'text'
+      const icons = { text: '📝', image: '📸', audio: '🎵' }
+      const unitLabels = { seconds: 's', minutes: 'min', hours: 'h', days: 'd' }
+      return `⏱ ${amount}${unitLabels[unit as keyof typeof unitLabels]} → ${icons[type as keyof typeof icons]}`
     }
     return null
   }

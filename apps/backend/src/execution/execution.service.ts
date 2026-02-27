@@ -8,7 +8,7 @@ export class ExecutionService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   /**
    * Create new execution
@@ -42,6 +42,14 @@ export class ExecutionService {
         interactionCount: 0,
         expiresAt,
       },
+    });
+
+    // Add metadata for nodes (like RMKT) to reference the current execution
+    context.variables._executionId = execution.id;
+    context.variables._tenantId = tenantId;
+    await this.prisma.workflowExecution.update({
+      where: { id: execution.id },
+      data: { context: context as any },
     });
 
     return this.mapToExecution(execution);
@@ -91,9 +99,9 @@ export class ExecutionService {
         ...data,
         context: data.context as any,
         updatedAt: new Date(),
-        completedAt: data.status === ExecutionStatus.COMPLETED || 
-                     data.status === ExecutionStatus.EXPIRED || 
-                     data.status === ExecutionStatus.ERROR
+        completedAt: data.status === ExecutionStatus.COMPLETED ||
+          data.status === ExecutionStatus.EXPIRED ||
+          data.status === ExecutionStatus.ERROR
           ? new Date()
           : undefined,
       },

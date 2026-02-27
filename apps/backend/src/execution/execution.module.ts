@@ -7,9 +7,18 @@ import { WhatsappSenderService } from './whatsapp-sender.service';
 import { ContactTagsService } from './contact-tags.service';
 import { ScheduleWorker } from '../worker/schedule.worker';
 import { OCRService } from './ocr.service';
+import { BullModule } from '@nestjs/bullmq';
+import { RmktProcessor } from './rmkt.processor';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Global()
 @Module({
+  imports: [
+    BullModule.registerQueue({
+      name: 'rmkt',
+    }),
+    PrismaModule,
+  ],
   providers: [
     ExecutionService,
     ExecutionEngineService,
@@ -19,6 +28,7 @@ import { OCRService } from './ocr.service';
     ContactTagsService,
     ScheduleWorker,
     OCRService,
+    RmktProcessor,
   ],
   exports: [
     ExecutionService,

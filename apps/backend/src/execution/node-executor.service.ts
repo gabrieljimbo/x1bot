@@ -21,7 +21,10 @@ import {
   LoopConfig,
   CommandConfig,
   PixRecognitionConfig,
+  RmktConfig,
 } from '@n9n/shared';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { ContextService } from './context.service';
 import { ContactTagsService } from './contact-tags.service';
 import { JSDOM } from 'jsdom';
@@ -60,6 +63,7 @@ export class NodeExecutorService {
     private configService: ConfigService,
     private contactTagsService: ContactTagsService,
     private ocrService: OCRService,
+    @InjectQueue('rmkt') private rmktQueue: Queue,
   ) { }
 
   setWhatsappSessionManager(manager: any) {
@@ -128,6 +132,9 @@ export class NodeExecutorService {
 
       case WorkflowNodeType.PIX_RECOGNITION:
         return await this.executePixRecognition(node, context, edges);
+
+      case WorkflowNodeType.RMKT:
+        return await this.executeRmkt(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
@@ -2021,6 +2028,61 @@ functions, etc.)
       }
     }
     return sanitized;
+  }
+
+  /**
+   * Execute RMKT node
+   */
+  private async executeRmkt(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    sessionId?: string,
+    contactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as RmktConfig;
+
+    // Calculate delay in milliseconds
+    let delayMs = (config.amount || 0) * 1000;
+    if (config.unit === 'minutes') delayMs *= 60;
+    else if (config.unit === 'hours') delayMs *= 3600;
+    else if (config.unit === 'days') delayMs *= 86400;
+
+    // Get metadata from context variables (set by ExecutionEngine)
+    const executionId = (context.variables as any)?._executionId;
+    const tenantId = (context.variables as any)?._tenantId;
+
+    if (!executionId || !tenantId) {
+      console.warn('[RMKT] Execution ID or Tenant ID missing in context variables, cannot schedule job');
+      throw new Error('Internal error: Missing execution metadata in context');
+    }
+
+    // Add job to queue
+    await this.rmktQueue.add(
+      'rmkt-job',
+      {
+        tenantId,
+        executionId,
+        nodeId: node.id,
+        config,
+      },
+      {
+        delay: delayMs,
+        attempts: (config.retries || 2) + 1,
+        backoff: {
+          type: 'fixed',
+          delay: config.retryDelayMs || 30000,
+        },
+        jobId: `rmkt:${executionId}`, // One RMKT at a time per execution
+        removeOnComplete: true,
+        removeOnFail: false,
+      },
+    );
+
+    return {
+      nextNodeId: null, // Will be resumed by processor
+      shouldWait: true,
+    };
   }
 }
 

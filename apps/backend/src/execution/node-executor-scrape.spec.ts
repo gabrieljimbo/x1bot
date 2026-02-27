@@ -35,6 +35,7 @@ describe('NodeExecutorService - HTTP_SCRAPE', () => {
     contextService = new ContextService();
     const configService = new ConfigService();
     const contactTagsService = {} as ContactTagsService;
+    const rmktQueue = { add: jest.fn() } as any;
     const ocrService = {} as OCRService;
 
     service = new NodeExecutorService(
@@ -42,6 +43,7 @@ describe('NodeExecutorService - HTTP_SCRAPE', () => {
       configService,
       contactTagsService,
       ocrService,
+      rmktQueue,
     );
 
     // Reset mocks

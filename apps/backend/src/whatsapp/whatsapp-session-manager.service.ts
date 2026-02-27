@@ -93,6 +93,12 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         this.sendMedia(sessionId, contactPhone, mediaType, mediaUrl, options)
     );
 
+    // Register send presence callback
+    this.whatsappSender.registerSendPresence(
+      (sessionId: string, contactPhone: string, presence: 'composing' | 'recording' | 'paused') =>
+        this.sendPresenceUpdate(sessionId, contactPhone, presence)
+    );
+
     // Auto-reconnect active sessions with staggered delay
     this.reconnectActiveSessions();
   }

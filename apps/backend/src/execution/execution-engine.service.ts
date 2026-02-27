@@ -6,7 +6,10 @@ import {
   WorkflowNode,
   WorkflowNodeType,
   EventType,
+  RmktConfig,
 } from '@n9n/shared';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { EventBusService } from '../event-bus/event-bus.service';
@@ -30,6 +33,7 @@ export class ExecutionEngineService implements OnModuleInit {
     private whatsappSender: WhatsappSenderService,
     private contactTagsService: ContactTagsService,
     private contextService: ContextService,
+    @InjectQueue('rmkt') private rmktQueue: Queue,
   ) { }
 
   /**
@@ -331,6 +335,36 @@ export class ExecutionEngineService implements OnModuleInit {
         return;
       }
 
+      // Process RMKT cancellation if current node is RMKT and cancelOnReply is true
+      if (currentNode.type === WorkflowNodeType.RMKT) {
+        const config = currentNode.config as RmktConfig;
+        if (config.cancelOnReply) {
+          console.log(`[RMKT] Contact replied, cancelling RMKT job for execution ${execution.id}`);
+
+          try {
+            // jobId was set as rmkt:executionId in NodeExecutorService
+            await this.rmktQueue.remove(`rmkt:${execution.id}`);
+
+            execution.context.variables.rmktStatus = 'CANCELADO';
+
+            // Move to next node
+            const nextEdge = workflow.edges.find((e) => e.source === currentNode.id);
+            execution.currentNodeId = nextEdge ? nextEdge.target : null;
+
+            await this.executionService.updateExecution(execution.id, {
+              context: execution.context,
+              status: ExecutionStatus.RUNNING,
+              currentNodeId: execution.currentNodeId,
+            });
+
+            await this.redis.releaseLock(lockKey);
+            return this.continueExecution(execution, workflow);
+          } catch (e) {
+            console.error(`[RMKT] Error cancelling RMKT job: ${e.message}`);
+          }
+        }
+      }
+
       // Process reply if current node is WAIT_REPLY
       if (currentNode.type === WorkflowNodeType.WAIT_REPLY) {
         // Cancel WAIT_REPLY timeout in Redis
@@ -376,7 +410,7 @@ export class ExecutionEngineService implements OnModuleInit {
   /**
    * Continue execution loop
    */
-  private async continueExecution(
+  public async continueExecution(
     execution: WorkflowExecution,
     workflow: Workflow,
   ): Promise<void> {

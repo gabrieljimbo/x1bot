@@ -19,6 +19,7 @@ export enum WorkflowNodeType {
   LOOP = 'LOOP',
   COMMAND = 'COMMAND',
   PIX_RECOGNITION = 'PIX_RECOGNITION',
+  RMKT = 'RMKT',
   END = 'END',
 }
 
@@ -316,5 +317,18 @@ export interface PixRecognitionConfig {
   expectedReceiverName?: string; // supports {{variables.name}} syntax
   acceptedValues?: string; // comma-separated values, e.g. "19.90, 29.90"
   saveResponseAs?: string; // default 'pixResult'
+}
+
+export interface RmktConfig {
+  amount: number;
+  unit: 'seconds' | 'minutes' | 'hours' | 'days';
+  messageType: 'text' | 'image' | 'audio';
+  text?: string;
+  mediaUrl?: string; // supports {{variables.name}} syntax
+  caption?: string; // supports {{variables.name}} syntax
+  cancelOnReply?: boolean;
+  sendAudioAsVoice?: boolean;
+  retries?: number; // default 2
+  retryDelayMs?: number; // default 30000
 }
 

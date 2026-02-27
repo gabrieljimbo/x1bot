@@ -1423,6 +1423,199 @@ export default function NodeConfigModal({
           </div>
         )
 
+      case 'RMKT':
+        return (
+          <div className="space-y-6">
+            <div className="bg-[#2a1a1a] border border-red-700/30 rounded-lg p-4">
+              <div className="flex items-start gap-4">
+                <div className="text-3xl">🎯</div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-white mb-1">
+                    Remarketing (Follow-up)
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Agenda uma mensagem para ser enviada após um tempo. Se o contato responder antes, o envio é cancelado.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 bg-[#151515] border border-gray-700 rounded-lg p-4">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">
+                  Tempo de Espera
+                </label>
+                <input
+                  type="number"
+                  value={config.amount || 1}
+                  onChange={(e) => setConfig({ ...config, amount: parseInt(e.target.value) || 1 })}
+                  placeholder="1"
+                  min="1"
+                  className="w-full px-4 py-2.5 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">
+                  Unidade
+                </label>
+                <select
+                  value={config.unit || 'minutes'}
+                  onChange={(e) => setConfig({ ...config, unit: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                >
+                  <option value="seconds">Segundos</option>
+                  <option value="minutes">Minutos</option>
+                  <option value="hours">Horas</option>
+                  <option value="days">Dias</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-gray-200">
+                Tipo de Mensagem
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {['text', 'image', 'audio'].map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setConfig({ ...config, messageType: type })}
+                    className={`
+                      px-4 py-2 rounded-lg border-2 transition-all text-xs font-semibold
+                      ${config.messageType === type
+                        ? 'bg-primary/20 border-primary text-primary'
+                        : 'bg-[#151515] border-gray-700 text-gray-400 hover:border-gray-600'
+                      }
+                    `}
+                  >
+                    {type === 'text' && '📝 Texto'}
+                    {type === 'image' && '📸 Imagem'}
+                    {type === 'audio' && '🎵 Áudio'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {config.messageType === 'text' && (
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">
+                  Mensagem
+                </label>
+                <DroppableInput
+                  type="textarea"
+                  value={config.text || ''}
+                  onChange={(e: any) => setConfig({ ...config, text: e.target.value })}
+                  placeholder="Olá {{nome}}, tudo bem?..."
+                  className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary resize-none text-white placeholder-gray-500 font-mono text-sm"
+                />
+                <p className="text-[10px] text-gray-500 mt-1.5 uppercase font-bold tracking-tighter">
+                  Variáveis: {'{{nome}}, {{telefone}}, {{sessao}}'}
+                </p>
+              </div>
+            )}
+
+            {(config.messageType === 'image' || config.messageType === 'audio') && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-200">
+                    URL da Mídia
+                  </label>
+                  <input
+                    type="text"
+                    value={config.mediaUrl || ''}
+                    onChange={(e) => setConfig({ ...config, mediaUrl: e.target.value })}
+                    placeholder="https://exemplo.com/imagem.jpg"
+                    className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500 font-mono text-sm"
+                  />
+                </div>
+                {config.messageType === 'image' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-200">
+                      Legenda (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={config.caption || ''}
+                      onChange={(e) => setConfig({ ...config, caption: e.target.value })}
+                      placeholder="Legenda da imagem..."
+                      className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500 text-sm"
+                    />
+                  </div>
+                )}
+                {config.messageType === 'audio' && (
+                  <div className="flex items-center gap-3 bg-[#151515] border border-gray-700 rounded-lg p-3">
+                    <input
+                      type="checkbox"
+                      id="sendAudioAsVoice"
+                      checked={config.sendAudioAsVoice || false}
+                      onChange={(e) => setConfig({ ...config, sendAudioAsVoice: e.target.checked })}
+                      className="w-4 h-4 rounded border-gray-700 bg-black text-primary"
+                    />
+                    <label htmlFor="sendAudioAsVoice" className="text-xs text-gray-300 cursor-pointer">
+                      Enviar como mensagem de voz (WhatsApp PTT)
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-4 pt-4 border-t border-gray-700/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium text-gray-200">
+                    Cancelar se responder
+                  </label>
+                  <p className="text-[10px] text-gray-500">
+                    Cancela o envio se o contato responder antes
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, cancelOnReply: !config.cancelOnReply })}
+                  className={`
+                    w-12 h-6 rounded-full transition-all relative
+                    ${config.cancelOnReply ? 'bg-primary' : 'bg-gray-700'}
+                  `}
+                >
+                  <div className={`
+                    absolute top-1 w-4 h-4 rounded-full bg-white transition-all
+                    ${config.cancelOnReply ? 'left-7' : 'left-1'}
+                  `} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                    Retentativas
+                  </label>
+                  <input
+                    type="number"
+                    value={config.retries || 2}
+                    onChange={(e) => setConfig({ ...config, retries: parseInt(e.target.value) || 0 })}
+                    min="0"
+                    max="5"
+                    className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                    Intervalo Retry (ms)
+                  </label>
+                  <input
+                    type="number"
+                    value={config.retryDelayMs || 30000}
+                    onChange={(e) => setConfig({ ...config, retryDelayMs: parseInt(e.target.value) || 30000 })}
+                    step="1000"
+                    className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+
       case 'LOOP':
         return (
           <div className="space-y-6">

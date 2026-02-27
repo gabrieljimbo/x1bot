@@ -28,6 +28,14 @@ export class WhatsappSenderService {
   private sendButtonsCallback: ((sessionId: string, contactPhone: string, message: string, buttons: ButtonData[], footer?: string) => Promise<void>) | null = null;
   private sendListCallback: ((sessionId: string, contactPhone: string, message: string, buttonText: string, sections: ListSection[], footer?: string) => Promise<void>) | null = null;
   private sendMediaCallback: ((sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) => Promise<void>) | null = null;
+  private sendPresenceCallback: ((sessionId: string, contactPhone: string, presence: 'composing' | 'recording' | 'paused') => Promise<void>) | null = null;
+
+  /**
+   * Register the send presence callback
+   */
+  registerSendPresence(callback: (sessionId: string, contactPhone: string, presence: 'composing' | 'recording' | 'paused') => Promise<void>) {
+    this.sendPresenceCallback = callback;
+  }
 
   /**
    * Register the send message callback
@@ -112,8 +120,8 @@ export class WhatsappSenderService {
    * Send WhatsApp media (image, video, audio, document)
    */
   async sendMedia(
-    sessionId: string, 
-    contactPhone: string, 
+    sessionId: string,
+    contactPhone: string,
     mediaType: 'image' | 'video' | 'audio' | 'document',
     mediaUrl: string,
     options?: {
@@ -131,6 +139,23 @@ export class WhatsappSenderService {
       await this.sendMediaCallback(sessionId, contactPhone, mediaType, mediaUrl, options);
     } catch (error) {
       console.error('Error sending WhatsApp media:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send presence update (typing, recording)
+   */
+  async sendPresence(sessionId: string, contactPhone: string, presence: 'composing' | 'recording' | 'paused'): Promise<void> {
+    if (!this.sendPresenceCallback) {
+      console.warn('WhatsApp send presence callback not registered yet');
+      return;
+    }
+
+    try {
+      await this.sendPresenceCallback(sessionId, contactPhone, presence);
+    } catch (error) {
+      console.error('Error sending WhatsApp presence:', error);
       throw error;
     }
   }
