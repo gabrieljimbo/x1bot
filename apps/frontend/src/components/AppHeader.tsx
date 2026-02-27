@@ -98,15 +98,19 @@ export default function AppHeader() {
                 <div className="flex items-center justify-end gap-2 text-xs">
                   {user.role === UserRole.SUPER_ADMIN ? (
                     <span className="flex items-center gap-1 bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/20 font-bold tracking-wider">
-                      <ShieldCheck size={10} /> SUPER
+                      <ShieldCheck size={10} /> Super Admin
+                    </span>
+                  ) : user.role === UserRole.ADMIN ? (
+                    <span className="flex items-center gap-1 bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20 font-bold tracking-wider">
+                      <Shield size={10} /> Admin
                     </span>
                   ) : user.role === UserRole.VIP ? (
                     <span className="flex items-center gap-1 bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20 font-bold tracking-wider">
                       <Star size={10} /> VIP
                     </span>
                   ) : (
-                    <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-bold tracking-wider uppercase">
-                      Trial
+                    <span className="bg-gray-500/10 text-gray-400 px-2 py-0.5 rounded-full border border-gray-500/20 font-bold tracking-wider uppercase">
+                      Usuário
                     </span>
                   )}
                   <p className="text-white font-semibold">{user.name || user.email}</p>
