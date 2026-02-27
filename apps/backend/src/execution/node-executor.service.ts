@@ -22,6 +22,7 @@ import {
   CommandConfig,
   PixRecognitionConfig,
   RmktConfig,
+  PixConfig,
 } from '@n9n/shared';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -68,6 +69,55 @@ export class NodeExecutorService {
 
   setWhatsappSessionManager(manager: any) {
     this.whatsappSessionManager = manager;
+  }
+
+  /**
+   * Execute SEND_PIX node
+   */
+  private async executeSendPix(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    sessionId?: string,
+    contactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as PixConfig;
+
+    // Interpolate config
+    const interpolatedConfig: PixConfig = {
+      ...config,
+      chavePix: this.contextService.interpolate(config.chavePix, context),
+      nomeRecebedor: this.contextService.interpolate(config.nomeRecebedor, context),
+      valor: this.contextService.interpolate(config.valor, context),
+      descricao: config.descricao ? this.contextService.interpolate(config.descricao, context) : undefined,
+      mensagemCustom: config.mensagemCustom ? this.contextService.interpolate(config.mensagemCustom, context) : undefined,
+    };
+
+    // Store config for later use in resume phase
+    this.contextService.setVariable(context, '_pixConfig', interpolatedConfig);
+
+    // Calculate expiry 
+    const timeoutSeconds = (config.timeoutMinutos || 30) * 60;
+    const expiresAt = new Date(Date.now() + timeoutSeconds * 1000).toISOString();
+    this.contextService.setVariable(context, '_pixExpiresAt', expiresAt);
+
+    // Store in output
+    this.contextService.setOutput(context, {
+      pixConfig: interpolatedConfig,
+      expiresAt
+    });
+
+    return {
+      nextNodeId: null, // Pausing
+      shouldWait: true,
+      waitTimeoutSeconds: timeoutSeconds,
+      onTimeout: 'GOTO_NODE', // We'll handle routing in ExecutionEngine
+      messageToSend: sessionId && contactPhone ? {
+        sessionId,
+        contactPhone,
+        message: JSON.stringify({ type: 'pix', config: interpolatedConfig }),
+      } : undefined,
+    };
   }
 
   /**
@@ -125,6 +175,9 @@ export class NodeExecutorService {
 
       case WorkflowNodeType.LOOP:
         return this.executeLoop(node, context, edges);
+
+      case WorkflowNodeType.SEND_PIX:
+        return this.executeSendPix(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.COMMAND:
       case 'COMMAND':

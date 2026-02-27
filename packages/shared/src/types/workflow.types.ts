@@ -20,6 +20,7 @@ export enum WorkflowNodeType {
   COMMAND = 'COMMAND',
   PIX_RECOGNITION = 'PIX_RECOGNITION',
   RMKT = 'RMKT',
+  SEND_PIX = 'SEND_PIX',
   END = 'END',
 }
 
@@ -330,5 +331,15 @@ export interface RmktConfig {
   sendAudioAsVoice?: boolean;
   retries?: number; // default 2
   retryDelayMs?: number; // default 30000
+}
+
+export interface PixConfig {
+  chavePix: string;          // chave PIX (email, CPF, tel, aleatória)
+  nomeRecebedor: string;     // nome que aparece no PIX
+  valor: string;             // valor fixo ou variável ex: {{valor}}
+  descricao?: string;        // descrição do pagamento
+  mensagemCustom?: string;   // mensagem antes do código PIX
+  timeoutMinutos: number;    // tempo limite de espera (padrão: 30)
+  palavrasChave?: string[];  // palavras que confirmam pagamento
 }
 

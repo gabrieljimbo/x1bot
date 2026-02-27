@@ -362,6 +362,45 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  async sendPix(sessionId: string, contactPhone: string, config: PixConfig): Promise<void> {
+    const sessionClient = this.resolveSessionClient(sessionId);
+
+    if (!sessionClient) {
+      throw new Error('Session not found');
+    }
+
+    if (sessionClient.status !== WhatsappSessionStatus.CONNECTED) {
+      throw new Error('Session not connected');
+    }
+
+    const jid = this.formatJid(contactPhone);
+
+    const formattedMessage = `💰 *${config.descricao || 'Cobrança PIX'}*
+
+${config.mensagemCustom || ''}
+
+Valor: *R$ ${config.valor}*
+Recebedor: ${config.nomeRecebedor}
+
+━━━━━━━━━━━━━━━━━
+📋 *Chave PIX:*
+${config.chavePix}
+━━━━━━━━━━━━━━━━━
+
+Após o pagamento, envie o comprovante aqui. ✅
+⏱ _Válido por ${config.timeoutMinutos} minutos._`;
+
+    await this.messageQueue.enqueue(
+      sessionId,
+      jid,
+      sessionClient.socket,
+      { type: 'text', payload: { text: formattedMessage } },
+      async () => {
+        await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
+      }
+    );
+  }
+
   /**
    * Send WhatsApp media (image, video, audio, document)
    */

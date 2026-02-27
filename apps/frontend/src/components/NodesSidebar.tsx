@@ -59,6 +59,15 @@ export default function NodesSidebar({ onAddNode, onClose }: NodesSidebarProps) 
         description: 'Envia imagem, vídeo, áudio ou documento'
       },
       {
+        type: 'SEND_PIX' as WorkflowNodeType,
+        label: 'Cobrar PIX',
+        icon: '💰',
+        color: 'from-green-500 to-green-600',
+        bgColor: 'bg-[#1a2e1a]',
+        borderColor: 'border-[#3b7d3b]',
+        description: 'Envia cobrança PIX e aguarda comprovante'
+      },
+      {
         type: 'SEND_BUTTONS' as WorkflowNodeType,
         label: 'Enviar Botões',
         icon: '🔘',

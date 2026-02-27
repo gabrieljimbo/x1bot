@@ -60,6 +60,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#3b7d7d]',
     iconBg: 'bg-gradient-to-br from-teal-500 to-teal-600',
   },
+  'SEND_PIX': {
+    label: 'Cobrar PIX',
+    subtitle: 'AÇÃO',
+    icon: '💰',
+    bgColor: 'bg-[#1a2e1a]',
+    borderColor: 'border-[#3b7d3b]',
+    iconBg: 'bg-gradient-to-br from-green-500 to-green-600',
+  },
   'HTTP_REQUEST': {
     label: 'HTTP Request',
     subtitle: 'AÇÃO',
@@ -211,6 +219,7 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
   const isSwitch = data.type === 'SWITCH'
   const isLoop = data.type === 'LOOP'
   const isButtons = data.type === 'SEND_BUTTONS'
+  const isPix = data.type === 'SEND_PIX'
 
   // Get switch rules for dynamic handles
   const switchRules = isSwitch && data.config.rules ? data.config.rules : []
@@ -387,6 +396,11 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
       const icons = { text: '📝', image: '📸', audio: '🎵' }
       const unitLabels = { seconds: 's', minutes: 'min', hours: 'h', days: 'd' }
       return `⏱ ${amount}${unitLabels[unit as keyof typeof unitLabels]} → ${icons[type as keyof typeof icons]}`
+    }
+    if (data.type === 'SEND_PIX') {
+      const valor = data.config.valor || '?'
+      const timeout = data.config.timeoutMinutos || 30
+      return `💰 R$ ${valor} • ⏱ ${timeout}min`
     }
     return null
   }
@@ -633,6 +647,31 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
                 <span className="text-yellow-400">Def</span>
               </div>
             </>
+          ) : isPix ? (
+            <div className="absolute -right-3 top-0 bottom-0 flex flex-col justify-around py-4 pointer-events-none w-24">
+              <div className="relative flex items-center justify-end translate-x-3">
+                <span className="mr-2 text-[10px] font-bold text-green-400 bg-[#0f172a] px-1.5 py-0.5 rounded border border-green-500/30 whitespace-nowrap shadow-sm backdrop-blur-sm">
+                  PAGO
+                </span>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id="paid"
+                  className="w-3 h-3 !bg-green-500 border-2 border-[#1a1c2e] hover:!bg-green-400 transition-colors !cursor-crosshair pointer-events-auto"
+                />
+              </div>
+              <div className="relative flex items-center justify-end translate-x-3">
+                <span className="mr-2 text-[10px] font-bold text-orange-400 bg-[#0f172a] px-1.5 py-0.5 rounded border border-orange-500/30 whitespace-nowrap shadow-sm backdrop-blur-sm">
+                  TIMEOUT
+                </span>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id="timeout"
+                  className="w-3 h-3 !bg-orange-500 border-2 border-[#1a1c2e] hover:!bg-orange-400 transition-colors !cursor-crosshair pointer-events-auto"
+                />
+              </div>
+            </div>
           ) : isLoop ? (
             <>
               {/* Loop iteration handle (top) */}

@@ -1393,7 +1393,7 @@ export class ExecutionEngineService implements OnModuleInit {
           });
         } else {
           // GOTO_NODE: resume execution from the specified target node
-          console.log(`[WAIT_REPLY] Timeout GOTO_NODE ${timeoutTargetNodeId} for execution ${executionId}`);
+          console.log(`[WAIT_REPLY] Timeout GOTO_NODE logic for execution ${executionId}`);
 
           const workflowData = await this.prisma.workflow.findFirst({
             where: { id: recheckExecution.workflowId, tenantId: recheckExecution.tenantId },
@@ -1415,12 +1415,30 @@ export class ExecutionEngineService implements OnModuleInit {
             edges: workflowData.edges as any,
           };
 
+          // Determine target node ID
+          let finalTargetNodeId = timeoutTargetNodeId;
+          const currentNode = workflow.nodes.find(n => n.id === recheckExecution.currentNodeId);
+
+          if (currentNode?.type === WorkflowNodeType.SEND_PIX) {
+            const timeoutEdge = workflow.edges.find(e => e.source === currentNode.id && e.condition === 'timeout');
+            if (timeoutEdge) {
+              finalTargetNodeId = timeoutEdge.target;
+              console.log(`[WAIT_REPLY] SEND_PIX timeout routing to edge: ${finalTargetNodeId}`);
+            }
+          }
+
+          if (!finalTargetNodeId) {
+            console.log(`[WAIT_REPLY] No target node for timeout, completing execution ${executionId}`);
+            await this.completeExecution(recheckExecution, 'Timeout reached (no target node)');
+            return;
+          }
+
           // Update execution to point to the timeout target node
-          recheckExecution.currentNodeId = timeoutTargetNodeId;
+          recheckExecution.currentNodeId = finalTargetNodeId;
           recheckExecution.status = ExecutionStatus.RUNNING;
           await this.executionService.updateExecution(executionId, {
             status: ExecutionStatus.RUNNING,
-            currentNodeId: timeoutTargetNodeId,
+            currentNodeId: finalTargetNodeId,
             context: recheckExecution.context,
           });
 
