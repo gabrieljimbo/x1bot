@@ -656,7 +656,7 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
                 <Handle
                   type="source"
                   position={Position.Right}
-                  id="paid"
+                  id="success"
                   className="w-3 h-3 !bg-green-500 border-2 border-[#1a1c2e] hover:!bg-green-400 transition-colors !cursor-crosshair pointer-events-auto"
                 />
               </div>

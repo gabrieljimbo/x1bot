@@ -427,6 +427,42 @@ export class ExecutionEngineService implements OnModuleInit {
         }
       }
 
+      // Process reply if current node is SEND_PIX
+      if (currentNode.type === WorkflowNodeType.SEND_PIX) {
+        const config = currentNode.config as PixConfig;
+        const replyText = message.trim().toLowerCase();
+
+        // Check if message matches keywords (or if any message matches)
+        const keywords = config.palavrasChave || [];
+        const isMatch = keywords.length === 0 || keywords.some(k => replyText.includes(k.toLowerCase()));
+
+        if (isMatch) {
+          console.log(`[RESUME] SEND_PIX matched payment confirmation for execution ${execution.id}`);
+
+          // Cancel timeout in Redis
+          const timeoutKey = `execution:timeout:${execution.id}`;
+          await this.redis.delete(timeoutKey).catch(() => { });
+
+          // Send confirmation message if configured
+          if (config.mensagemConfirmacao) {
+            await this.sendMessageWithRetry({
+              sessionId: execution.sessionId,
+              contactPhone: execution.contactPhone,
+              message: config.mensagemConfirmacao
+            });
+          }
+
+          // Move to success output
+          const successEdge = workflow.edges.find(e => e.source === currentNode.id && e.condition === 'success');
+          execution.currentNodeId = successEdge ? successEdge.target : null;
+        } else {
+          // No match, stay in current node (still waiting)
+          console.log(`[RESUME] SEND_PIX message "${message}" did not match keywords, staying in node`);
+          await this.redis.releaseLock(lockKey);
+          return;
+        }
+      }
+
       // Update status to RUNNING
       execution.status = ExecutionStatus.RUNNING;
       await this.executionService.updateExecution(execution.id, {
@@ -1421,10 +1457,45 @@ export class ExecutionEngineService implements OnModuleInit {
           const currentNode = workflow.nodes.find(n => n.id === recheckExecution.currentNodeId);
 
           if (currentNode?.type === WorkflowNodeType.SEND_PIX) {
+            const config = currentNode.config as PixConfig;
+
+            // Handle Auto-Retry
+            if (config.autoRetry) {
+              const currentRetry = (recheckExecution.context.variables as any)._pixRetryCount || 0;
+              const maxRetry = config.retryCount || 1;
+
+              if (currentRetry < maxRetry) {
+                console.log(`[WAIT_REPLY] SEND_PIX auto-retry ${currentRetry + 1}/${maxRetry} for execution ${executionId}`);
+
+                // Increment retry count
+                recheckExecution.context.variables._pixRetryCount = currentRetry + 1;
+
+                // Restart node execution
+                recheckExecution.status = ExecutionStatus.RUNNING;
+                await this.executionService.updateExecution(executionId, {
+                  status: ExecutionStatus.RUNNING,
+                  context: recheckExecution.context,
+                });
+
+                await this.continueExecution(recheckExecution, workflow);
+                return;
+              }
+            }
+
             const timeoutEdge = workflow.edges.find(e => e.source === currentNode.id && e.condition === 'timeout');
+
             if (timeoutEdge) {
               finalTargetNodeId = timeoutEdge.target;
               console.log(`[WAIT_REPLY] SEND_PIX timeout routing to edge: ${finalTargetNodeId}`);
+
+              // Send timeout message if configured
+              if (config.mensagemTimeout) {
+                await this.sendMessageWithRetry({
+                  sessionId: recheckExecution.sessionId,
+                  contactPhone: recheckExecution.contactPhone,
+                  message: config.mensagemTimeout
+                });
+              }
             }
           }
 

@@ -341,5 +341,9 @@ export interface PixConfig {
   mensagemCustom?: string;   // mensagem antes do código PIX
   timeoutMinutos: number;    // tempo limite de espera (padrão: 30)
   palavrasChave?: string[];  // palavras que confirmam pagamento
+  mensagemConfirmacao?: string;
+  mensagemTimeout?: string;
+  autoRetry?: boolean;
+  retryCount?: number;
 }
 

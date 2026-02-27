@@ -1618,6 +1618,147 @@ export default function NodeConfigModal({
           </div>
         )
 
+      case 'SEND_PIX':
+        return (
+          <div className="space-y-6">
+            <div className="bg-[#1a2e1a] border border-green-700/30 rounded-lg p-4">
+              <div className="flex items-start gap-4">
+                <div className="text-3xl">💰</div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-white mb-1">
+                    Cobrar PIX
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Envia uma cobrança PIX e aguarda um comprovante ou mensagem de confirmação.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-2 text-gray-200">
+                  Chave PIX
+                </label>
+                <input
+                  type="text"
+                  value={config.chavePix || ''}
+                  onChange={(e) => setConfig({ ...config, chavePix: e.target.value })}
+                  placeholder="E-mail, CPF, Tel ou Chave Aleatória"
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">
+                  Nome do Recebedor
+                </label>
+                <input
+                  type="text"
+                  value={config.nomeRecebedor || ''}
+                  onChange={(e) => setConfig({ ...config, nomeRecebedor: e.target.value })}
+                  placeholder="Nome que aparece no PIX"
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">
+                  Valor (R$)
+                </label>
+                <input
+                  type="text"
+                  value={config.valor || ''}
+                  onChange={(e) => setConfig({ ...config, valor: e.target.value })}
+                  placeholder="Ex: 50.00 ou {{valor}}"
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-gray-200">
+                Descrição (Opcional)
+              </label>
+              <input
+                type="text"
+                value={config.descricao || ''}
+                onChange={(e) => setConfig({ ...config, descricao: e.target.value })}
+                placeholder="Ex: Pagamento Pedido #123"
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-gray-200">
+                Mensagem Personalizada (Opcional)
+              </label>
+              <textarea
+                value={config.mensagemCustom || ''}
+                onChange={(e) => setConfig({ ...config, mensagemCustom: e.target.value })}
+                placeholder="Ex: Olá! Aqui está o seu link para pagamento:"
+                rows={3}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white resize-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">
+                  Timeout (Minutos)
+                </label>
+                <input
+                  type="number"
+                  value={config.timeoutMinutos || 30}
+                  onChange={(e) => setConfig({ ...config, timeoutMinutos: parseInt(e.target.value) || 30 })}
+                  min="1"
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">
+                  Palavras-chave (Confirmam pgto)
+                </label>
+                <input
+                  type="text"
+                  value={config.palavrasChave?.join(', ') || ''}
+                  onChange={(e) => setConfig({ ...config, palavrasChave: e.target.value.split(',').map(s => s.trim()).filter(s => s !== '') })}
+                  placeholder="paguei, pix, ok"
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Separadas por vírgula. Se vazio, qualquer resposta confirma.
+                </p>
+              </div>
+            </div>
+
+            {/* MESSAGE PREVIEW */}
+            <div className="mt-8 pt-6 border-t border-gray-700">
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-4 tracking-widest">
+                Preview da Mensagem
+              </label>
+              <div className="bg-[#0b141a] rounded-lg p-4 font-sans text-[14px] leading-relaxed relative overflow-hidden ring-1 ring-white/10 shadow-xl">
+                <div className="text-[#e9edef] whitespace-pre-wrap">
+                  {`💰 *${config.descricao || 'Cobrança PIX'}*\n\n`}
+                  {config.mensagemCustom ? `${config.mensagemCustom}\n\n` : ''}
+                  {`Valor: *R$ ${config.valor || '0.00'}*\n`}
+                  {`Recebedor: ${config.nomeRecebedor || '...'}\n\n`}
+                  {`━━━━━━━━━━━━━━━━━\n`}
+                  {`📋 *Chave PIX:*\n`}
+                  {`${config.chavePix || '...'}\n`}
+                  {`━━━━━━━━━━━━━━━━━\n\n`}
+                  {`Após o pagamento, envie o comprovante aqui. ✅\n`}
+                  {`⏱ _Válido por ${config.timeoutMinutos || 30} minutos._`}
+                </div>
+                <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">
+                  12:00 ✓✓
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+
       case 'LOOP':
         return (
           <div className="space-y-6">
@@ -4170,14 +4311,89 @@ return {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {activeTab === 'parameters' ? renderConfigFields() : (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="text-sm text-gray-400">
-                <p>Additional settings for this node.</p>
+                <p>Configurações adicionais para este node.</p>
               </div>
+
+              {node.type === WorkflowNodeType.SEND_PIX && (
+                <div className="space-y-6">
+                  <div className="bg-[#151515] border border-gray-700 rounded-lg p-4 space-y-4">
+                    <h3 className="text-sm font-semibold text-gray-200 border-b border-gray-700 pb-2">Mensagens de Resposta</h3>
+
+                    <div>
+                      <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                        Mensagem ao receber comprovante
+                      </label>
+                      <textarea
+                        value={config.mensagemConfirmacao || ''}
+                        onChange={(e) => setConfig({ ...config, mensagemConfirmacao: e.target.value })}
+                        placeholder="✅ Comprovante recebido! Em breve confirmaremos seu pagamento."
+                        rows={2}
+                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                        Mensagem ao expirar (Timeout)
+                      </label>
+                      <textarea
+                        value={config.mensagemTimeout || ''}
+                        onChange={(e) => setConfig({ ...config, mensagemTimeout: e.target.value })}
+                        placeholder="⏰ Seu PIX expirou. Entre em contato para gerar um novo."
+                        rows={2}
+                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-[#151515] border border-gray-700 rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-200">Reenviar PIX automaticamente</h3>
+                        <p className="text-[10px] text-gray-500">Reenvia a cobrança se o tempo expirar sem pagamento</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setConfig({ ...config, autoRetry: !config.autoRetry })}
+                        className={`w-12 h-6 rounded-full transition-all relative ${config.autoRetry ? 'bg-primary' : 'bg-gray-700'}`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${config.autoRetry ? 'left-7' : 'left-1'}`} />
+                      </button>
+                    </div>
+
+                    {config.autoRetry && (
+                      <div className="pt-2">
+                        <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                          Número de tentativas de reenvio
+                        </label>
+                        <input
+                          type="number"
+                          value={config.retryCount || 1}
+                          onChange={(e) => setConfig({ ...config, retryCount: parseInt(e.target.value) || 1 })}
+                          min="1"
+                          max="5"
+                          className="w-24 px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="bg-[#151515] border border-gray-700 rounded p-4">
-                <label className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Always Output Data</span>
-                  <input type="checkbox" className="w-4 h-4" />
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div>
+                    <span className="text-sm font-medium">Always Output Data</span>
+                    <p className="text-[10px] text-gray-500">Garante que o node sempre retorne um objeto de output</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={config.alwaysOutputData}
+                    onChange={(e) => setConfig({ ...config, alwaysOutputData: e.target.checked })}
+                    className="w-4 h-4 rounded border-gray-700 bg-black text-primary focus:ring-0"
+                  />
                 </label>
               </div>
             </div>
