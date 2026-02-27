@@ -58,7 +58,8 @@ async function main() {
   console.log('Created superadmin tenant:', superAdminTenant)
 
   // ── Super Admin User ────────────────────────────────────
-  const superAdminPassword = await bcrypt.hash('@superadmin123', 10)
+  const plainSuperAdminPassword = process.env.SUPERADMIN_PASSWORD || '@superadmin123'
+  const superAdminPassword = await bcrypt.hash(plainSuperAdminPassword, 10)
   const superAdminUser = await prisma.user.upsert({
     where: {
       tenantId_email: {
@@ -67,7 +68,6 @@ async function main() {
       },
     },
     update: {
-      password: superAdminPassword,
       isActive: true,
       role: 'SUPER_ADMIN',
     } as any,
@@ -111,7 +111,6 @@ async function main() {
       },
     },
     update: {
-      password: defaultPassword,
       isActive: true,
       role: 'ADMIN',
     } as any,
