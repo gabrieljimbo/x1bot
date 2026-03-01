@@ -109,26 +109,28 @@ export default function ExecutionHistory({
                       {execution.status}
                     </span>
                     <span className="text-xs text-gray-500">
-                      {execution.createdAt 
+                      {execution.createdAt
                         ? new Date(execution.createdAt).toLocaleString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
                         : 'N/A'}
                     </span>
                   </div>
-                  
+
                   <div className="text-xs text-gray-400 space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">Contato:</span>
-                      <span className="font-mono">{execution.contactId.split('@')[0]}</span>
+                      <span className="font-mono">
+                        {(execution.contactPhone || execution.contactId || '')?.split('@')[0] || 'N/A'}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500">Sessão:</span>
-                      <span className="font-mono">{execution.sessionId.substring(0, 8)}...</span>
+                      <span className="font-mono">{execution.sessionId?.substring(0, 8) || 'N/A'}...</span>
                     </div>
                   </div>
 
