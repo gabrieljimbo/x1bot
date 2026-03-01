@@ -381,7 +381,8 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     const jid = this.formatJid(contactPhone);
 
-    const formattedMessage = `💰 *${config.descricao || 'Cobrança PIX'}*
+    const timeoutMin = config.timeoutMinutos || 30;
+    const formattedMessage = `💰 *${config.descricao || 'Dados para pagamento'}*
 
 ${config.mensagemCustom || ''}
 
@@ -390,11 +391,12 @@ Recebedor: ${config.nomeRecebedor}
 
 ━━━━━━━━━━━━━━━━━
 📋 *Chave PIX:*
-${config.chavePix}
-━━━━━━━━━━━━━━━━━
 
+\`${config.chavePix}\`
+
+━━━━━━━━━━━━━━━━━
 Após o pagamento, envie o comprovante aqui. ✅
-⏱ _Válido por ${config.timeoutMinutos} minutos._`;
+⏱ _Válido por ${timeoutMin} minutos._`;
 
     await this.messageQueue.enqueue(
       sessionId,
