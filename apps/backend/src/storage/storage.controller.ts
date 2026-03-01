@@ -91,23 +91,19 @@ export class StorageController {
       }
     }
 
-    // Upload to MinIO
+    // Upload to MinIO (returns objectName directly)
     const result = await this.storageService.uploadMedia(
       file.buffer,
       file.mimetype,
       file.originalname,
     );
 
-    // Extract objectName from the URL for later deletion
-    const urlParts = result.url.split('/');
-    const objectName = `media/${urlParts[urlParts.length - 1]}`;
-
     // Save to DB
     const mediaFile = await this.prisma.mediaFile.create({
       data: {
         tenantId,
         url: result.url,
-        objectName,
+        objectName: result.objectName,
         filename: result.fileName,
         originalName: file.originalname,
         size: file.size,
@@ -162,19 +158,35 @@ export class StorageController {
   }
 
   /**
-   * Serve a file from MinIO (existing endpoint)
+   * Serve a file from MinIO — searches all subfolders
    */
   @Get('files/:filename')
   async getFile(@Param('filename') filename: string, @Res() res: Response) {
     try {
-      const objectName = `media/${filename}`;
+      // Search across all subfolders for the file
+      const subfolders = [
+        'media/images',
+        'media/audio',
+        'media/video',
+        'media/documents',
+        'media', // legacy flat path
+      ];
 
-      const exists = await this.storageService.fileExists(objectName);
-      if (!exists) {
+      let foundPath: string | null = null;
+      for (const folder of subfolders) {
+        const objectName = `${folder}/${filename}`;
+        const exists = await this.storageService.fileExists(objectName);
+        if (exists) {
+          foundPath = objectName;
+          break;
+        }
+      }
+
+      if (!foundPath) {
         throw new NotFoundException(`File ${filename} not found`);
       }
 
-      const stream = await this.storageService.getFileStream(objectName);
+      const stream = await this.storageService.getFileStream(foundPath);
 
       res.setHeader('Content-Type', this.getContentType(filename));
       res.setHeader('Cache-Control', 'public, max-age=31536000');

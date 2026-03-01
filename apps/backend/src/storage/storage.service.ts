@@ -4,6 +4,14 @@ import * as Minio from 'minio';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
 
+// Map MIME type prefix to subfolder
+const MEDIA_FOLDERS: Record<string, string> = {
+  image: 'media/images',
+  video: 'media/video',
+  audio: 'media/audio',
+  application: 'media/documents',
+};
+
 @Injectable()
 export class StorageService implements OnModuleInit {
   private readonly logger = new Logger(StorageService.name);
@@ -13,14 +21,14 @@ export class StorageService implements OnModuleInit {
   private initializationPromise: Promise<void> | null = null;
 
   constructor(private configService: ConfigService) {
-    this.bucket = this.configService.get('MINIO_BUCKET_NAME', 'whatsapp-media');
+    this.bucket = this.configService.get('MINIO_BUCKET', 'x1bot');
 
     const endpoint = this.configService.get('MINIO_ENDPOINT', 'minio_vps');
     const port = Number(this.configService.get('MINIO_PORT', '9000'));
     const useSSL = this.configService.get('MINIO_USE_SSL', 'false') === 'true';
 
     this.logger.log(
-      `Initializing MinIO client: ${endpoint}:${port} (SSL: ${useSSL})`,
+      `Initializing MinIO client: ${endpoint}:${port} (SSL: ${useSSL}) bucket: ${this.bucket}`,
     );
 
     this.client = new Minio.Client({
@@ -28,10 +36,10 @@ export class StorageService implements OnModuleInit {
       port: port,
       useSSL: useSSL,
       accessKey: this.configService.get('MINIO_ACCESS_KEY', 'minioadmin'),
-      secretKey: this.configService.get('MINIO_SECRET_KEY', 'minioadmin'),
+      secretKey: this.configService.get('MINIO_SECRET_KEY', 'minioadmin123'),
       pathStyle: true,
       region: 'us-east-1',
-      partSize: 5 * 1024 * 1024, // 5MB part size
+      partSize: 5 * 1024 * 1024,
     });
   }
 
@@ -44,7 +52,6 @@ export class StorageService implements OnModuleInit {
       this.logger.error(
         'MinIO operations will be attempted lazily on first use',
       );
-      // Don't throw - allow app to start even if MinIO is not ready
     }
   }
 
@@ -56,7 +63,6 @@ export class StorageService implements OnModuleInit {
       return;
     }
 
-    // If initialization is in progress, wait for it
     if (this.initializationPromise) {
       return this.initializationPromise;
     }
@@ -72,89 +78,70 @@ export class StorageService implements OnModuleInit {
   }
 
   private async doEnsureBucketExists(): Promise<void> {
-    this.logger.log(`Ensuring bucket "${this.bucket}" exists...`);
+    this.logger.log(`Checking bucket "${this.bucket}"...`);
 
     try {
       const exists = await this.client.bucketExists(this.bucket);
 
-      if (!exists) {
-        this.logger.log(`Bucket "${this.bucket}" does not exist, creating...`);
-        await this.client.makeBucket(this.bucket, 'us-east-1');
-        
-        // Set bucket policy to allow public read access
-        const policy = {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: { AWS: ['*'] },
-              Action: ['s3:GetObject'],
-              Resource: [`arn:aws:s3:::${this.bucket}/*`],
-            },
-          ],
-        };
-        await this.client.setBucketPolicy(this.bucket, JSON.stringify(policy));
-        
-        this.logger.log(`Bucket "${this.bucket}" created successfully`);
+      if (exists) {
+        this.logger.log(`Bucket "${this.bucket}" exists, ready to use`);
       } else {
-        this.logger.log(`Bucket "${this.bucket}" already exists`);
+        this.logger.warn(
+          `Bucket "${this.bucket}" does not exist. It should be pre-created.`,
+        );
       }
     } catch (error: any) {
-      this.logger.error(
-        `Failed to ensure bucket exists: ${error.message || 'Unknown error'}`,
-      );
-      this.logger.error(`Error code: ${error.code || 'N/A'}`);
-
-      // Em Docker, se chegou aqui, o bucket provavelmente já existe
+      // In Docker, hostname resolution may cause issues with bucketExists
+      // Assume bucket exists and proceed
       this.logger.warn(
-        `Skipping bucket check due to MinIO SDK hostname limitations`,
+        `Could not verify bucket "${this.bucket}": ${error.message}. Assuming it exists.`,
       );
-      throw error;
     }
+  }
+
+  /**
+   * Get the subfolder for a given MIME type
+   */
+  private getSubfolderForMimeType(mimeType: string): string {
+    const prefix = mimeType.split('/')[0];
+    return MEDIA_FOLDERS[prefix] || 'media/documents';
   }
 
   /**
    * Get public URL for an object
    */
   getPublicUrl(objectName: string): string {
-    // Prioridade: NGROK_URL > BACKEND_URL > MINIO_PUBLIC_URL > fallback MinIO
     const ngrokUrl = this.configService.get('NGROK_URL');
     const backendUrl = this.configService.get('BACKEND_URL');
     const minioPublicUrl = this.configService.get('MINIO_PUBLIC_URL');
 
-    // Extrair apenas o nome do arquivo (sem path do bucket)
+    // Extract just the filename for backend proxy routes
     const filename = objectName.split('/').pop() || objectName;
 
     if (ngrokUrl) {
-      // Usar URL do ngrok se configurada (para desenvolvimento/testes)
       this.logger.debug(`Using ngrok URL: ${ngrokUrl}`);
       return `${ngrokUrl}/media/files/${filename}`;
     }
 
     if (backendUrl) {
-      // Usar BACKEND_URL se configurado (produção)
       return `${backendUrl}/media/files/${filename}`;
     }
 
     if (minioPublicUrl) {
-      // Usar MINIO_PUBLIC_URL se configurado
       return `${minioPublicUrl}/${this.bucket}/${objectName}`;
     }
 
-    // Fallback para URL direta do MinIO (pode não funcionar se não for público)
-    const endpoint = this.configService.get('MINIO_ENDPOINT', 'localhost');
+    // Fallback: direct MinIO URL with full bucket/path
+    const endpoint = this.configService.get('MINIO_ENDPOINT', 'minio_vps');
     const port = Number(this.configService.get('MINIO_PORT', '9000'));
     const useSSL = this.configService.get('MINIO_USE_SSL', 'false') === 'true';
     const protocol = useSSL ? 'https' : 'http';
-    
-    this.logger.warn(
-      `No public URL configured, using MinIO direct URL (may not work)`,
-    );
+
     return `${protocol}://${endpoint}:${port}/${this.bucket}/${objectName}`;
   }
 
   /**
-   * Upload file to MinIO (new method compatible with example)
+   * Upload file to MinIO
    */
   async uploadFile(
     buffer: Buffer,
@@ -162,7 +149,7 @@ export class StorageService implements OnModuleInit {
     mimeType: string,
   ): Promise<string> {
     await this.ensureBucketExists();
-    
+
     await this.client.putObject(
       this.bucket,
       objectName,
@@ -198,21 +185,27 @@ export class StorageService implements OnModuleInit {
   }
 
   /**
-   * Upload media file to MinIO (legacy method - maintained for compatibility)
+   * Upload media file to MinIO with folder structure based on type
+   * Saves to: media/images/, media/audio/, media/video/, or media/documents/
    */
   async uploadMedia(
     buffer: Buffer,
     mimeType: string,
     originalFileName?: string,
-  ): Promise<{ url: string; fileName: string; size: number }> {
+  ): Promise<{ url: string; fileName: string; objectName: string; size: number }> {
     await this.ensureBucketExists();
 
     // Generate unique filename
-    const extension = this.getExtensionFromMimeType(mimeType) || 
-                     this.getExtensionFromFileName(originalFileName) || 
-                     'bin';
+    const extension = this.getExtensionFromMimeType(mimeType) ||
+      this.getExtensionFromFileName(originalFileName) ||
+      'bin';
     const fileName = `${randomUUID()}.${extension}`;
-    const objectName = `media/${fileName}`;
+
+    // Determine subfolder based on MIME type
+    const subfolder = this.getSubfolderForMimeType(mimeType);
+    const objectName = `${subfolder}/${fileName}`;
+
+    this.logger.log(`Uploading to ${this.bucket}/${objectName} (${mimeType}, ${buffer.length} bytes)`);
 
     // Upload to MinIO
     await this.client.putObject(
@@ -231,15 +224,17 @@ export class StorageService implements OnModuleInit {
     return {
       url,
       fileName: originalFileName || fileName,
+      objectName,
       size: buffer.length,
     };
   }
 
   /**
-   * Delete media file from MinIO (legacy method - maintained for compatibility)
+   * Delete media file from MinIO
    */
   async deleteMedia(objectName: string): Promise<void> {
     await this.ensureBucketExists();
+    this.logger.log(`Deleting ${this.bucket}/${objectName}`);
     await this.client.removeObject(this.bucket, objectName);
   }
 
@@ -260,6 +255,7 @@ export class StorageService implements OnModuleInit {
       'audio/mpeg': 'mp3',
       'audio/mp4': 'm4a',
       'audio/ogg': 'ogg',
+      'audio/aac': 'aac',
       'audio/wav': 'wav',
       'audio/webm': 'webm',
       'application/pdf': 'pdf',
