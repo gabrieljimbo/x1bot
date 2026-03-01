@@ -15,6 +15,9 @@ cd /app/apps/backend
 echo "📦 Running database migrations..."
 npx prisma migrate deploy --schema prisma/schema.prisma
 
+echo "✅ Marking exhaustive migration as applied manually..."
+npx prisma migrate resolve --applied 20260228_fix_all_missing_columns || true
+
 echo "🌱 Running database seeds..."
 node prisma/seed.js || echo "⚠️ Seed failed but continuing..."
 
