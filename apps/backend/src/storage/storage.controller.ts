@@ -1,12 +1,22 @@
 import {
-  Controller, Get, Post, Delete, Param, Res, Query,
-  NotFoundException, BadRequestException,
-  UseInterceptors, UploadedFile,
+  Controller,
+  Post,
+  Get,
+  Delete,
+  Param,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+  NotFoundException,
+  Query,
+  Res,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { StorageService } from './storage.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 // File size limits per media type (in bytes)
 const SIZE_LIMITS: Record<string, number> = {
@@ -39,6 +49,7 @@ export class StorageController {
    * Upload a media file to MinIO
    */
   @Post('upload')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }))
   async uploadMedia(
     @UploadedFile() file: any,
@@ -127,6 +138,7 @@ export class StorageController {
    * Delete a media file from MinIO and DB
    */
   @Delete(':id')
+  @UseGuards(JwtAuthGuard)
   async deleteMedia(
     @Param('id') id: string,
     @Query('tenantId') tenantId: string,

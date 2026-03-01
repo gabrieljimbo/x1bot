@@ -891,9 +891,14 @@ export default function NodeConfigModal({
                           const formData = new FormData()
                           formData.append('file', file)
                           const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                          const token = localStorage.getItem('n9n_token')
+                          const headers: HeadersInit = {}
+                          if (token) {
+                            headers['Authorization'] = `Bearer ${token}`
+                          }
                           const res = await fetch(
                             `${API_URL}/media/upload?tenantId=${tenantId}&mediaType=${mediaType}&nodeId=${node.id}&workflowId=${(node as any).workflowId || ''}`,
-                            { method: 'POST', body: formData }
+                            { method: 'POST', headers, body: formData }
                           )
 
                           if (!res.ok) {
@@ -944,7 +949,12 @@ export default function NodeConfigModal({
                     onClick={async () => {
                       try {
                         const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
-                        await fetch(`${API_URL}/media/${config.uploadedMediaId}?tenantId=${tenantId}`, { method: 'DELETE' })
+                        const token = localStorage.getItem('n9n_token')
+                        const headers: HeadersInit = {}
+                        if (token) {
+                          headers['Authorization'] = `Bearer ${token}`
+                        }
+                        await fetch(`${API_URL}/media/${config.uploadedMediaId}?tenantId=${tenantId}`, { method: 'DELETE', headers })
                       } catch (e) { /* ignore */ }
                       setConfig({
                         ...config,
