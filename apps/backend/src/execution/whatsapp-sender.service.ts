@@ -146,6 +146,21 @@ export class WhatsappSenderService {
   }
 
 
+  /**
+   * Send WhatsApp presence update
+   */
+  async sendPresence(
+    sessionId: string,
+    contactPhone: string,
+    presence: 'composing' | 'recording' | 'paused'
+  ): Promise<void> {
+    if (this.sendPresenceCallback) {
+      await this.sendPresenceCallback(sessionId, contactPhone, presence);
+    } else {
+      console.warn('WhatsApp send presence callback not registered yet');
+    }
+  }
+
 
   /**
    * Register the send pix callback
