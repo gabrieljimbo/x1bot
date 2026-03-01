@@ -52,6 +52,7 @@ export interface NodeExecutionResult {
       fileName?: string;
       sendAudioAsVoice?: boolean;
     };
+    pixConfig?: PixConfig;
   };
 }
 
@@ -107,19 +108,6 @@ export class NodeExecutorService {
       expiresAt
     });
 
-    const mensagem = interpolatedConfig.mensagemCustom
-      ? `${interpolatedConfig.mensagemCustom}\n\n`
-      : '';
-
-    const caption = `${mensagem}💰 *Pagamento*
-Valor: *R$ ${interpolatedConfig.valor}*
-Recebedor: ${interpolatedConfig.nomeRecebedor}
-━━━━━━━━━━━━━━━━━
-📋 *Chave PIX:*
-${interpolatedConfig.chavePix}
-━━━━━━━━━━━━━━━━━
-Após o pagamento, envie o comprovante aqui. ✅`;
-
     return {
       nextNodeId: null, // Pausing
       shouldWait: true,
@@ -128,7 +116,7 @@ Após o pagamento, envie o comprovante aqui. ✅`;
       messageToSend: sessionId && contactPhone ? {
         sessionId,
         contactPhone,
-        message: caption,
+        pixConfig: interpolatedConfig,
       } : undefined,
     };
   }

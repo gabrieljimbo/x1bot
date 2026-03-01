@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PixConfig } from '@n9n/shared';
 
 export interface ButtonData {
   id: string;
@@ -29,6 +30,7 @@ export class WhatsappSenderService {
   private sendListCallback: ((sessionId: string, contactPhone: string, message: string, buttonText: string, sections: ListSection[], footer?: string) => Promise<void>) | null = null;
   private sendMediaCallback: ((sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) => Promise<void>) | null = null;
   private sendPresenceCallback: ((sessionId: string, contactPhone: string, presence: 'composing' | 'recording' | 'paused') => Promise<void>) | null = null;
+  private sendPixCallback: ((sessionId: string, contactPhone: string, config: PixConfig) => Promise<void>) | null = null;
 
   /**
    * Register the send presence callback
@@ -144,18 +146,32 @@ export class WhatsappSenderService {
   }
 
   /**
-   * Send presence update (typing, recording)
+   * Register the send presence callback
    */
-  async sendPresence(sessionId: string, contactPhone: string, presence: 'composing' | 'recording' | 'paused'): Promise<void> {
-    if (!this.sendPresenceCallback) {
-      console.warn('WhatsApp send presence callback not registered yet');
+  registerSendPresence(callback: (sessionId: string, contactPhone: string, presence: 'composing' | 'recording' | 'paused') => Promise<void>) {
+    this.sendPresenceCallback = callback;
+  }
+
+  /**
+   * Register the send pix callback
+   */
+  registerSendPix(callback: (sessionId: string, contactPhone: string, config: PixConfig) => Promise<void>) {
+    this.sendPixCallback = callback;
+  }
+
+  /**
+   * Send WhatsApp PIX message
+   */
+  async sendPix(sessionId: string, contactPhone: string, config: PixConfig): Promise<void> {
+    if (!this.sendPixCallback) {
+      console.warn('WhatsApp send pix callback not registered yet');
       return;
     }
 
     try {
-      await this.sendPresenceCallback(sessionId, contactPhone, presence);
+      await this.sendPixCallback(sessionId, contactPhone, config);
     } catch (error) {
-      console.error('Error sending WhatsApp presence:', error);
+      console.error('Error sending WhatsApp PIX:', error);
       throw error;
     }
   }

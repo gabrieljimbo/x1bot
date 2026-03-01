@@ -99,6 +99,12 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         this.sendPresenceUpdate(sessionId, contactPhone, presence)
     );
 
+    // Register send PIX callback
+    this.whatsappSender.registerSendPix(
+      (sessionId: string, contactPhone: string, config: PixConfig) =>
+        this.sendPix(sessionId, contactPhone, config)
+    );
+
     // Auto-reconnect active sessions with staggered delay
     this.reconnectActiveSessions();
   }
@@ -396,7 +402,36 @@ Após o pagamento, envie o comprovante aqui. ✅
       sessionClient.socket,
       { type: 'text', payload: { text: formattedMessage } },
       async () => {
-        await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
+        try {
+          await sessionClient.socket.sendMessage(jid, {
+            nativeFlowMessage: {
+              messageParamsJson: JSON.stringify({
+                flow_token: 'pix_payment',
+                screens: []
+              }),
+              buttons: [{
+                name: 'pix_copy_and_paste',
+                buttonParamsJson: JSON.stringify({
+                  currency: 'BRL',
+                  total_amount: {
+                    value: Math.round(parseFloat(config.valor.replace(',', '.')) * 100),
+                    offset: 100
+                  },
+                  reference_id: `pix_${Date.now()}`,
+                  type: 'pix',
+                  pix_key: config.chavePix,
+                  merchant_name: config.nomeRecebedor,
+                  expiration_time: (config.timeoutMinutos || 30) * 60
+                })
+              }]
+            }
+          } as any);
+        } catch (error) {
+          console.warn(`[SEND_PIX] Native flow message failed for ${jid}, falling back to text messages`);
+          await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
+          await new Promise(resolve => setTimeout(resolve, 500)); // Short delay
+          await sessionClient.socket.sendMessage(jid, { text: config.chavePix });
+        }
       }
     );
   }

@@ -1139,15 +1139,18 @@ export class ExecutionEngineService implements OnModuleInit {
         fileName?: string;
         sendAudioAsVoice?: boolean;
       };
+      pixConfig?: any;
     },
     maxRetries = 3,
   ): Promise<void> {
-    const { sessionId, contactPhone, message, media } = messageToSend;
+    const { sessionId, contactPhone, message, media, pixConfig } = messageToSend;
     const retryDelays = [2000, 4000, 8000]; // Exponential backoff
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        if (media) {
+        if (pixConfig) {
+          await this.whatsappSender.sendPix(sessionId, contactPhone, pixConfig);
+        } else if (media) {
           await this.whatsappSender.sendMedia(
             sessionId,
             contactPhone,
