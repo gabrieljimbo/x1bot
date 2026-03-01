@@ -107,6 +107,19 @@ export class NodeExecutorService {
       expiresAt
     });
 
+    const mensagem = interpolatedConfig.mensagemCustom
+      ? `${interpolatedConfig.mensagemCustom}\n\n`
+      : '';
+
+    const caption = `${mensagem}💰 *Pagamento*
+Valor: *R$ ${interpolatedConfig.valor}*
+Recebedor: ${interpolatedConfig.nomeRecebedor}
+━━━━━━━━━━━━━━━━━
+📋 *Chave PIX:*
+${interpolatedConfig.chavePix}
+━━━━━━━━━━━━━━━━━
+Após o pagamento, envie o comprovante aqui. ✅`;
+
     return {
       nextNodeId: null, // Pausing
       shouldWait: true,
@@ -115,7 +128,7 @@ export class NodeExecutorService {
       messageToSend: sessionId && contactPhone ? {
         sessionId,
         contactPhone,
-        message: JSON.stringify({ type: 'pix', config: interpolatedConfig }),
+        message: caption,
       } : undefined,
     };
   }
