@@ -23,7 +23,7 @@ export class StorageService implements OnModuleInit {
   constructor(private configService: ConfigService) {
     this.bucket = this.configService.get('MINIO_BUCKET', 'x1bot');
 
-    const endpoint = this.configService.get('MINIO_ENDPOINT', 'minio_vps');
+    const endpoint = this.configService.get('MINIO_ENDPOINT')?.replace(/_/g, '-') || '10.0.1.9';
     const port = Number(this.configService.get('MINIO_PORT', '9000'));
     const useSSL = this.configService.get('MINIO_USE_SSL', 'false') === 'true';
 
@@ -132,7 +132,7 @@ export class StorageService implements OnModuleInit {
     }
 
     // Fallback: direct MinIO URL with full bucket/path
-    const endpoint = this.configService.get('MINIO_ENDPOINT', 'minio_vps');
+    const endpoint = this.configService.get('MINIO_ENDPOINT')?.replace(/_/g, '-') || '10.0.1.9';
     const port = Number(this.configService.get('MINIO_PORT', '9000'));
     const useSSL = this.configService.get('MINIO_USE_SSL', 'false') === 'true';
     const protocol = useSSL ? 'https' : 'http';
