@@ -145,12 +145,7 @@ export class WhatsappSenderService {
     }
   }
 
-  /**
-   * Register the send presence callback
-   */
-  registerSendPresence(callback: (sessionId: string, contactPhone: string, presence: 'composing' | 'recording' | 'paused') => Promise<void>) {
-    this.sendPresenceCallback = callback;
-  }
+
 
   /**
    * Register the send pix callback
