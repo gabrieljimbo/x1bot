@@ -2,6 +2,7 @@ import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Workflow, WorkflowNode, WorkflowEdge, WorkflowNodeType, TriggerManualConfig, WorkflowExecution } from '@n9n/shared';
 import { ExecutionEngineService } from '../execution/execution-engine.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class WorkflowService {
@@ -9,6 +10,7 @@ export class WorkflowService {
     private prisma: PrismaService,
     @Inject(forwardRef(() => ExecutionEngineService))
     private executionEngine: ExecutionEngineService,
+    private storageService: StorageService,
   ) { }
 
   /**
@@ -119,6 +121,25 @@ export class WorkflowService {
    * Delete workflow
    */
   async deleteWorkflow(tenantId: string, workflowId: string): Promise<void> {
+    // Clean up uploaded media files from MinIO
+    const mediaFiles = await this.prisma.mediaFile.findMany({
+      where: { workflowId, tenantId },
+    });
+
+    for (const file of mediaFiles) {
+      try {
+        await this.storageService.deleteMedia(file.objectName);
+      } catch (e) {
+        console.warn(`[WORKFLOW] Failed to delete media ${file.objectName} from MinIO`);
+      }
+    }
+
+    if (mediaFiles.length > 0) {
+      await this.prisma.mediaFile.deleteMany({
+        where: { workflowId, tenantId },
+      });
+    }
+
     await this.prisma.workflow.delete({
       where: {
         id: workflowId,

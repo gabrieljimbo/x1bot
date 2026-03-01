@@ -297,6 +297,25 @@ model ContactTag {
   @@map("contact_tags")
 }
 
+model MediaFile {
+  id           String   @id @default(cuid())
+  tenantId     String
+  url          String
+  objectName   String
+  filename     String
+  originalName String
+  size         Int
+  mimeType     String
+  nodeId       String?
+  workflowId   String?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([nodeId])
+  @@index([workflowId])
+  @@map("media_files")
+}
+
 enum ConversationStatus {
   OPEN
   PENDING
