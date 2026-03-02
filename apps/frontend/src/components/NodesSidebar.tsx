@@ -212,6 +212,15 @@ export default function NodesSidebar({ onAddNode, onClose }: NodesSidebarProps) 
         description: 'Roteia para múltiplos caminhos baseado em regras'
       },
       {
+        type: 'MARK_STAGE' as WorkflowNodeType,
+        label: 'Marcar Etapa',
+        icon: '🚩',
+        color: 'from-orange-400 to-orange-500',
+        bgColor: 'bg-[#2a1a0e]',
+        borderColor: 'border-[#7d5d39]',
+        description: 'Marca uma etapa importante no funil de conversão'
+      },
+      {
         type: 'END' as WorkflowNodeType,
         label: 'Finalizar',
         icon: '🏁',

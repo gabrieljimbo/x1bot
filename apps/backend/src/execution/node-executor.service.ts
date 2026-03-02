@@ -190,6 +190,9 @@ export class NodeExecutorService {
       case WorkflowNodeType.RMKT:
         return await this.executeRmkt(node, context, edges, sessionId, contactPhone);
 
+      case WorkflowNodeType.MARK_STAGE:
+        return this.executeMarkStage(node, context, edges);
+
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
 
@@ -2137,6 +2140,24 @@ functions, etc.)
     return {
       nextNodeId: null, // Will be resumed by processor
       shouldWait: true,
+    };
+  }
+
+  /**
+   * Execute MARK_STAGE node
+   */
+  private executeMarkStage(
+    node: any,
+    context: any,
+    edges: any[],
+  ): any {
+    // This is a passive node for analytics, just move to next node
+    const nextEdge = edges.find((e) => e.source === node.id);
+    const nextNodeId = nextEdge ? nextEdge.target : null;
+
+    return {
+      nextNodeId,
+      shouldWait: false,
     };
   }
 }

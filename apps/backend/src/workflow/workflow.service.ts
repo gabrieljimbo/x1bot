@@ -699,6 +699,7 @@ export class WorkflowService {
         id: node.id,
         name: node.data?.label || node.name || node.type,
         type: node.type,
+        config: node.config,
         count,
         conversionRate: prevCount > 0 ? (count / prevCount) * 100 : 0,
         dropOffRate: prevCount > 0 ? ((prevCount - count) / prevCount) * 100 : 0,

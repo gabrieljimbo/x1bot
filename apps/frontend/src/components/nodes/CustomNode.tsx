@@ -180,6 +180,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#7d3b3b]',
     iconBg: 'bg-gradient-to-br from-red-500 to-red-600',
   },
+  'MARK_STAGE': {
+    label: 'Marcar Etapa',
+    subtitle: 'METRICA',
+    icon: '🚩',
+    bgColor: 'bg-[#2a1a0e]',
+    borderColor: 'border-[#7d5d39]',
+    iconBg: 'bg-gradient-to-br from-orange-400 to-orange-500',
+  },
 }
 
 interface CustomNodeProps {
@@ -401,6 +409,11 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
       const valor = data.config.valor || '?'
       const timeout = data.config.timeoutMinutos || 30
       return `💰 R$ ${valor} • ⏱ ${timeout}min`
+    }
+    if (data.type === 'MARK_STAGE') {
+      const stageName = data.config.stageName || 'Nova Etapa'
+      const emoji = data.config.emoji || '🚩'
+      return `${emoji} Etapa: ${stageName}`
     }
     return null
   }

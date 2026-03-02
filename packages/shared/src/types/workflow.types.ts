@@ -21,6 +21,7 @@ export enum WorkflowNodeType {
   PIX_RECOGNITION = 'PIX_RECOGNITION',
   RMKT = 'RMKT',
   SEND_PIX = 'SEND_PIX',
+  MARK_STAGE = 'MARK_STAGE',
   END = 'END',
 }
 
@@ -346,5 +347,12 @@ export interface PixConfig {
   autoRetry?: boolean;
   retryCount?: number;
   enviarMensagensAutomaticas?: boolean;
+}
+
+export interface MarkStageConfig {
+  stageName: string;
+  color: string;
+  emoji: string;
+  isCustom?: boolean;
 }
 

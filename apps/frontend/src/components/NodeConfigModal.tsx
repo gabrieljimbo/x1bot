@@ -4292,6 +4292,134 @@ return {
           </div>
         )
 
+      case 'MARK_STAGE':
+        const stagePresets = [
+          { name: 'Quente', emoji: '🔥', color: '#ef4444' }, // Red-500
+          { name: 'Frio', emoji: '❄️', color: '#3b82f6' }, // Blue-500
+          { name: 'Pronto pra comprar', emoji: '💰', color: '#22c55e' }, // Green-500
+          { name: 'Interesse', emoji: '👀', color: '#eab308' }, // Yellow-500
+          { name: 'Convertido', emoji: '✅', color: '#00ba7c' }, // Primary
+          { name: 'Perdido', emoji: '❌', color: '#6b7280' }, // Gray-500
+          { name: 'Em dúvida', emoji: '🤔', color: '#f97316' }, // Orange-500
+          { name: 'Aguardando retorno', emoji: '📞', color: '#a855f7' }, // Purple-500
+        ]
+
+        return (
+          <div className="space-y-8">
+            <div>
+              <label className="block text-sm font-medium mb-4 text-gray-200">
+                Escolha uma etapa pré-definida:
+              </label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {stagePresets.map((preset) => (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => setConfig({
+                      ...config,
+                      stageName: preset.name,
+                      emoji: preset.emoji,
+                      color: preset.color,
+                      isCustom: false
+                    })}
+                    className={`
+                      p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2
+                      ${config.stageName === preset.name && !config.isCustom
+                        ? 'border-primary bg-primary/10 shadow-[0_0_15px_rgba(0,186,124,0.2)]'
+                        : 'border-gray-800 bg-[#151515] hover:border-gray-600'
+                      }
+                    `}
+                  >
+                    <span className="text-2xl">{preset.emoji}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-center line-clamp-1">
+                      {preset.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-6 border-t border-gray-800">
+              <div className="flex items-center justify-between mb-4">
+                <label className="text-sm font-medium text-gray-200">
+                  Ou personalize livremente:
+                </label>
+                {!config.isCustom && (
+                  <button
+                    type="button"
+                    onClick={() => setConfig({ ...config, isCustom: true })}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Habilitar edição manual
+                  </button>
+                )}
+              </div>
+
+              <div className={`space-y-6 transition-opacity ${!config.isCustom ? 'opacity-50 pointer-events-none' : ''}`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                      Nome da Etapa
+                    </label>
+                    <input
+                      type="text"
+                      value={config.stageName || ''}
+                      onChange={(e) => setConfig({ ...config, stageName: e.target.value, isCustom: true })}
+                      placeholder="Ex: Lead Qualificado VIP"
+                      className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                      Emoji/Ícone
+                    </label>
+                    <input
+                      type="text"
+                      value={config.emoji || ''}
+                      onChange={(e) => setConfig({ ...config, emoji: e.target.value, isCustom: true })}
+                      placeholder="💡"
+                      className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white text-center text-xl"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium mb-3 text-gray-400">
+                    Cor da Etapa
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="color"
+                      value={config.color || '#00ba7c'}
+                      onChange={(e) => setConfig({ ...config, color: e.target.value, isCustom: true })}
+                      className="w-12 h-12 bg-transparent border-none cursor-pointer rounded overflow-hidden"
+                    />
+                    <input
+                      type="text"
+                      value={config.color || '#00ba7c'}
+                      onChange={(e) => setConfig({ ...config, color: e.target.value, isCustom: true })}
+                      className="flex-1 px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white font-mono text-sm uppercase"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex gap-4 items-start mt-8">
+              <div className={`w-12 h-12 shrink-0 rounded-lg flex items-center justify-center text-2xl shadow-lg`} style={{ backgroundColor: `${config.color || '#00ba7c'}20`, border: `2px solid ${config.color || '#00ba7c'}` }}>
+                {config.emoji || '🚩'}
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white mb-0.5">Preview da Etapa</h4>
+                <p className="text-xs text-gray-400">
+                  Esta etapa aparecerá como <span className="text-white font-medium">"{config.stageName || 'Nova Etapa'}"</span> no funil do Insights.
+                </p>
+              </div>
+            </div>
+          </div>
+        )
+
       default:
         return (
           <div className="text-center py-8">
