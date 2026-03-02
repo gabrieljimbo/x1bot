@@ -13,7 +13,8 @@ import NodesSidebar from '@/components/NodesSidebar'
 import { useAuth } from '@/contexts/AuthContext'
 import { AuthGuard } from '@/components/AuthGuard'
 import AppHeader from '@/components/AppHeader'
-import { Copy, Share2, Info } from 'lucide-react'
+import { Copy, Share2, Info, Layout, BarChart3 } from 'lucide-react'
+import WorkflowInsights from '@/components/WorkflowInsights'
 
 const WorkflowCanvas = dynamic(() => import('@/components/WorkflowCanvas'), {
   ssr: false,
@@ -49,6 +50,7 @@ function WorkflowPageContent() {
   const [previousNodeId, setPreviousNodeId] = useState<string | null>(null)
   const [isViewingHistory, setIsViewingHistory] = useState(false)
   const [historicalExecutionId, setHistoricalExecutionId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'editor' | 'insights'>('editor')
 
   // Sharing states
   const [showShareModal, setShowShareModal] = useState(false)
@@ -746,6 +748,25 @@ function WorkflowPageContent() {
             <span>Add Node</span>
           </button>
 
+          <div className="flex bg-surface border border-border rounded-lg p-1">
+            <button
+              onClick={() => setActiveTab('editor')}
+              className={`px-4 py-1.5 rounded-md text-sm transition flex items-center gap-2 ${activeTab === 'editor' ? 'bg-primary text-black font-medium' : 'text-gray-400 hover:text-white'
+                }`}
+            >
+              <Layout size={16} />
+              Editor
+            </button>
+            <button
+              onClick={() => setActiveTab('insights')}
+              className={`px-4 py-1.5 rounded-md text-sm transition flex items-center gap-2 ${activeTab === 'insights' ? 'bg-primary text-black font-medium' : 'text-gray-400 hover:text-white'
+                }`}
+            >
+              <BarChart3 size={16} />
+              Insights
+            </button>
+          </div>
+
           <button
             onClick={() => setShowHistory(true)}
             className="px-4 py-2 bg-surface border border-border rounded hover:border-primary transition"
@@ -781,48 +802,53 @@ function WorkflowPageContent() {
         </div>
       </div>
 
-      {/* Canvas with Sidebar */}
-      <div className="flex-1 flex relative">
-        {/* Sidebar Overlay */}
-        {showNodesSidebar && (
+      {/* Main Content */}
+      <div className="flex-1 flex relative overflow-hidden">
+        {activeTab === 'editor' ? (
           <>
-            {/* Backdrop */}
-            <div
-              className="absolute inset-0 bg-black/50 z-40 backdrop-blur-sm"
-              onClick={() => setShowNodesSidebar(false)}
-            />
+            {/* Sidebar Overlay */}
+            {showNodesSidebar && (
+              <>
+                {/* Backdrop */}
+                <div
+                  className="absolute inset-0 bg-black/50 z-40 backdrop-blur-sm"
+                  onClick={() => setShowNodesSidebar(false)}
+                />
 
-            {/* Sidebar */}
-            <div className="absolute right-0 top-0 bottom-0 z-50 animate-slide-in-right">
-              <NodesSidebar
-                onAddNode={(type: WorkflowNodeType, position?: { x: number; y: number }) => {
-                  handleAddNode(type, position)
-                  setShowNodesSidebar(false)
-                }}
-                onClose={() => setShowNodesSidebar(false)}
+                {/* Sidebar */}
+                <div className="absolute right-0 top-0 bottom-0 z-50 animate-slide-in-right">
+                  <NodesSidebar
+                    onAddNode={(type: WorkflowNodeType, position?: { x: number; y: number }) => {
+                      handleAddNode(type, position)
+                      setShowNodesSidebar(false)
+                    }}
+                    onClose={() => setShowNodesSidebar(false)}
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="flex-1">
+              <WorkflowCanvas
+                initialNodes={workflow.nodes}
+                initialEdges={workflow.edges}
+                onChange={handleSave}
+                onNodeDoubleClick={handleNodeDoubleClick}
+                currentNodeId={currentNodeId}
+                executionStatus={executionStatus}
+                executedNodes={executedNodes}
+                failedNodes={failedNodes}
+                executedEdges={executedEdges}
+                failedEdges={failedEdges}
+                onAddNode={handleAddNode}
+                onManualTrigger={handleManualTrigger}
+                onDuplicateNode={handleDuplicateNode}
               />
             </div>
           </>
+        ) : (
+          <WorkflowInsights workflowId={workflowId} tenantId={tenantId || undefined} />
         )}
-
-        {/* Canvas */}
-        <div className="flex-1">
-          <WorkflowCanvas
-            initialNodes={workflow.nodes}
-            initialEdges={workflow.edges}
-            onChange={handleSave}
-            currentNodeId={currentNodeId}
-            executionStatus={executionStatus}
-            onNodeDoubleClick={handleNodeDoubleClick}
-            onAddNode={handleAddNode}
-            onManualTrigger={handleManualTrigger}
-            onDuplicateNode={handleDuplicateNode}
-            executedNodes={executedNodes}
-            failedNodes={failedNodes}
-            executedEdges={executedEdges}
-            failedEdges={failedEdges}
-          />
-        </div>
       </div>
 
       {/* Modals & Panels */}

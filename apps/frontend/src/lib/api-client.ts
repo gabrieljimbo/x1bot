@@ -193,8 +193,24 @@ export const apiClient = {
     return data
   },
 
-  getWorkflowExecutions: async (workflowId: string) => {
+  async getWorkflowExecutions(workflowId: string) {
     const { data } = await client.get(`/api/workflows/${workflowId}/executions`)
+    return data
+  },
+
+  async getWorkflowInsights(
+    workflowId: string,
+    params: {
+      from?: string
+      to?: string
+      compareFrom?: string
+      compareTo?: string
+      tenantId?: string
+    }
+  ) {
+    const { tenantId, ...rest } = params
+    const queryParams = tenantId ? { ...rest, tenantId } : rest
+    const { data } = await client.get(`/api/workflows/${workflowId}/insights`, { params: queryParams })
     return data
   },
 

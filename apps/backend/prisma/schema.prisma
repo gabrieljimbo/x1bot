@@ -80,6 +80,7 @@ model Workflow {
   updatedAt           DateTime              @updatedAt
   shareableWorkflows  ShareableWorkflow[]
   workflowExecutions  WorkflowExecution[]
+  workflowNodeStats   WorkflowNodeStats[]
   tenant              Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
@@ -314,6 +315,23 @@ model MediaFile {
   @@index([nodeId])
   @@index([workflowId])
   @@map("media_files")
+}
+
+model WorkflowNodeStats {
+  id               String   @id @default(cuid())
+  workflowId       String
+  nodeId           String
+  nodeName         String
+  nodeType         String
+  totalExecutions  Int      @default(0)
+  successCount     Int      @default(0)
+  failCount        Int      @default(0)
+  date             DateTime @default(now())
+  
+  workflow         Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId, date])
+  @@map("workflow_node_stats")
 }
 
 enum ConversationStatus {

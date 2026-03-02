@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Workflow, WorkflowNode, WorkflowEdge, WorkflowNodeType, TriggerManualConfig, WorkflowExecution } from '@n9n/shared';
 import { ExecutionEngineService } from '../execution/execution-engine.service';
 import { StorageService } from '../storage/storage.service';
+import { startOfDay, endOfDay, subDays, format } from 'date-fns';
 
 @Injectable()
 export class WorkflowService {
@@ -545,6 +546,172 @@ export class WorkflowService {
     });
 
     return shareable || null;
+  }
+
+  /**
+   * Get workflow insights (funnel metrics)
+   */
+  async getWorkflowInsights(
+    tenantId: string,
+    workflowId: string,
+    from?: string,
+    to?: string,
+    compareFrom?: string,
+    compareTo?: string,
+  ): Promise<any> {
+    const workflow = await this.getWorkflow(tenantId, workflowId);
+    if (!workflow) {
+      throw new Error('Workflow not found');
+    }
+
+    const startDate = from ? new Date(from) : new Date(0);
+    const endDate = to ? new Date(to) : new Date();
+
+    // 1. Get main period stats
+    const mainStats = await this.calculateFunnelStats(workflowId, startDate, endDate);
+
+    // 2. Get comparison period stats if requested
+    let comparisonStats = null;
+    if (compareFrom && compareTo) {
+      comparisonStats = await this.calculateFunnelStats(
+        workflowId,
+        new Date(compareFrom),
+        new Date(compareTo),
+      );
+    }
+
+    // 3. Find node with highest drop-off
+    let highestDropOffNode = null;
+    let maxDropOffRate = -1;
+
+    mainStats.nodes.forEach((node: any, index: number) => {
+      if (index > 0) {
+        const prevNode = mainStats.nodes[index - 1];
+        if (prevNode.count > 0) {
+          const dropOffRate = (prevNode.count - node.count) / prevNode.count;
+          if (dropOffRate > maxDropOffRate) {
+            maxDropOffRate = dropOffRate;
+            highestDropOffNode = node.name;
+          }
+        }
+      }
+    });
+
+    // 4. Find best hour for conversion (simplified: based on execution starts)
+    const executions = await this.prisma.workflowExecution.findMany({
+      where: {
+        workflowId,
+        startedAt: { gte: startDate, lte: endDate },
+      },
+      select: { startedAt: true },
+    });
+
+    const hourCounts: Record<number, number> = {};
+    executions.forEach((ex) => {
+      const hour = new Date(ex.startedAt).getHours();
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    });
+
+    let bestHour = 0;
+    let maxHourCount = 0;
+    Object.entries(hourCounts).forEach(([hour, count]) => {
+      if (count > maxHourCount) {
+        maxHourCount = count;
+        bestHour = parseInt(hour);
+      }
+    });
+
+    return {
+      summary: {
+        totalLeads: mainStats.totalLeads,
+        conversionRate: mainStats.totalLeads > 0 ? (mainStats.conversions / mainStats.totalLeads) * 100 : 0,
+        highestDropOffNode,
+        bestTime: `${bestHour}:00`,
+      },
+      nodes: mainStats.nodes,
+      comparison: comparisonStats ? {
+        summary: {
+          totalLeads: comparisonStats.totalLeads,
+          conversionRate: comparisonStats.totalLeads > 0 ? (comparisonStats.conversions / comparisonStats.totalLeads) * 100 : 0,
+        },
+        nodes: comparisonStats.nodes,
+      } : null,
+      updatedAt: workflow.updatedAt,
+    };
+  }
+
+  private async calculateFunnelStats(workflowId: string, from: Date, to: Date) {
+    // Get all executions for this workflow in the period
+    const executions = await this.prisma.workflowExecution.findMany({
+      where: {
+        workflowId,
+        startedAt: { gte: from, lte: to },
+      },
+      select: { id: true, status: true },
+    });
+
+    const executionIds = executions.map((e) => e.id);
+    const totalLeads = executionIds.length;
+
+    // Get workflow nodes to build the funnel in order
+    const workflow = await this.prisma.workflow.findUnique({
+      where: { id: workflowId },
+      select: { nodes: true, edges: true },
+    });
+
+    if (!workflow) return { totalLeads: 0, conversions: 0, nodes: [] };
+
+    const nodes = workflow.nodes as any[];
+    const edges = workflow.edges as any[];
+
+    // Find trigger node and build sequence
+    const triggerNode = nodes.find(n => n.type.startsWith('TRIGGER_'));
+    if (!triggerNode) return { totalLeads: 0, conversions: 0, nodes: [] };
+
+    const sequence: any[] = [];
+    let curr: any = triggerNode;
+    const visited = new Set();
+
+    while (curr && !visited.has(curr.id)) {
+      visited.add(curr.id);
+      sequence.push(curr);
+      const edge = edges.find(e => e.source === curr.id);
+      curr = edge ? nodes.find(n => n.id === edge.target) : null;
+    }
+
+    // Get execution logs for these executions to count reach for each node
+    const nodeReach = await this.prisma.executionLog.groupBy({
+      by: ['nodeId'],
+      where: {
+        executionId: { in: executionIds },
+        eventType: 'node.executed',
+      },
+      _count: { executionId: true },
+    });
+
+    const reachMap = new Map(nodeReach.map(r => [r.nodeId, r._count.executionId]));
+
+    const nodeStats = sequence.map((node, index) => {
+      const count = reachMap.get(node.id) || 0;
+      const prevCount = index > 0 ? reachMap.get(sequence[index - 1].id) || 0 : totalLeads;
+
+      return {
+        id: node.id,
+        name: node.data?.label || node.name || node.type,
+        type: node.type,
+        count,
+        conversionRate: prevCount > 0 ? (count / prevCount) * 100 : 0,
+        dropOffRate: prevCount > 0 ? ((prevCount - count) / prevCount) * 100 : 0,
+      };
+    });
+
+    const conversions = nodes.filter(n => n.type === 'END').reduce((acc, node) => acc + (reachMap.get(node.id) || 0), 0);
+
+    return {
+      totalLeads,
+      conversions,
+      nodes: nodeStats,
+    };
   }
 }
 

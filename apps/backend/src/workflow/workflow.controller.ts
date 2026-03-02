@@ -115,6 +115,25 @@ export class WorkflowController {
     return this.workflowService.duplicateWorkflow(tenantId, id);
   }
 
+  @Get('workflows/:id/insights')
+  async getWorkflowInsights(
+    @Tenant() tenantId: string,
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('compareFrom') compareFrom?: string,
+    @Query('compareTo') compareTo?: string,
+  ) {
+    return this.workflowService.getWorkflowInsights(
+      tenantId,
+      id,
+      from,
+      to,
+      compareFrom,
+      compareTo,
+    );
+  }
+
   // WhatsApp Sessions
 
   @Get('whatsapp/sessions')
