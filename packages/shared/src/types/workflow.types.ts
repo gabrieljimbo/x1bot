@@ -22,6 +22,7 @@ export enum WorkflowNodeType {
   RMKT = 'RMKT',
   SEND_PIX = 'SEND_PIX',
   MARK_STAGE = 'MARK_STAGE',
+  PROMO_ML = 'PROMO_ML',
   END = 'END',
 }
 
@@ -368,5 +369,20 @@ export interface MarkStageConfig {
   color: string;
   emoji: string;
   isCustom?: boolean;
+}
+
+export interface PromoMLConfig {
+  searchTerm: string;
+  minRating: number;
+  minDiscount: number;
+  category: string;
+  bestValue: boolean;
+  maxQuantity: number;
+  affiliateTag?: string;
+  introText?: string;
+  footerText?: string;
+  messageInterval: number;
+  ignoreAlreadySent: boolean;
+  saveResponseAs?: string;
 }
 

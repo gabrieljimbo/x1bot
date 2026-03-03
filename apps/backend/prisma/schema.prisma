@@ -360,3 +360,14 @@ enum LicenseStatus {
   EXPIRED
   SUSPENDED
 }
+
+model PromoMLSent {
+  id         String   @id @default(cuid())
+  productUrl String
+  tenantId   String
+  sentAt     DateTime @default(now())
+
+  @@index([productUrl])
+  @@index([tenantId])
+  @@map("promo_ml_sent")
+}

@@ -23,6 +23,7 @@ import {
   PixRecognitionConfig,
   RmktConfig,
   PixConfig,
+  PromoMLConfig,
 } from '@n9n/shared';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -33,6 +34,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { PixParser } from './pix-parser.util';
 import { OCRService } from './ocr.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface NodeExecutionResult {
   nextNodeId: string | null;
@@ -66,6 +68,7 @@ export class NodeExecutorService {
     private contactTagsService: ContactTagsService,
     private ocrService: OCRService,
     @InjectQueue('rmkt') private rmktQueue: Queue,
+    private prisma: PrismaService,
   ) { }
 
   setWhatsappSessionManager(manager: any) {
@@ -192,6 +195,9 @@ export class NodeExecutorService {
 
       case WorkflowNodeType.MARK_STAGE:
         return this.executeMarkStage(node, context, edges);
+
+      case WorkflowNodeType.PROMO_ML:
+        return this.executePromoML(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
@@ -2152,6 +2158,218 @@ functions, etc.)
     edges: any[],
   ): any {
     // This is a passive node for analytics, just move to next node
+    const nextEdge = edges.find((e) => e.source === node.id);
+    const nextNodeId = nextEdge ? nextEdge.target : null;
+
+    return {
+      nextNodeId,
+      shouldWait: false,
+    };
+  }
+
+  /**
+   * Execute PROMO_ML node
+   */
+  private async executePromoML(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    sessionId?: string,
+    contactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as PromoMLConfig;
+    const tenantId = (context.variables as any)?._tenantId;
+
+    // 1. Scraping logic
+    const searchTerm = this.contextService.interpolate(config.searchTerm, context);
+    const searchUrl = searchTerm
+      ? `https://lista.mercadolivre.com.br/${encodeURIComponent(searchTerm)}`
+      : 'https://www.mercadolivre.com.br/offers';
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const puppeteer = require('puppeteer');
+    let browser = null;
+    let products: any[] = [];
+
+    try {
+      browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--single-process',
+          '--no-zygote'
+        ],
+        timeout: 60000,
+      });
+      const page = await browser.newPage();
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      await page.setViewport({ width: 1280, height: 800 });
+
+      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+
+      // Scroll to load lazy images
+      await page.evaluate(async () => {
+        await new Promise<void>((resolve) => {
+          let totalHeight = 0;
+          const distance = 200;
+          const timer = setInterval(() => {
+            const scrollHeight = document.body.scrollHeight;
+            window.scrollBy(0, distance);
+            totalHeight += distance;
+            if (totalHeight >= scrollHeight || totalHeight > 4000) {
+              clearInterval(timer);
+              resolve();
+            }
+          }, 150);
+        });
+      });
+
+      products = await page.evaluate(() => {
+        const items = Array.from(document.querySelectorAll('.ui-search-layout__item, .promotion-item, .ui-search-result'));
+        return items.map(item => {
+          const title = item.querySelector('.ui-search-item__title, .promotion-item__title')?.textContent?.trim();
+
+          // Price extraction
+          const priceElement = item.querySelector('.ui-search-price__second-line .andes-money-amount__fraction, .promotion-item__price .andes-money-amount__fraction');
+          const priceStr = priceElement?.textContent?.replace(/\D/g, '');
+
+          const oldPriceElement = item.querySelector('.ui-search-price__part--del .andes-money-amount__fraction, .promotion-item__old-price .andes-money-amount__fraction');
+          const originalPriceStr = oldPriceElement?.textContent?.replace(/\D/g, '');
+
+          const discountElement = item.querySelector('.ui-search-price__discount, .promotion-item__discount-percentage');
+          const discountStr = discountElement?.textContent?.replace(/\D/g, '');
+
+          const ratingElement = item.querySelector('.ui-search-reviews__rating-number');
+          const ratingStr = ratingElement?.textContent?.trim();
+
+          const reviewsElement = item.querySelector('.ui-search-reviews__amount');
+          const reviewsStr = reviewsElement?.textContent?.trim()?.replace(/\D/g, '');
+
+          const imgElement = item.querySelector('img.ui-search-result-image__element, img.promotion-item__img, .poly-component__picture img');
+          const imageUrl = imgElement?.getAttribute('src') || imgElement?.getAttribute('data-src');
+
+          const linkElement = item.querySelector('a.ui-search-link, a.promotion-item__link-container, a');
+          const productUrl = linkElement?.getAttribute('href');
+
+          const sellerElement = item.querySelector('.ui-search-item__group__element--seller, .poly-component__seller');
+          const seller = sellerElement?.textContent?.replace(/por\s+/i, '')?.trim();
+
+          const price = priceStr ? parseFloat(priceStr) : 0;
+          const originalPrice = originalPriceStr ? parseFloat(originalPriceStr) : price;
+
+          return {
+            title,
+            price,
+            originalPrice,
+            discount: discountStr ? parseInt(discountStr) : 0,
+            rating: ratingStr ? parseFloat(ratingStr) : 0,
+            reviewCount: reviewsStr ? parseInt(reviewsStr) : 0,
+            imageUrl,
+            productUrl,
+            seller: seller || 'Mercado Livre'
+          };
+        }).filter(p => p.title && p.productUrl && p.price > 0);
+      });
+    } catch (e) {
+      console.error('[PROMO_ML] Scraping error:', e);
+    } finally {
+      if (browser) await browser.close();
+    }
+
+    // 2. Filter products
+    let filteredProducts = products.filter(p => {
+      if (p.rating < (config.minRating || 0)) return false;
+      if (p.discount < (config.minDiscount || 0)) return false;
+      // Basic category filter by keyword in title if provided (simplified)
+      if (config.category && config.category !== 'Todos') {
+        const categoryKeywords: Record<string, string[]> = {
+          'Confeitaria/Alimentos': ['alimento', 'comida', 'confeitaria', 'doce', 'bolo'],
+          'Eletrônicos': ['eletronico', 'celular', 'tv', 'fone', 'gadget'],
+          'Casa e Jardim': ['casa', 'jardim', 'decoracao', 'moveis'],
+          'Moda': ['roupa', 'calcado', 'tenis', 'vestido', 'camisa'],
+          'Esportes': ['esporte', 'academia', 'bola', 'bike'],
+          'Beleza': ['beleza', 'maquiagem', 'creme', 'perfume'],
+          'Informática': ['notebook', 'computador', 'mouse', 'teclado', 'monitor'],
+          'Automotivo': ['carro', 'moto', 'pneu', 'oleo', 'acessorio']
+        };
+        const keywords = categoryKeywords[config.category] || [];
+        const hasKeyword = keywords.some(k => p.title.toLowerCase().includes(k.toLowerCase()));
+        if (!hasKeyword) return false;
+      }
+      return true;
+    });
+
+    if (config.bestValue) {
+      filteredProducts.sort((a, b) => a.price - b.price);
+    }
+
+    filteredProducts = filteredProducts.slice(0, config.maxQuantity || 5);
+
+    // 3. Send to WhatsApp
+    if (sessionId && contactPhone && this.whatsappSessionManager) {
+      for (const product of filteredProducts) {
+        // Check if sent today
+        if (config.ignoreAlreadySent && tenantId) {
+          const startOfDay = new Date();
+          startOfDay.setHours(0, 0, 0, 0);
+          const alreadySent = await this.prisma.promoMLSent.findFirst({
+            where: {
+              productUrl: product.productUrl,
+              tenantId,
+              sentAt: { gte: startOfDay }
+            }
+          });
+          if (alreadySent) continue;
+        }
+
+        const affiliateUrl = product.productUrl + (config.affiliateTag ? `${product.productUrl.includes('?') ? '&' : '?'}deal_print_id=${config.affiliateTag}` : '');
+
+        const caption = `🛒 *${product.title}*
+   
+💰 De ~~R$ ${product.originalPrice.toLocaleString('pt-BR')}~~ por *R$ ${product.price.toLocaleString('pt-BR')}*
+🔥 ${product.discount}% OFF
+⭐ ${product.rating > 0 ? product.rating + '/5' : 'N/A'} (${product.reviewCount} avaliações)
+🏪 Vendido por: ${product.seller}
+
+${config.introText || ''}
+👉 ${affiliateUrl}
+
+${config.footerText || ''}`;
+
+        try {
+          if (product.imageUrl) {
+            await this.whatsappSessionManager.sendMedia(sessionId, contactPhone, 'image', product.imageUrl, { caption });
+          } else {
+            await this.whatsappSessionManager.sendMessage(sessionId, contactPhone, caption);
+          }
+
+          // Track as sent
+          if (tenantId) {
+            await this.prisma.promoMLSent.create({
+              data: {
+                productUrl: product.productUrl,
+                tenantId
+              }
+            });
+          }
+        } catch (err) {
+          console.error('[PROMO_ML] Send error:', err);
+        }
+
+        // Wait interval
+        const interval = (config.messageInterval || 3) * 1000;
+        await new Promise(resolve => setTimeout(resolve, interval));
+      }
+    }
+
+    // 4. Save results to context
+    const saveAs = config.saveResponseAs || 'mlProducts';
+    this.contextService.setVariable(context, saveAs, filteredProducts);
+    this.contextService.setOutput(context, { [saveAs]: filteredProducts });
+
     const nextEdge = edges.find((e) => e.source === node.id);
     const nextNodeId = nextEdge ? nextEdge.target : null;
 

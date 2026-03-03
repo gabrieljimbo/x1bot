@@ -114,6 +114,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         description: 'Faz scraping de páginas web renderizadas com JavaScript'
       },
       {
+        type: WorkflowNodeType.PROMO_ML,
+        label: 'Promo ML',
+        icon: '🛒',
+        color: 'from-yellow-400 to-yellow-500',
+        bgColor: 'bg-[#2a2a0a]',
+        borderColor: 'border-[#8a7a0a]',
+        description: 'Busca e envia ofertas do Mercado Livre automaticamente'
+      },
+      {
         type: 'PIX_RECOGNITION' as WorkflowNodeType,
         label: 'Reconhecer PIX',
         icon: '💸',

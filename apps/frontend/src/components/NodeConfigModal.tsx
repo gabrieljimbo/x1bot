@@ -178,6 +178,196 @@ function SetTagsConfig({ config, setConfig, tenantId: _tenantId }: any) {
   )
 }
 
+function PromoMLConfig({ config, setConfig }: any) {
+  const [activeTab, setActiveTab] = useState<'params' | 'filters' | 'message'>('params');
+
+  return (
+    <div className="space-y-6">
+      <div className="flex border-b border-gray-700 mb-2 overflow-x-auto no-scrollbar">
+        {[
+          { id: 'params', label: 'Parâmetros', icon: '🔍' },
+          { id: 'filters', label: 'Filtros', icon: '🏷️' },
+          { id: 'message', label: 'Mensagem', icon: '💬' }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id
+                ? 'text-primary border-b-2 border-primary'
+                : 'text-gray-400 hover:text-gray-200'
+              }`}
+          >
+            <span>{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'params' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">🔍 Termo de busca</label>
+            <DroppableInput
+              value={config.searchTerm || ''}
+              onChange={(e: any) => setConfig({ ...config, searchTerm: e.target.value })}
+              placeholder="Ex: batedeira, airfryer, confeitaria"
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+            />
+            <p className="text-[10px] text-gray-500 mt-1">Palavra-chave para buscar no Mercado Livre</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">📂 Categoria</label>
+            <select
+              value={config.category || 'Todos'}
+              onChange={(e) => setConfig({ ...config, category: e.target.value })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+            >
+              <option value="Todos">Todas as Categorias</option>
+              <option value="Confeitaria/Alimentos">Confeitaria / Alimentos</option>
+              <option value="Eletrônicos">Eletrônicos</option>
+              <option value="Casa e Jardim">Casa e Jardim</option>
+              <option value="Moda">Moda</option>
+              <option value="Esportes">Esportes</option>
+              <option value="Beleza">Beleza</option>
+              <option value="Informática">Informática</option>
+              <option value="Automotivo">Automotivo</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">🔢 Quantidade máxima de produtos</label>
+            <input
+              type="number"
+              value={config.maxQuantity || 5}
+              onChange={(e) => setConfig({ ...config, maxQuantity: parseInt(e.target.value) || 1 })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+              min="1"
+              max="20"
+            />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'filters' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">⭐ Avaliação mínima</label>
+              <input
+                type="number"
+                value={config.minRating || 4}
+                onChange={(e) => setConfig({ ...config, minRating: parseFloat(e.target.value) || 0 })}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                min="0"
+                max="5"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">🏷️ Desconto mín. (%)</label>
+              <input
+                type="number"
+                value={config.minDiscount || 10}
+                onChange={(e) => setConfig({ ...config, minDiscount: parseInt(e.target.value) || 0 })}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                min="0"
+                max="99"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-[#151515] border border-gray-700 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-gray-200">💎 Melhores valores</p>
+              <p className="text-xs text-gray-500">Priorizar produtos com menor preço</p>
+            </div>
+            <button
+              onClick={() => setConfig({ ...config, bestValue: !config.bestValue })}
+              className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${config.bestValue ? 'bg-primary' : 'bg-gray-600'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${config.bestValue ? 'left-6' : 'left-1'}`} />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-[#151515] border border-gray-700 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-gray-200">🚫 Ignorar enviados hoje</p>
+              <p className="text-xs text-gray-500">Não enviar produtos que já foram enviados nas últimas 24h</p>
+            </div>
+            <button
+              onClick={() => setConfig({ ...config, ignoreAlreadySent: !config.ignoreAlreadySent })}
+              className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${config.ignoreAlreadySent ? 'bg-primary' : 'bg-gray-600'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${config.ignoreAlreadySent ? 'left-6' : 'left-1'}`} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'message' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">🔖 Tag de afiliado</label>
+            <input
+              type="text"
+              value={config.affiliateTag || ''}
+              onChange={(e) => setConfig({ ...config, affiliateTag: e.target.value })}
+              placeholder="Ex: minha-tag-20"
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white font-mono"
+            />
+            <p className="text-[10px] text-gray-500 mt-1">Será anexado ao link do produto</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">📝 Texto introdutório</label>
+            <DroppableInput
+              type="textarea"
+              value={config.introText || ''}
+              onChange={(e: any) => setConfig({ ...config, introText: e.target.value })}
+              placeholder="Ex: 🔥 OFERTA IMPERDÍVEL ENCONTRADA!"
+              className="w-full px-4 py-2 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">🦶 Rodapé da mensagem</label>
+            <DroppableInput
+              type="textarea"
+              value={config.footerText || ''}
+              onChange={(e: any) => setConfig({ ...config, footerText: e.target.value })}
+              placeholder="Ex: ✅ Link verificado e seguro."
+              className="w-full px-4 py-2 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white text-sm"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">⏱️ Intervalo (seg)</label>
+              <input
+                type="number"
+                value={config.messageInterval || 3}
+                onChange={(e) => setConfig({ ...config, messageInterval: parseInt(e.target.value) || 1 })}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                min="1"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">💾 Salvar como</label>
+              <input
+                type="text"
+                value={config.saveResponseAs || 'mlProducts'}
+                onChange={(e) => setConfig({ ...config, saveResponseAs: e.target.value })}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white font-mono"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Component for TRIGGER_MANUAL configuration
 function TriggerManualConfig({ config, setConfig, tenantId, sessions, loading }: any) {
   const [groups, setGroups] = useState<any[]>([])
@@ -662,6 +852,9 @@ export default function NodeConfigModal({
 
   const renderConfigFields = () => {
     switch (node.type) {
+      case WorkflowNodeType.PROMO_ML:
+        return <PromoMLConfig config={config} setConfig={setConfig} />
+
       case 'TRIGGER_MESSAGE':
         return (
           <div className="space-y-6">

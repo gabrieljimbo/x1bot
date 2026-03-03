@@ -188,7 +188,17 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#7d5d39]',
     iconBg: 'bg-gradient-to-br from-orange-400 to-orange-500',
   },
+  'PROMO_ML': {
+    label: 'Promo ML',
+    subtitle: 'AÇÃO',
+    icon: '🛒',
+    bgColor: 'bg-[#2a2a0a]',
+    borderColor: 'border-[#8a7a0a]',
+    iconBg: 'bg-gradient-to-br from-[#FFE600] to-[#FFCC00]',
+    iconColor: 'text-black',
+  },
 }
+
 
 interface CustomNodeProps {
   data: {
