@@ -1,0 +1,28 @@
+﻿node.exe : npm warn 
+Unknown project config 
+"always-auth". This 
+will stop working in 
+the next major version 
+of npm.
+No linha:1 caractere:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (npm warn Unkn   
+ ow...version of np    
+m.:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+src/execution/execution.service.ts(201,7): error TS2353: Object literal may only specify known properties, and 'createdAt' does not exist in type 'WorkflowExecution'.
+src/whatsapp/whatsapp.controller.ts(39,37): error TS2339: Property 'syncGroups' does not exist on type 'WhatsappService'.

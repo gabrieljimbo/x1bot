@@ -122,6 +122,10 @@ export class ExecutionEngineService implements OnModuleInit {
     contactPhone: string,
     triggerMessage?: string,
     triggerPayload?: any, // TriggerMessagePayload
+    options?: {
+      initialContext?: any;
+      force?: boolean;
+    }
   ): Promise<WorkflowExecution> {
     // Acquire lock to prevent duplicate executions
     const lockKey = `execution:lock:${tenantId}:${sessionId}:${contactPhone}`;
@@ -133,37 +137,40 @@ export class ExecutionEngineService implements OnModuleInit {
 
     try {
       // Check for existing active execution
-      const existingExecution = await this.executionService.getActiveExecution(
-        tenantId,
-        sessionId,
-        contactPhone,
-      );
+      if (!options?.force) {
+        const existingExecution = await this.executionService.getActiveExecution(
+          tenantId,
+          sessionId,
+          contactPhone,
+        );
 
-      if (existingExecution) {
-        // Check if the existing execution is stale (stuck for more than STALE_EXECUTION_MINUTES)
-        const staleThreshold = new Date(Date.now() - ExecutionEngineService.STALE_EXECUTION_MINUTES * 60 * 1000);
-        const executionUpdatedAt = existingExecution.updatedAt || existingExecution.startedAt;
+        if (existingExecution) {
+          // Check if the existing execution is stale (stuck for more than STALE_EXECUTION_MINUTES)
+          const staleThreshold = new Date(Date.now() - ExecutionEngineService.STALE_EXECUTION_MINUTES * 60 * 1000);
+          const executionUpdatedAt = existingExecution.updatedAt || existingExecution.startedAt;
 
-        if (executionUpdatedAt && executionUpdatedAt < staleThreshold) {
-          // Don't auto-expire if this is a legitimate WAIT with a future resume time
-          const waitResumeAt = existingExecution.context?.variables?._waitResumeAt;
-          if (waitResumeAt && new Date(waitResumeAt).getTime() > Date.now()) {
-            console.log(`[EXECUTION] Execution ${existingExecution.id} has scheduled WAIT resuming at ${waitResumeAt}, not expiring`);
+          if (executionUpdatedAt && executionUpdatedAt < staleThreshold) {
+            // Don't auto-expire if this is a legitimate WAIT with a future resume time
+            const waitResumeAt = existingExecution.context?.variables?._waitResumeAt;
+            if (waitResumeAt && new Date(waitResumeAt).getTime() > Date.now()) {
+              throw new Error('Another execution is already in progress for this contact');
+            }
+
+            console.log(`[STALE_DETECTION] Marking stale execution ${existingExecution.id} as EXPIRED`);
+            // Clean up any active timeout for this execution
+            this.cleanupExecutionTimeouts(existingExecution.id);
+            await this.prisma.workflowExecution.update({
+              where: { id: existingExecution.id },
+              data: {
+                status: ExecutionStatus.EXPIRED,
+                completedAt: new Date(),
+              },
+            });
+            // Continue to create a new execution
+          } else {
             await this.redis.releaseLock(lockKey);
-            throw new Error('Active execution already exists for this contact (waiting)');
+            throw new Error('Another execution is already in progress for this contact');
           }
-
-          console.warn(`[EXECUTION] Auto-expiring stale execution ${existingExecution.id} (status: ${existingExecution.status}, updatedAt: ${executionUpdatedAt.toISOString()})`);
-          // Clean up any active timeout for this execution
-          this.cleanupExecutionTimeouts(existingExecution.id);
-          await this.executionService.updateExecution(existingExecution.id, {
-            status: ExecutionStatus.ERROR,
-            error: `Auto-expired: execution was stuck in ${existingExecution.status} for over ${ExecutionEngineService.STALE_EXECUTION_MINUTES} minutes`,
-          });
-          // Continue to create a new execution
-        } else {
-          await this.redis.releaseLock(lockKey);
-          throw new Error('Active execution already exists for this contact');
         }
       }
 
@@ -201,27 +208,48 @@ export class ExecutionEngineService implements OnModuleInit {
         sessionId,
         contactPhone,
       );
+
+      // Prepare initial context, merging provided initialContext with trigger data and contact tags
+      const baseContext = options?.initialContext || {
+        globals: {},
+        input: {},
+        output: {},
+        variables: {},
+      };
+
+      // Ensure variables object exists
+      if (!baseContext.variables) {
+        baseContext.variables = {};
+      }
+
+      // Add trigger message, payload, and contact tags to variables
+      baseContext.variables.triggerMessage = triggerMessage || '';
+      baseContext.variables.triggerPayload = triggerPayload || {
+        messageId: `text-${Date.now()}`,
+        from: contactPhone,
+        type: 'text',
+        text: triggerMessage || '',
+        media: null,
+        timestamp: Date.now(),
+      };
+      baseContext.variables.contactTags = contactTags; // Make tags available in all nodes
+
       // Create execution with normalized payload
-      const execution = await this.executionService.createExecution(
-        tenantId,
-        workflowId,
-        sessionId,
-        contactPhone,
-        {
-          variables: {
-            triggerMessage: triggerMessage || '',
-            triggerPayload: triggerPayload || {
-              messageId: `text-${Date.now()}`,
-              from: contactPhone,
-              type: 'text',
-              text: triggerMessage || '',
-              media: null,
-              timestamp: Date.now(),
-            },
-            contactTags, // Make tags available in all nodes
-          },
+      const execution = await this.prisma.workflowExecution.create({
+        data: {
+          tenantId,
+          workflowId,
+          sessionId,
+          contactPhone,
+          currentNodeId: triggerNode.id,
+          status: ExecutionStatus.RUNNING,
+          context: baseContext, // Use the prepared context
+          interactionCount: 0,
+          startedAt: new Date(),
+          updatedAt: new Date(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
         },
-      );
+      }) as unknown as WorkflowExecution;
 
       // Emit started event
       await this.eventBus.emit({

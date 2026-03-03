@@ -6,9 +6,10 @@ import { WorkflowNodeType } from '@n9n/shared'
 interface NodesSidebarProps {
   onAddNode: (type: WorkflowNodeType, position?: { x: number; y: number }) => void
   onClose?: () => void
+  hasTrigger?: boolean
 }
 
-export default function NodesSidebar({ onAddNode, onClose }: NodesSidebarProps) {
+export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }: NodesSidebarProps) {
   const nodeCategories = {
     TRIGGERS: [
       {
@@ -232,7 +233,7 @@ export default function NodesSidebar({ onAddNode, onClose }: NodesSidebarProps) 
     ]
   }
   const [searchTerm, setSearchTerm] = useState('')
-  const [expandedCategory, setExpandedCategory] = useState<string | null>('TRIGGERS')
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(hasTrigger ? 'ACTIONS' : 'TRIGGERS')
 
   const filteredCategories = Object.entries(nodeCategories).reduce((acc, [category, nodes]) => {
     const filtered = nodes.filter(node =>
@@ -289,13 +290,20 @@ export default function NodesSidebar({ onAddNode, onClose }: NodesSidebarProps) 
                   {category === 'TRIGGERS' ? '🎯' : '⚡'}
                 </span>
                 <span className="text-sm font-semibold text-gray-300">
-                  {category === 'TRIGGERS' ? 'TRIGGERS' : 'AÇÕES'}
+                  {category === 'TRIGGERS' ? '🎯 GATILHOS' : '⚡ AÇÕES DO FLUXO'}
                 </span>
               </div>
               <span className="text-gray-500">
                 {expandedCategory === category ? '▼' : '▶'}
               </span>
             </button>
+
+            {/* Warning for Triggers if hasTrigger is true */}
+            {category === 'TRIGGERS' && hasTrigger && expandedCategory === 'TRIGGERS' && (
+              <div className="mx-4 mb-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-[10px] text-yellow-500 leading-tight">
+                ⚠️ Este fluxo já possui um gatilho configurado.
+              </div>
+            )}
 
             {/* Nodes List */}
             {expandedCategory === category && (
@@ -351,4 +359,5 @@ export default function NodesSidebar({ onAddNode, onClose }: NodesSidebarProps) 
     </div>
   )
 }
+
 

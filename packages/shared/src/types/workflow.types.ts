@@ -86,6 +86,7 @@ export interface WorkflowExecution {
   context: ExecutionContext;
   interactionCount: number;
   startedAt: Date;
+  createdAt: Date;
   updatedAt: Date;
   expiresAt: Date;
   completedAt?: Date;
@@ -272,9 +273,22 @@ export interface CommandConfig {
   saveExitCodeAs?: string; // Variable name to save exit code, default 'commandExitCode'
 }
 
+export interface WhatsappGroup {
+  id: string; // JID
+  name: string;
+  participantsCount?: number;
+}
+
 export interface TriggerManualConfig {
-  sessionId?: string; // Optional: specific WhatsApp session to use
-  testData?: Record<string, any>; // Optional: test data to inject into context
+  destinationType: 'individual' | 'group';
+  phoneNumber?: string; // Individual: Target phone number
+  contactName?: string; // Individual: Name for {{contact.name}}
+  groupJid?: string;    // Group: JID of the group
+  groupName?: string;   // Group: Name for identification
+  sessionId: string;    // Mandatory WhatsApp session to use
+  allowRedisparo?: boolean;
+  initialDelay?: number; // In seconds
+  customVariables?: Array<{ key: string; value: string }>;
 }
 
 export interface EditFieldsOperation {

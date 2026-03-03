@@ -259,9 +259,34 @@ export class WorkflowService {
       sessionId = session.id;
     }
 
-    // Generate a unique contact ID for this manual execution
-    const timestamp = Date.now();
-    const contactPhone = `manual-${workflowId}-${timestamp}`;
+    // Determine target contact/group
+    const isGroup = config.destinationType === 'group';
+    const contactPhone = isGroup ? config.groupJid : config.phoneNumber;
+
+    if (!contactPhone) {
+      throw new Error(`Destination ${isGroup ? 'Group' : 'Phone'} is required for manual trigger`);
+    }
+
+    // Prepare initial context
+    const initialContext = {
+      variables: {
+        contact: {
+          name: isGroup ? (config.groupName || 'Grupo') : (config.contactName || contactPhone),
+          phoneNumber: isGroup ? config.groupJid : config.phoneNumber,
+          groupJid: isGroup ? config.groupJid : undefined,
+          isGroup: isGroup
+        }
+      } as any
+    };
+
+    // Add custom variables
+    if (config.customVariables && Array.isArray(config.customVariables)) {
+      config.customVariables.forEach(v => {
+        if (v.key) {
+          initialContext.variables[v.key] = v.value;
+        }
+      });
+    }
 
     // Start execution
     const execution = await this.executionEngine.startExecution(
@@ -270,12 +295,18 @@ export class WorkflowService {
       sessionId,
       contactPhone,
       undefined, // no trigger message for manual executions
+      undefined,
+      {
+        initialContext,
+        force: config.allowRedisparo
+      }
     );
 
-    console.log(`[MANUAL TRIGGER] Started execution ${execution.id} for workflow ${workflowId}`);
+    console.log(`[MANUAL TRIGGER] Started execution ${execution.id} for workflow ${workflowId} to ${contactPhone}`);
 
     return { executionId: execution.id };
   }
+
 
   /**
    * Test a node from the current execution context
@@ -374,7 +405,7 @@ export class WorkflowService {
         ...newExecution,
         status: newExecution.status as any,
         context: existingExecution.context as any,
-      } as WorkflowExecution,
+      } as unknown as WorkflowExecution,
       workflow,
     );
 

@@ -169,6 +169,12 @@ export const apiClient = {
     return data
   },
 
+  getWhatsappGroups: async (sessionId: string) => {
+    const { data } = await client.get(`/api/whatsapp/sessions/${sessionId}/groups`)
+    return data
+  },
+
+
   syncGroups: async (sessionId: string) => {
     const { data } = await client.post(`/api/whatsapp/sessions/${sessionId}/groups/sync`)
     return data

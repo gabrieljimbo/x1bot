@@ -178,9 +178,230 @@ function SetTagsConfig({ config, setConfig, tenantId: _tenantId }: any) {
   )
 }
 
+// Component for TRIGGER_MANUAL configuration
+function TriggerManualConfig({ config, setConfig, tenantId, sessions, loading }: any) {
+  const [groups, setGroups] = useState<any[]>([])
+  const [loadingGroups, setLoadingGroups] = useState(false)
+  const [activeTab, setActiveTab] = useState<'params' | 'settings'>('params')
+
+  useEffect(() => {
+    if (config.destinationType === 'group' && config.sessionId) {
+      loadGroups()
+    }
+  }, [config.destinationType, config.sessionId])
+
+  const loadGroups = async () => {
+    try {
+      setLoadingGroups(true)
+      const data = await apiClient.getWhatsappGroups(config.sessionId)
+      setGroups(data || [])
+    } catch (error) {
+      console.error('Error loading groups:', error)
+    } finally {
+      setLoadingGroups(false)
+    }
+  }
+
+  const addVariable = () => {
+    const vars = config.customVariables || []
+    setConfig({
+      ...config,
+      customVariables: [...vars, { key: '', value: '' }]
+    })
+  }
+
+  const updateVariable = (index: number, field: 'key' | 'value', val: string) => {
+    const vars = [...(config.customVariables || [])]
+    vars[index][field] = val
+    setConfig({ ...config, customVariables: vars })
+  }
+
+  const removeVariable = (index: number) => {
+    const vars = (config.customVariables || []).filter((_: any, i: number) => i !== index)
+    setConfig({ ...config, customVariables: vars })
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex border-b border-gray-700 mb-2">
+        <button
+          onClick={() => setActiveTab('params')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'params' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`}
+        >
+          Parâmetros
+        </button>
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'settings' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`}
+        >
+          Configurações
+        </button>
+      </div>
+
+      {activeTab === 'params' ? (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-gray-200">Tipo de Destino</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setConfig({ ...config, destinationType: 'individual' })}
+                className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded border text-sm font-medium transition ${config.destinationType !== 'group' ? 'bg-primary/20 border-primary text-primary' : 'bg-[#151515] border-gray-700 text-gray-400 hover:border-gray-600'}`}
+              >
+                👤 Individual
+              </button>
+              <button
+                onClick={() => setConfig({ ...config, destinationType: 'group' })}
+                className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded border text-sm font-medium transition ${config.destinationType === 'group' ? 'bg-primary/20 border-primary text-primary' : 'bg-[#151515] border-gray-700 text-gray-400 hover:border-gray-600'}`}
+              >
+                👥 Grupo
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-gray-200">Sessão WhatsApp</label>
+            <select
+              value={config.sessionId || ''}
+              onChange={(e) => setConfig({ ...config, sessionId: e.target.value })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+              disabled={loading}
+            >
+              <option value="">Selecione uma sessão</option>
+              {sessions.map((s: any) => (
+                <option key={s.id} value={s.id}>{s.name} ({s.phoneNumber})</option>
+              ))}
+            </select>
+          </div>
+
+          {config.destinationType === 'group' ? (
+            <div>
+              <label className="block text-sm font-medium mb-2 text-gray-200">Selecione o Grupo</label>
+              <div className="relative">
+                <select
+                  value={config.groupJid || ''}
+                  onChange={(e) => {
+                    const group = groups.find(g => g.id === e.target.value)
+                    setConfig({ ...config, groupJid: e.target.value, groupName: group?.name || '' })
+                  }}
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white appearance-none"
+                  disabled={loadingGroups || !config.sessionId}
+                >
+                  <option value="">{loadingGroups ? 'Carregando grupos...' : 'Selecione um grupo'}</option>
+                  {groups.map((g: any) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                  ▼
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-1.5 flex items-center gap-1.5">
+                <span>📍</span> Grupos em que a sessão selecionada participa
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">WhatsApp Destino</label>
+                <input
+                  type="text"
+                  value={config.phoneNumber || ''}
+                  onChange={(e) => setConfig({ ...config, phoneNumber: e.target.value })}
+                  placeholder="5511999999999"
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-600"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">Nome do Contato</label>
+                <input
+                  type="text"
+                  value={config.contactName || ''}
+                  onChange={(e) => setConfig({ ...config, contactName: e.target.value })}
+                  placeholder="Nome para {{contact.name}}"
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-600"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-6 animate-in slide-in-from-right-4 duration-200">
+          <div className="flex items-center justify-between p-4 bg-[#151515] border border-gray-700 rounded-lg">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-gray-200">Permitir Redisparo</p>
+              <p className="text-xs text-gray-500 pr-4">Permite iniciar o fluxo mesmo se já houver uma execução ativa para o contato</p>
+            </div>
+            <button
+              onClick={() => setConfig({ ...config, allowRedisparo: !config.allowRedisparo })}
+              className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${config.allowRedisparo ? 'bg-primary' : 'bg-gray-600'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${config.allowRedisparo ? 'left-6' : 'left-1'}`} />
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-gray-200">Delay Inicial (segundos)</label>
+            <input
+              type="number"
+              value={config.initialDelay || 0}
+              onChange={(e) => setConfig({ ...config, initialDelay: parseInt(e.target.value) || 0 })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+              min="0"
+            />
+            <p className="text-xs text-gray-500 mt-1.5">Tempo de espera antes de começar a execução</p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-200">Variáveis Customizadas</label>
+              <button
+                onClick={addVariable}
+                className="text-xs font-semibold text-primary hover:text-primary/80 bg-primary/10 px-2 py-1 rounded"
+              >
+                + Adicionar
+              </button>
+            </div>
+            {(!config.customVariables || config.customVariables.length === 0) ? (
+              <div className="text-center py-6 border border-dashed border-gray-700 rounded-lg">
+                <p className="text-xs text-gray-500">Nenhuma variável customizada adicionada</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {config.customVariables.map((v: any, i: number) => (
+                  <div key={i} className="flex gap-2 group">
+                    <input
+                      placeholder="Chave"
+                      value={v.key}
+                      onChange={(e) => updateVariable(i, 'key', e.target.value)}
+                      className="flex-1 px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-sm text-white focus:border-primary/50 outline-none"
+                    />
+                    <input
+                      placeholder="Valor"
+                      value={v.value}
+                      onChange={(e) => updateVariable(i, 'value', e.target.value)}
+                      className="flex-1 px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-sm text-white focus:border-primary/50 outline-none"
+                    />
+                    <button
+                      onClick={() => removeVariable(i)}
+                      className="text-gray-500 hover:text-red-400 p-2 transition-colors"
+                      title="Remover"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Editor de código Monaco (VS Code)
 function CodeEditor({ value, onChange, language = 'javascript' }: any) {
+
   const handleEditorChange = (newValue: string | undefined) => {
     onChange({ target: { value: newValue || '' } })
   }
@@ -521,68 +742,15 @@ export default function NodeConfigModal({
 
       case 'TRIGGER_MANUAL':
         return (
-          <div className="space-y-6">
-            <div className="bg-[#1a2a1a] border border-green-700/30 rounded-lg p-6">
-              <div className="flex items-start gap-4">
-                <div className="text-4xl">▶️</div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-white mb-2">
-                    Trigger Manual
-                  </h3>
-                  <p className="text-sm text-gray-300 mb-4">
-                    Este workflow será executado manualmente através de um botão de "Start" no canvas.
-                    Ideal para testes e execuções sob demanda.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-200">
-                WhatsApp Session
-              </label>
-              <select
-                value={config.sessionId || ''}
-                onChange={(e) => setConfig({ ...config, sessionId: e.target.value })}
-                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
-                disabled={loading}
-              >
-                <option value="">Primeira sessão disponível</option>
-                {sessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {session.name} ({session.phoneNumber})
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1.5">
-                Sessão WhatsApp que será usada para executar o workflow
-              </p>
-            </div>
-
-            <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3">
-                Dados de Teste (Opcional)
-              </h3>
-              <p className="text-xs text-gray-400 mb-3">
-                Você pode definir dados iniciais que estarão disponíveis em <code className="text-primary">variables</code> durante a execução.
-              </p>
-              <textarea
-                value={config.testData ? JSON.stringify(config.testData, null, 2) : ''}
-                onChange={(e) => {
-                  try {
-                    const parsed = e.target.value ? JSON.parse(e.target.value) : {}
-                    setConfig({ ...config, testData: parsed })
-                  } catch (err) {
-                    // Invalid JSON, keep current
-                  }
-                }}
-                placeholder={'{\n  "userName": "João",\n  "userId": "123"\n}'}
-                rows={6}
-                className="w-full px-4 py-3 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary resize-none text-white placeholder-gray-500 font-mono text-sm"
-              />
-            </div>
-          </div>
+          <TriggerManualConfig
+            config={config}
+            setConfig={setConfig}
+            tenantId={tenantId}
+            sessions={sessions}
+            loading={loading}
+          />
         )
+
 
       case 'TRIGGER_SCHEDULE':
         return (

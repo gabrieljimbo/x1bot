@@ -809,11 +809,9 @@ function WorkflowPageContent() {
             {/* Left Sidebar */}
             <div className={`absolute left-0 top-0 bottom-0 z-40 transition-all duration-300 ease-in-out transform ${showNodesSidebar ? 'translate-x-0' : '-translate-x-full'}`}>
               <NodesSidebar
-                onAddNode={(type: WorkflowNodeType, position?: { x: number; y: number }) => {
-                  handleAddNode(type, position)
-                  // Don't close sidebar on add, as per ManyChat UX
-                }}
+                onAddNode={handleAddNode}
                 onClose={() => setShowNodesSidebar(false)}
+                hasTrigger={workflow?.nodes?.some((n: WorkflowNode) => n.type.startsWith('TRIGGER_'))}
               />
             </div>
 

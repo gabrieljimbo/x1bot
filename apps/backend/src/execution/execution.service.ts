@@ -203,7 +203,7 @@ export class ExecutionService {
       expiresAt: data.expiresAt,
       completedAt: data.completedAt,
       error: data.error,
-    } as any;
+    };
   }
 }
 
