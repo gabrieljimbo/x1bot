@@ -40,7 +40,7 @@ function WorkflowPageContent() {
   const [showHistory, setShowHistory] = useState(false)
   const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null)
   const [inspectedNode, setInspectedNode] = useState<WorkflowNode | null>(null)
-  const [showNodesSidebar, setShowNodesSidebar] = useState(false)
+  const [showNodesSidebar, setShowNodesSidebar] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [executedNodes, setExecutedNodes] = useState<Set<string>>(new Set())
@@ -742,10 +742,10 @@ function WorkflowPageContent() {
 
           <button
             onClick={() => setShowNodesSidebar(!showNodesSidebar)}
-            className="px-4 py-2 bg-surface border border-border rounded hover:border-primary transition flex items-center gap-2"
+            className={`px-4 py-2 bg-surface border border-border rounded hover:border-primary transition flex items-center gap-2 ${showNodesSidebar ? 'border-primary text-primary' : ''}`}
           >
-            <span>➕</span>
-            <span>Add Node</span>
+            <span>{showNodesSidebar ? '⬅️' : '➕'}</span>
+            <span>{showNodesSidebar ? 'Fechar Sidebar' : 'Add Node'}</span>
           </button>
 
           <div className="flex bg-surface border border-border rounded-lg p-1">
@@ -806,27 +806,16 @@ function WorkflowPageContent() {
       <div className="flex-1 flex relative overflow-hidden">
         {activeTab === 'editor' ? (
           <>
-            {/* Sidebar Overlay */}
-            {showNodesSidebar && (
-              <>
-                {/* Backdrop */}
-                <div
-                  className="absolute inset-0 bg-black/50 z-40 backdrop-blur-sm"
-                  onClick={() => setShowNodesSidebar(false)}
-                />
-
-                {/* Sidebar */}
-                <div className="absolute right-0 top-0 bottom-0 z-50 animate-slide-in-right">
-                  <NodesSidebar
-                    onAddNode={(type: WorkflowNodeType, position?: { x: number; y: number }) => {
-                      handleAddNode(type, position)
-                      setShowNodesSidebar(false)
-                    }}
-                    onClose={() => setShowNodesSidebar(false)}
-                  />
-                </div>
-              </>
-            )}
+            {/* Left Sidebar */}
+            <div className={`absolute left-0 top-0 bottom-0 z-40 transition-all duration-300 ease-in-out transform ${showNodesSidebar ? 'translate-x-0' : '-translate-x-full'}`}>
+              <NodesSidebar
+                onAddNode={(type: WorkflowNodeType, position?: { x: number; y: number }) => {
+                  handleAddNode(type, position)
+                  // Don't close sidebar on add, as per ManyChat UX
+                }}
+                onClose={() => setShowNodesSidebar(false)}
+              />
+            </div>
 
             <div className="flex-1">
               <WorkflowCanvas

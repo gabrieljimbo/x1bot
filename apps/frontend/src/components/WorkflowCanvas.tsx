@@ -19,7 +19,7 @@ import 'reactflow/dist/style.css'
 import { WorkflowNode, WorkflowEdge, WorkflowNodeType } from '@n9n/shared'
 import CustomNode from './nodes/CustomNode'
 import CustomEdge from './edges/CustomEdge'
-import { Trash2 } from 'lucide-react'
+import { Trash2, ZoomIn, ZoomOut, Maximize, MousePointer2, Plus } from 'lucide-react'
 
 const nodeTypes: NodeTypes = {
   custom: CustomNode,
@@ -68,6 +68,8 @@ export default function WorkflowCanvas({
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null)
+  const [zoom, setZoom] = useState(100)
+  const [menu, setMenu] = useState<{ id: string; top?: number; left?: number; right?: number; bottom?: number; type: 'node' | 'pane'; data?: any } | null>(null)
 
   // Track whether this is the first render (initial load)
   const isInitialLoad = useRef(true)
@@ -255,6 +257,43 @@ export default function WorkflowCanvas({
     )
   }, [executedEdges, failedEdges, currentNodeId, setEdges])
 
+  const onViewportChange = useCallback((viewport: { x: number, y: number, zoom: number }) => {
+    setZoom(Math.round(viewport.zoom * 100))
+  }, [])
+
+  const handleZoomIn = () => reactFlowInstanceRef.current?.zoomIn()
+  const handleZoomOut = () => reactFlowInstanceRef.current?.zoomOut()
+  const handleFitView = () => reactFlowInstanceRef.current?.fitView({ padding: 0.2 })
+
+  const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault()
+    if (!reactFlowWrapper.current) return
+
+    const rect = reactFlowWrapper.current.getBoundingClientRect()
+    setMenu({
+      id: 'pane-menu',
+      top: event.clientY - rect.top,
+      left: event.clientX - rect.left,
+      type: 'pane'
+    })
+  }, [])
+
+  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    event.preventDefault()
+    if (!reactFlowWrapper.current) return
+
+    const rect = reactFlowWrapper.current.getBoundingClientRect()
+    setMenu({
+      id: node.id,
+      top: event.clientY - rect.top,
+      left: event.clientX - rect.left,
+      type: 'node',
+      data: node
+    })
+  }, [])
+
+  const closeMenu = useCallback(() => setMenu(null), [])
+
   const onConnect = useCallback(
     (connection: Connection) => {
       if (readonly) return
@@ -426,7 +465,8 @@ export default function WorkflowCanvas({
   const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: Node[], edges: Edge[] }) => {
     setSelectedNodes(selectedNodes.map(n => n.id))
     setSelectedEdges(selectedEdges.map(e => e.id))
-  }, [])
+    if (selectedNodes.length > 0 || selectedEdges.length > 0) closeMenu()
+  }, [closeMenu])
 
   const handleDelete = useCallback(() => {
     if (readonly) return
@@ -621,25 +661,162 @@ export default function WorkflowCanvas({
         onDragOver={onDragOver}
         onSelectionChange={onSelectionChange}
         onInit={(instance) => { reactFlowInstanceRef.current = instance }}
+        onMove={(e, viewport) => onViewportChange(viewport)}
+        onPaneContextMenu={onPaneContextMenu}
+        onNodeContextMenu={onNodeContextMenu}
+        onPaneClick={closeMenu}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
         selectNodesOnDrag={false}
         deleteKeyCode={null}
+        minZoom={0.1}
+        maxZoom={2}
         defaultEdgeOptions={{
           type: 'custom',
           animated: true,
         }}
       >
-        <Controls />
         <Background />
-        <MiniMap
-          nodeColor={(node) => {
-            if (node.data.isActive) return '#00FF88'
-            return '#333'
-          }}
-        />
 
+        {/* Real-time MiniMap */}
+        <div className="absolute bottom-4 right-4 z-50 pointer-events-auto">
+          <div className="bg-[#1a1a1a]/80 backdrop-blur-md border border-white/5 rounded-xl overflow-hidden shadow-2xl p-1">
+            <MiniMap
+              style={{
+                width: 200,
+                height: 150,
+                background: 'transparent',
+                borderRadius: '8px',
+              }}
+              ariaLabel="Mini visualizador do workflow"
+              maskColor="rgba(0, 0, 0, 0.4)"
+              nodeStrokeColor="#00FF88"
+              nodeColor={(node) => {
+                if (node.data.isActive) return '#00FF88'
+                return '#333'
+              }}
+              pannable
+              zoomable
+            />
+          </div>
+        </div>
+
+        {/* Custom Zoom Controls */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-[#1a1a1a]/80 backdrop-blur-md border border-white/5 p-1.5 rounded-full shadow-2xl">
+          <button
+            onClick={handleZoomOut}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white"
+            title="Zoom Out"
+          >
+            <ZoomOut size={18} />
+          </button>
+          <div className="px-3 border-x border-white/10 text-xs font-bold font-mono text-gray-400 min-w-[60px] text-center">
+            {zoom}%
+          </div>
+          <button
+            onClick={handleZoomIn}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white"
+            title="Zoom In"
+          >
+            <ZoomIn size={18} />
+          </button>
+          <button
+            onClick={handleFitView}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white ml-1"
+            title="Fit View"
+          >
+            <Maximize size={18} />
+          </button>
+        </div>
+
+        {/* Action Menu (Floating button to show sidebar if closed) */}
+        {!readonly && (
+          <div className="absolute top-6 left-6 z-50">
+            {/* Note: In page.tsx we already have a button to toggle sidebar. 
+                 This could be a quick-add node menu as well if needed. */}
+          </div>
+        )}
+
+        {/* Context Menu Rendering */}
+        {menu && (
+          <div
+            className="absolute z-[100] bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl py-2 min-w-[200px] backdrop-blur-md animate-fade-in"
+            style={{ top: menu.top, left: menu.left }}
+          >
+            {menu.type === 'pane' ? (
+              <>
+                <div className="px-4 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Adicionar Node</div>
+                <button
+                  onClick={() => { onAddNode?.(WorkflowNodeType.TRIGGER_MESSAGE, reactFlowInstanceRef.current?.screenToFlowPosition({ x: menu.left! + 50, y: menu.top! + 50 })); closeMenu() }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-blue-500/10 hover:text-blue-400 transition-colors text-sm text-gray-300"
+                >
+                  <Plus size={16} /> Novo Trigger
+                </button>
+                <div className="h-px bg-white/5 my-1" />
+                <button
+                  onClick={() => { onAddNode?.(WorkflowNodeType.SEND_MESSAGE, reactFlowInstanceRef.current?.screenToFlowPosition({ x: menu.left! + 50, y: menu.top! + 50 })); closeMenu() }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-green-500/10 hover:text-green-400 transition-colors text-sm text-gray-300"
+                >
+                  <Plus size={16} /> Enviar Mensagem
+                </button>
+                <button
+                  onClick={() => { onAddNode?.(WorkflowNodeType.CONDITION, reactFlowInstanceRef.current?.screenToFlowPosition({ x: menu.left! + 50, y: menu.top! + 50 })); closeMenu() }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors text-sm text-gray-300"
+                >
+                  <Plus size={16} /> Condição
+                </button>
+                <div className="h-px bg-white/5 my-2" />
+                <button
+                  onClick={() => { handleFitView(); closeMenu() }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/5 transition-colors text-sm text-gray-300"
+                >
+                  <Maximize size={16} /> Centralizar Fluxo
+                </button>
+                {clipboard.current && (
+                  <button
+                    onClick={() => { handlePaste(); closeMenu() }}
+                    className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/5 transition-colors text-sm text-gray-300 border-t border-white/5 mt-2"
+                  >
+                    📋 Colar Node
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="px-4 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Ações do Node</div>
+                <button
+                  onClick={() => { onNodeDoubleClick?.(menu.data); closeMenu() }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-primary/10 hover:text-primary transition-colors text-sm text-gray-300"
+                >
+                  ✏️ Editar Node
+                </button>
+                <button
+                  onClick={() => { handleCopy(); closeMenu() }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/5 transition-colors text-sm text-gray-300"
+                >
+                  📋 Copiar Node
+                </button>
+                <button
+                  onClick={() => { handleDelete(); closeMenu() }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-500/10 hover:text-red-500 transition-colors text-sm text-gray-400"
+                >
+                  🗑️ Deletar Node
+                </button>
+                <div className="h-px bg-red-500/20 my-2" />
+                <button
+                  onClick={() => {
+                    setEdges(eds => eds.filter(e => e.source !== menu.id && e.target !== menu.id))
+                    closeMenu()
+                  }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-500/10 hover:text-red-500 transition-colors text-sm text-gray-400"
+                >
+                  🔗 Desconectar Tudo
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </ReactFlow>
     </div>
   )
