@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { ContactTagsService } from './contact-tags.service';
 import { OCRService } from './ocr.service';
 import { WorkflowNodeType, ExecutionContext, HttpScrapeConfig } from '@n9n/shared';
+import { PrismaService } from '../prisma/prisma.service';
 
 // Mock puppeteer before importing the service
 const mockPage = {
@@ -38,12 +39,15 @@ describe('NodeExecutorService - HTTP_SCRAPE', () => {
     const rmktQueue = { add: jest.fn() } as any;
     const ocrService = {} as OCRService;
 
+    const prismaService = {} as PrismaService;
+
     service = new NodeExecutorService(
       contextService,
       configService,
       contactTagsService,
       ocrService,
       rmktQueue,
+      prismaService,
     );
 
     // Reset mocks
