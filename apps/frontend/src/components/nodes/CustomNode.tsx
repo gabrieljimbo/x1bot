@@ -255,7 +255,7 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
 
     // Selection style - highest priority for visual feedback
     if (selected) {
-      classes += ' ring-4 ring-offset-2 ring-offset-[#0a0a0a] ring-primary shadow-[0_0_20px_rgba(0,186,124,0.4)] '
+      classes += ' ring-4 ring-[#00FF88] ring-offset-4 ring-offset-[#0a0a0a] shadow-[0_0_30px_rgba(0,255,136,0.5)] z-[1000] '
     }
 
     if (!data.isActive) return classes

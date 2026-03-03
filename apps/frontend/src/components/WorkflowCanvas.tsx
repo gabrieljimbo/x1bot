@@ -282,6 +282,13 @@ export default function WorkflowCanvas({
     event.preventDefault()
     if (!reactFlowWrapper.current) return
 
+    // Explicitly select the node on right click
+    setNodes((nds) => nds.map((n) => ({
+      ...n,
+      selected: n.id === node.id
+    })))
+    setSelectedNodes([node.id])
+
     const rect = reactFlowWrapper.current.getBoundingClientRect()
     setMenu({
       id: node.id,
@@ -290,7 +297,7 @@ export default function WorkflowCanvas({
       type: 'node',
       data: node
     })
-  }, [])
+  }, [setNodes])
 
   const closeMenu = useCallback(() => setMenu(null), [])
 
@@ -465,8 +472,7 @@ export default function WorkflowCanvas({
   const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: Node[], edges: Edge[] }) => {
     setSelectedNodes(selectedNodes.map(n => n.id))
     setSelectedEdges(selectedEdges.map(e => e.id))
-    if (selectedNodes.length > 0 || selectedEdges.length > 0) closeMenu()
-  }, [closeMenu])
+  }, [])
 
   const handleDelete = useCallback(() => {
     if (readonly) return
@@ -786,7 +792,18 @@ export default function WorkflowCanvas({
               <>
                 <div className="px-4 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Ações do Node</div>
                 <button
-                  onClick={() => { onNodeDoubleClick?.(menu.data); closeMenu() }}
+                  onClick={() => {
+                    if (onNodeDoubleClick && menu.data) {
+                      const workflowNode: WorkflowNode = {
+                        id: menu.data.id,
+                        type: menu.data.data.type,
+                        config: menu.data.data.config,
+                        position: menu.data.position,
+                      }
+                      onNodeDoubleClick(workflowNode)
+                    }
+                    closeMenu()
+                  }}
                   className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-primary/10 hover:text-primary transition-colors text-sm text-gray-300"
                 >
                   ✏️ Editar Node
@@ -806,7 +823,28 @@ export default function WorkflowCanvas({
                 <div className="h-px bg-red-500/20 my-2" />
                 <button
                   onClick={() => {
-                    setEdges(eds => eds.filter(e => e.source !== menu.id && e.target !== menu.id))
+                    const newEdges = edges.filter(e => e.source !== menu.id && e.target !== menu.id)
+                    setEdges(newEdges)
+
+                    if (onChange) {
+                      const workflowNodes: WorkflowNode[] = nodes.map((node) => ({
+                        id: node.id,
+                        type: node.data.type,
+                        config: node.data.config,
+                        position: node.position,
+                      }))
+
+                      const workflowEdges: WorkflowEdge[] = newEdges.map((e) => ({
+                        id: e.id,
+                        source: e.source,
+                        target: e.target,
+                        label: typeof e.label === 'string' ? e.label : undefined,
+                        condition: e.sourceHandle || undefined,
+                      }))
+
+                      onChange(workflowNodes, workflowEdges)
+                    }
+
                     closeMenu()
                   }}
                   className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-500/10 hover:text-red-500 transition-colors text-sm text-gray-400"
