@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import Bottleneck from 'bottleneck';
 
 export interface MessageJob {
-    type: 'text' | 'media' | 'buttons' | 'list';
+    type: 'text' | 'media' | 'buttons' | 'list' | 'poll';
     payload: any;
     options?: any;
 }
@@ -141,7 +141,7 @@ export class MessageQueueService implements OnModuleInit {
 
         let presenceType: 'composing' | 'recording' | null = null;
 
-        if (job.type === 'text' || job.type === 'buttons' || job.type === 'list') {
+        if (job.type === 'text' || job.type === 'buttons' || job.type === 'list' || job.type === 'poll') {
             presenceType = 'composing';
         } else if (job.type === 'media') {
             const mediaType = job.options?.mediaType;

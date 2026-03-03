@@ -326,6 +326,52 @@ export class WhatsappService {
     return this.prisma.globalConfig.create({ data });
   }
 
+  /**
+   * Get all group-workflow links for a tenant
+   */
+  async getGroupLinks(tenantId: string) {
+    return this.prisma.groupWorkflowLink.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Create or update a group-workflow link
+   */
+  async createGroupLink(tenantId: string, groupJid: string, workflowId: string) {
+    return this.prisma.groupWorkflowLink.upsert({
+      where: { id: `link_${groupJid}_${workflowId}` },
+      update: { isActive: true, activatedAt: new Date() },
+      create: {
+        id: `link_${groupJid}_${workflowId}`,
+        groupJid,
+        workflowId,
+        tenantId,
+        isActive: true,
+      },
+    });
+  }
+
+  /**
+   * Delete a group link
+   */
+  async deleteGroupLink(tenantId: string, linkId: string) {
+    return this.prisma.groupWorkflowLink.delete({
+      where: { id: linkId, tenantId },
+    });
+  }
+
+  /**
+   * Get active group offers
+   */
+  async getGroupOffers(tenantId: string) {
+    return this.prisma.groupOffer.findMany({
+      where: { tenantId, status: 'active' },
+      orderBy: { expiresAt: 'asc' },
+    });
+  }
+
   private mapToSession(data: any): WhatsappSession {
     return {
       id: data.id,

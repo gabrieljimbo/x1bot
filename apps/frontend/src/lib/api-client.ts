@@ -188,6 +188,31 @@ export const apiClient = {
     return data
   },
 
+  getGroupLinks: async (tenantId: string) => {
+    const { data } = await client.get('/api/whatsapp/groups/links', {
+      params: { tenantId }
+    })
+    return data
+  },
+
+  createGroupLink: async (groupJid: string, workflowId: string, tenantId: string) => {
+    const { data } = await client.post('/api/whatsapp/groups/links', { groupJid, workflowId, tenantId })
+    return data
+  },
+
+  deleteGroupLink: async (tenantId: string, linkId: string) => {
+    await client.delete(`/api/whatsapp/groups/links/${linkId}`, {
+      params: { tenantId }
+    })
+  },
+
+  getGroupOffers: async (tenantId: string) => {
+    const { data } = await client.get('/api/whatsapp/groups/offers', {
+      params: { tenantId }
+    })
+    return data
+  },
+
   // Executions
   getExecution: async (executionId: string) => {
     const { data } = await client.get(`/api/executions/${executionId}`)

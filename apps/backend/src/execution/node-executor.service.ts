@@ -24,6 +24,13 @@ import {
   RmktConfig,
   PixConfig,
   PromoMLConfig,
+  MencionarTodosConfig,
+  AquecimentoConfig,
+  OfertaRelampagoConfig,
+  LembreteRecorrenteConfig,
+  EnqueteGrupoConfig,
+  SequenciaLancamentoConfig,
+  PromoMLApiConfig,
 } from '@n9n/shared';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -35,6 +42,7 @@ import { promisify } from 'util';
 import { PixParser } from './pix-parser.util';
 import { OCRService } from './ocr.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WhatsappSenderService } from './whatsapp-sender.service';
 
 export interface NodeExecutionResult {
   nextNodeId: string | null;
@@ -55,6 +63,12 @@ export interface NodeExecutionResult {
       sendAudioAsVoice?: boolean;
     };
     pixConfig?: PixConfig;
+    poll?: {
+      name: string;
+      values: string[];
+      selectableCount: number;
+    };
+    mentions?: string[];
   };
 }
 
@@ -69,6 +83,7 @@ export class NodeExecutorService {
     private ocrService: OCRService,
     @InjectQueue('rmkt') private rmktQueue: Queue,
     private prisma: PrismaService,
+    private whatsappSender: WhatsappSenderService,
   ) { }
 
   setWhatsappSessionManager(manager: any) {
@@ -198,6 +213,27 @@ export class NodeExecutorService {
 
       case WorkflowNodeType.PROMO_ML:
         return this.executePromoML(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.MENCIONAR_TODOS:
+        return this.executeMencionarTodos(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.AQUECIMENTO:
+        return this.executeAquecimento(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.OFERTA_RELAMPAGO:
+        return this.executeOfertaRelampago(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.LEMBRETE_RECORRENTE:
+        return this.executeLembreteRecorrente(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.ENQUETE_GRUPO:
+        return this.executeEnqueteGrupo(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.SEQUENCIA_LANCAMENTO:
+        return this.executeSequenciaLancamento(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.PROMO_ML_API:
+        return this.executePromoMLApi(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
@@ -2376,6 +2412,407 @@ ${config.footerText || ''}`;
     return {
       nextNodeId,
       shouldWait: false,
+    };
+  }
+
+  /**
+   * Execute MENCIONAR_TODOS node
+   */
+  private async executeMencionarTodos(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    defaultSessionId?: string,
+    defaultContactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as MencionarTodosConfig;
+    const sessionId = config.sessionId || defaultSessionId;
+    const contactPhone = defaultContactPhone;
+    const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
+
+    if (!sessionId || !contactPhone || !contactPhone.includes('@g.us')) {
+      throw new Error('MENCIONAR_TODOS only works within a connected WhatsApp group');
+    }
+
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentMention = await this.prisma.groupMentionLog.findFirst({
+      where: {
+        groupJid: contactPhone,
+        mentionedAt: { gte: oneHourAgo }
+      }
+    });
+
+    if (recentMention) {
+      console.warn(`[GROUP_MENTIONS] skipping mention for ${contactPhone} as it was mentioned less than 1h ago`);
+      const nextEdge = edges.find((e) => e.source === node.id);
+      return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
+    }
+
+    const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId, contactPhone);
+    const participants = metadata.participants || [];
+
+    const mentions = participants
+      .filter((p: any) => {
+        if (!config.incluirAdmins && (p.admin === 'admin' || p.admin === 'superadmin')) return false;
+        return true;
+      })
+      .map((p: any) => p.id);
+
+    await this.prisma.groupMentionLog.create({
+      data: {
+        groupJid: contactPhone,
+        tenantId: tenantId!,
+        mentionedAt: new Date()
+      }
+    });
+
+    const interpolatedMessage = this.contextService.interpolate(config.mensagem, context);
+
+    return {
+      nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
+      shouldWait: false,
+      messageToSend: {
+        sessionId,
+        contactPhone,
+        message: interpolatedMessage,
+        mentions
+      }
+    };
+  }
+
+  /**
+   * Execute AQUECIMENTO node
+   */
+  private async executeAquecimento(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    defaultSessionId?: string,
+    defaultContactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as AquecimentoConfig;
+    const sessionId = config.sessionId || defaultSessionId;
+    const contactPhone = defaultContactPhone;
+    const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
+    const workflowId = (context.variables as any)?._workflowId;
+
+    if (!contactPhone?.includes('@g.us')) throw new Error('Cuidado: AQUECIMENTO recomendado apenas para grupos');
+
+    let link = await this.prisma.groupWorkflowLink.findFirst({
+      where: { groupJid: contactPhone, workflowId, tenantId: tenantId! }
+    });
+
+    if (!link) {
+      link = await this.prisma.groupWorkflowLink.create({
+        data: { groupJid: contactPhone, workflowId, tenantId: tenantId!, isActive: true }
+      });
+    }
+
+    const diffTime = Math.abs(new Date().getTime() - link.activatedAt.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    const diaConfig = config.sequencia.find(s => s.dia === diffDays);
+
+    if (!diaConfig) {
+      const nextEdge = edges.find((e) => e.source === node.id);
+      return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
+    }
+
+    let mentions: string[] = [];
+    if (diaConfig.mencionarTodos && contactPhone.includes('@g.us')) {
+      const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId, contactPhone);
+      mentions = (metadata.participants || []).map((p: any) => p.id);
+    }
+
+    if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for AQUECIMENTO');
+
+    return {
+      nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
+      shouldWait: false,
+      messageToSend: {
+        sessionId,
+        contactPhone,
+        message: this.contextService.interpolate(diaConfig.mensagem, context),
+        mentions: mentions.length > 0 ? mentions : undefined
+      }
+    };
+  }
+
+  /**
+   * Execute OFERTA_RELAMPAGO node
+   */
+  private async executeOfertaRelampago(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    defaultSessionId?: string,
+    defaultContactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as OfertaRelampagoConfig;
+    const sessionId = config.sessionId || defaultSessionId;
+    const contactPhone = defaultContactPhone;
+    const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
+
+    const expiresAt = new Date();
+    if (config.duracao.tipo === 'tempo') {
+      expiresAt.setHours(expiresAt.getHours() + (config.duracao.horas || 0));
+      expiresAt.setMinutes(expiresAt.getMinutes() + (config.duracao.minutos || 0));
+    } else {
+      const [h, m] = config.duracao.horaFixa!.split(':').map(Number);
+      expiresAt.setHours(h, m, 0, 0);
+      if (expiresAt < new Date()) expiresAt.setDate(expiresAt.getDate() + 1);
+    }
+
+    await this.prisma.groupOffer.create({
+      data: {
+        groupJid: contactPhone!,
+        message: config.mensagemEncerramento,
+        expiresAt,
+        tenantId: tenantId!,
+        status: 'active'
+      }
+    });
+
+    let mentions: string[] = [];
+    if (config.mencionarAoAbrir && contactPhone?.includes('@g.us')) {
+      const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId!, contactPhone);
+      mentions = (metadata.participants || []).map((p: any) => p.id);
+    }
+
+    if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for OFERTA_RELAMPAGO');
+
+    return {
+      nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
+      shouldWait: false,
+      messageToSend: {
+        sessionId,
+        contactPhone,
+        message: this.contextService.interpolate(config.mensagemOferta, context),
+        mentions: mentions.length > 0 ? mentions : undefined
+      }
+    };
+  }
+
+  /**
+   * Execute LEMBRETE_RECORRENTE node
+   */
+  private async executeLembreteRecorrente(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    defaultSessionId?: string,
+    defaultContactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as LembreteRecorrenteConfig;
+    const sessionId = config.sessionId || defaultSessionId;
+    const contactPhone = defaultContactPhone;
+
+    let mentions: string[] = [];
+    if (config.mencionarTodos && contactPhone?.includes('@g.us')) {
+      const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId!, contactPhone);
+      mentions = (metadata.participants || []).map((p: any) => p.id);
+    }
+
+    if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for LEMBRETE_RECORRENTE');
+
+    return {
+      nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
+      shouldWait: false,
+      messageToSend: {
+        sessionId,
+        contactPhone,
+        message: this.contextService.interpolate(config.mensagem, context),
+        mentions: mentions.length > 0 ? mentions : undefined
+      }
+    };
+  }
+
+  /**
+   * Execute ENQUETE_GRUPO node
+   */
+  private async executeEnqueteGrupo(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    defaultSessionId?: string,
+    defaultContactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as EnqueteGrupoConfig;
+    const sessionId = config.sessionId || defaultSessionId;
+    const contactPhone = defaultContactPhone;
+
+    if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for poll');
+
+    const interpolatedQuestion = this.contextService.interpolate(config.pergunta, context);
+    const interpolatedOptions = config.opcoes.map(opt => this.contextService.interpolate(opt, context));
+
+    let mentions: string[] = [];
+    if (config.mencionarTodos && contactPhone.includes('@g.us')) {
+      try {
+        const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId, contactPhone);
+        mentions = (metadata.participants || []).map((p: any) => p.id);
+      } catch (e) {
+        console.warn(`[ENQUETE_GRUPO] Failed to fetch participants for mentions:`, e.message);
+      }
+    }
+
+    return {
+      nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
+      shouldWait: false,
+      messageToSend: {
+        sessionId,
+        contactPhone,
+        poll: {
+          name: interpolatedQuestion,
+          values: interpolatedOptions,
+          selectableCount: config.multiplas ? interpolatedOptions.length : 1
+        },
+        mentions: mentions.length > 0 ? mentions : undefined
+      }
+    };
+  }
+
+  /**
+   * Execute SEQUENCIA_LANCAMENTO node
+   */
+  private async executeSequenciaLancamento(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    defaultSessionId?: string,
+    defaultContactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as SequenciaLancamentoConfig;
+    const sessionId = config.sessionId || defaultSessionId;
+    const contactPhone = defaultContactPhone;
+    const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
+    const workflowId = (context.variables as any)?._workflowId;
+
+    let link = await this.prisma.groupWorkflowLink.findFirst({
+      where: { groupJid: contactPhone!, workflowId, tenantId: tenantId! }
+    });
+
+    if (!link) {
+      link = await this.prisma.groupWorkflowLink.create({
+        data: { groupJid: contactPhone!, workflowId, tenantId: tenantId!, isActive: true }
+      });
+    }
+
+    const diffTime = Math.abs(new Date().getTime() - link.activatedAt.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    const fase = config.fases.find(f => diffDays >= f.diaInicio && diffDays <= f.diaFim);
+
+    if (!fase) {
+      const nextEdge = edges.find((e) => e.source === node.id);
+      return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
+    }
+
+    let mentions: string[] = [];
+    if (fase.mencionarTodos && contactPhone?.includes('@g.us')) {
+      const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId!, contactPhone);
+      mentions = (metadata.participants || []).map((p: any) => p.id);
+    }
+
+    if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for SEQUENCIA_LANCAMENTO');
+
+    return {
+      nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
+      shouldWait: false,
+      messageToSend: {
+        sessionId,
+        contactPhone,
+        message: this.contextService.interpolate(fase.mensagem, context),
+        mentions: mentions.length > 0 ? mentions : undefined
+      }
+    };
+  }
+
+  /**
+   * Execute PROMO_ML_API node
+   */
+  private async executePromoMLApi(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    defaultSessionId?: string,
+    defaultContactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as PromoMLApiConfig;
+    const sessionId = config.sessionId || defaultSessionId;
+    const contactPhone = defaultContactPhone;
+    const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
+
+    const searchTerm = this.contextService.interpolate(config.searchTerm, context);
+    const category = config.category || 'MLA1051';
+
+    try {
+      const response = await fetch(`https://api.mercadolibre.com/sites/MLB/search?q=${encodeURIComponent(searchTerm)}&category=${category}&limit=20`);
+      const data = await response.json();
+      const results = (data.results || []).map((p: any) => ({
+        title: p.title,
+        price: p.price,
+        originalPrice: p.original_price || p.price,
+        discount: p.original_price ? Math.round(((p.original_price - p.price) / p.original_price) * 100) : 0,
+        rating: p.reviews?.rating_avg || 4.5,
+        reviewCount: p.reviews?.total || 10,
+        imageUrl: p.thumbnail,
+        productUrl: p.permalink,
+        seller: p.seller?.nickname || 'Mercado Livre'
+      }));
+
+      let filtered = results.filter((p: any) => {
+        if (p.rating < (config.minRating || 0)) return false;
+        if (p.discount < (config.minDiscount || 0)) return false;
+        return true;
+      });
+
+      if (config.bestValue) filtered.sort((a: any, b: any) => b.discount - a.discount);
+      filtered = filtered.slice(0, config.maxQuantity || 5);
+
+      if (config.ignoreAlreadySent) {
+        const sentUrls = await this.prisma.promoMLSent.findMany({
+          where: { tenantId: tenantId!, productUrl: { in: filtered.map((p: any) => p.productUrl) } },
+          select: { productUrl: true }
+        });
+        const sentUrlSet = new Set(sentUrls.map(s => s.productUrl));
+        filtered = filtered.filter((p: any) => !sentUrlSet.has(p.productUrl));
+      }
+
+      if (filtered.length === 0) {
+        return { nextNodeId: edges.find((e) => e.source === node.id)?.target || null, shouldWait: false };
+      }
+
+      await this.prisma.promoMLSent.createMany({
+        data: filtered.map((p: any) => ({
+          productUrl: p.productUrl,
+          tenantId: tenantId!,
+          sentAt: new Date()
+        }))
+      });
+
+      if (config.introText) {
+        await this.whatsappSender.sendMessage(sessionId!, contactPhone!, this.contextService.interpolate(config.introText, context));
+        await new Promise(r => setTimeout(r, 2000));
+      }
+
+      for (const p of filtered) {
+        const offerText = `🔥 *${p.title}*\n\n💰 *R$ ${p.price.toLocaleString('pt-BR')}*\n🏷️ Desconto: ${p.discount}%\n⭐ Avaliação: ${p.rating}\n\n🛒 Compre agora: ${p.productUrl}${config.affiliateTag ? `?aff={${config.affiliateTag}}` : ''}`;
+        await this.whatsappSender.sendMedia(sessionId!, contactPhone!, 'image', p.imageUrl, { caption: offerText });
+        await new Promise(r => setTimeout(r, (config.messageInterval || 5) * 1000));
+      }
+
+      if (config.footerText) {
+        await this.whatsappSender.sendMessage(sessionId!, contactPhone!, this.contextService.interpolate(config.footerText, context));
+      }
+
+    } catch (error) {
+      console.error('[PROMO_ML_API] Error:', error);
+    }
+
+    return {
+      nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
+      shouldWait: false
     };
   }
 }

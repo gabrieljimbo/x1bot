@@ -40,6 +40,11 @@ describe('NodeExecutorService - HTTP_SCRAPE', () => {
     const ocrService = {} as OCRService;
 
     const prismaService = {} as PrismaService;
+    const whatsappSenderService = {
+      sendMessage: jest.fn(),
+      sendMedia: jest.fn(),
+      sendPoll: jest.fn()
+    } as any;
 
     service = new NodeExecutorService(
       contextService,
@@ -48,6 +53,7 @@ describe('NodeExecutorService - HTTP_SCRAPE', () => {
       ocrService,
       rmktQueue,
       prismaService,
+      whatsappSenderService,
     );
 
     // Reset mocks

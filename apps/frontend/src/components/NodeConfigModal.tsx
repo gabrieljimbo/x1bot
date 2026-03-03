@@ -193,8 +193,8 @@ function PromoMLConfig({ config, setConfig }: any) {
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-gray-400 hover:text-gray-200'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-gray-400 hover:text-gray-200'
               }`}
           >
             <span>{tab.icon}</span>
@@ -586,7 +586,478 @@ function TriggerManualConfig({ config, setConfig, tenantId, sessions, loading }:
         </div>
       )}
     </div>
-  )
+  );
+}
+
+function MencionarTodosConfig({ config, setConfig }: any) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium mb-1.5 text-gray-200">💬 Mensagem</label>
+        <textarea
+          value={config.mensagem || ''}
+          onChange={(e) => setConfig({ ...config, mensagem: e.target.value })}
+          placeholder="Ex: Pessoal, olhem essa oferta imperdível!"
+          className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white min-h-[100px]"
+        />
+        <p className="text-[10px] text-gray-500 mt-1">A mensagem será enviada mencionando todos os membros.</p>
+      </div>
+
+      <div className="flex items-center justify-between p-4 bg-[#151515] border border-gray-700 rounded-lg">
+        <div>
+          <p className="text-sm font-medium text-gray-200">🛡️ Incluir Admins?</p>
+          <p className="text-xs text-gray-500">Se desativado, apenas membros comuns serão mencionados</p>
+        </div>
+        <button
+          onClick={() => setConfig({ ...config, incluirAdmins: !config.incluirAdmins })}
+          className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${config.incluirAdmins ? 'bg-primary' : 'bg-gray-600'}`}
+        >
+          <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${config.incluirAdmins ? 'left-6' : 'left-1'}`} />
+        </button>
+      </div>
+
+      <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+        <p className="text-xs text-yellow-500">
+          ⚠️ **Anti-Ban:** Este node possui um limite automático de 1 menção por hora por grupo para evitar SPAM e bloqueios.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function EnqueteGrupoConfig({ config, setConfig }: any) {
+  const addOption = () => {
+    const opcoes = [...(config.opcoes || []), ''];
+    setConfig({ ...config, opcoes });
+  };
+
+  const updateOption = (index: number, value: string) => {
+    const opcoes = [...(config.opcoes || [])];
+    opcoes[index] = value;
+    setConfig({ ...config, opcoes });
+  };
+
+  const removeOption = (index: number) => {
+    const opcoes = (config.opcoes || []).filter((_: any, i: number) => i !== index);
+    setConfig({ ...config, opcoes });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium mb-1.5 text-gray-200">📊 Pergunta da Enquete</label>
+        <input
+          type="text"
+          value={config.pergunta || ''}
+          onChange={(e) => setConfig({ ...config, pergunta: e.target.value })}
+          placeholder="Ex: Qual produto você mais gostou?"
+          className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-200">🔘 Opções</label>
+        {(config.opcoes || []).map((opt: string, i: number) => (
+          <div key={i} className="flex gap-2">
+            <input
+              type="text"
+              value={opt}
+              onChange={(e) => updateOption(i, e.target.value)}
+              className="flex-1 px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white"
+            />
+            <button onClick={() => removeOption(i)} className="p-2 text-red-500 hover:bg-red-500/10 rounded">✕</button>
+          </div>
+        ))}
+        <button
+          onClick={addOption}
+          className="w-full py-2 border border-dashed border-gray-600 rounded text-xs text-gray-400 hover:border-primary hover:text-primary transition-colors"
+        >
+          + Adicionar Opção
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex items-center justify-between p-3 bg-[#151515] border border-gray-700 rounded-lg">
+          <span className="text-xs text-gray-300">Múltipla escolha?</span>
+          <button
+            onClick={() => setConfig({ ...config, multiplas: !config.multiplas })}
+            className={`w-9 h-5 rounded-full relative ${config.multiplas ? 'bg-primary' : 'bg-gray-600'}`}
+          >
+            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${config.multiplas ? 'left-4.5' : 'left-0.5'}`} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between p-3 bg-[#151515] border border-gray-700 rounded-lg">
+          <span className="text-xs text-gray-300">Mencionar todos?</span>
+          <button
+            onClick={() => setConfig({ ...config, mencionarTodos: !config.mencionarTodos })}
+            className={`w-9 h-5 rounded-full relative ${config.mencionarTodos ? 'bg-primary' : 'bg-gray-600'}`}
+          >
+            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${config.mencionarTodos ? 'left-4.5' : 'left-0.5'}`} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PromoMLApiConfig({ config, setConfig }: any) {
+  const [activeTab, setActiveTab] = useState<'params' | 'filters' | 'message'>('params');
+
+  return (
+    <div className="space-y-6">
+      <div className="flex border-b border-gray-700 mb-2 overflow-x-auto no-scrollbar">
+        {[
+          { id: 'params', label: 'Busca', icon: '🔍' },
+          { id: 'filters', label: 'Filtros', icon: '⚙️' },
+          { id: 'message', label: 'Mensagens', icon: '💬' }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-gray-400 hover:text-gray-200'
+              }`}
+          >
+            <span>{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'params' && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">🔍 Termo de busca</label>
+            <input
+              type="text"
+              value={config.searchTerm || ''}
+              onChange={(e) => setConfig({ ...config, searchTerm: e.target.value })}
+              placeholder="Ex: batedeira, airfryer..."
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">📂 Categoria (ID)</label>
+            <input
+              type="text"
+              value={config.category || ''}
+              onChange={(e) => setConfig({ ...config, category: e.target.value })}
+              placeholder="Ex: MLA1051"
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">🔢 Quantidade Máxima</label>
+            <input
+              type="number"
+              value={config.maxQuantity || 5}
+              onChange={(e) => setConfig({ ...config, maxQuantity: parseInt(e.target.value) })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded text-white"
+            />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'filters' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">⭐ Nota Mínima</label>
+              <input
+                type="number"
+                step="0.1"
+                value={config.minRating || 4.5}
+                onChange={(e) => setConfig({ ...config, minRating: parseFloat(e.target.value) })}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">🏷️ Desconto Mín. %</label>
+              <input
+                type="number"
+                value={config.minDiscount || 10}
+                onChange={(e) => setConfig({ ...config, minDiscount: parseInt(e.target.value) })}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded text-white"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-[#151515] border border-gray-700 rounded-lg">
+            <span className="text-sm text-gray-300">Ignorar já enviados</span>
+            <button
+              onClick={() => setConfig({ ...config, ignoreAlreadySent: !config.ignoreAlreadySent })}
+              className={`w-9 h-5 rounded-full relative ${config.ignoreAlreadySent ? 'bg-primary' : 'bg-gray-600'}`}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${config.ignoreAlreadySent ? 'left-4.5' : 'left-0.5'}`} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'message' && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">📝 Texto de Intro</label>
+            <textarea
+              value={config.introText || ''}
+              onChange={(e) => setConfig({ ...config, introText: e.target.value })}
+              className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white h-20"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">🔗 Tag de Afiliado</label>
+            <input
+              type="text"
+              value={config.affiliateTag || ''}
+              onChange={(e) => setConfig({ ...config, affiliateTag: e.target.value })}
+              className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">⏱️ Intervalo (segundos)</label>
+            <input
+              type="number"
+              value={config.messageInterval || 5}
+              onChange={(e) => setConfig({ ...config, messageInterval: parseInt(e.target.value) })}
+              className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SequenciaLancamentoConfig({ config, setConfig }: any) {
+  const addFase = () => {
+    const fases = [...(config.fases || []), { id: Date.now().toString(), nome: '', diaInicio: 1, diaFim: 1, mensagem: '', mencionarTodos: false }];
+    setConfig({ ...config, fases });
+  };
+
+  const updateFase = (index: number, field: string, value: any) => {
+    const fases = [...(config.fases || [])];
+    fases[index] = { ...fases[index], [field]: value };
+    setConfig({ ...config, fases });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-bold text-gray-200">Fases do Lançamento</label>
+        <button onClick={addFase} className="text-xs text-primary">+ Adicionar Fase</button>
+      </div>
+
+      <div className="space-y-3 max-h-[400px] overflow-y-auto p-1">
+        {(config.fases || []).map((fase: any, i: number) => (
+          <div key={fase.id} className="p-4 bg-[#151515] border border-gray-700 rounded-lg space-y-3">
+            <input
+              type="text"
+              value={fase.nome}
+              onChange={(e) => updateFase(i, 'nome', e.target.value)}
+              placeholder="Nome da fase (ex: PPL, L)"
+              className="w-full bg-transparent border-b border-gray-600 focus:border-primary text-sm font-bold"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                value={fase.diaInicio}
+                onChange={(e) => updateFase(i, 'diaInicio', parseInt(e.target.value))}
+                placeholder="Dia Início"
+                className="bg-[#0d0d0d] border border-gray-700 rounded px-2 py-1 text-xs"
+              />
+              <input
+                type="number"
+                value={fase.diaFim}
+                onChange={(e) => updateFase(i, 'diaFim', parseInt(e.target.value))}
+                placeholder="Dia Fim"
+                className="bg-[#0d0d0d] border border-gray-700 rounded px-2 py-1 text-xs"
+              />
+            </div>
+            <textarea
+              value={fase.mensagem}
+              onChange={(e) => updateFase(i, 'mensagem', e.target.value)}
+              placeholder="Mensagem da fase..."
+              className="w-full bg-[#0d0d0d] border border-gray-700 rounded p-2 text-xs h-20"
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-400">Mencionar todos?</span>
+              <button
+                onClick={() => updateFase(i, 'mencionarTodos', !fase.mencionarTodos)}
+                className={`w-8 h-4 rounded-full relative ${fase.mencionarTodos ? 'bg-primary' : 'bg-gray-600'}`}
+              >
+                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${fase.mencionarTodos ? 'left-4.5' : 'left-0.5'}`} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OfertaRelampagoConfig({ config, setConfig }: any) {
+  // Logic for durations/fixed times
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium mb-1.5 text-gray-200">🚀 Mensagem da Oferta</label>
+        <textarea
+          value={config.mensagemOferta || ''}
+          onChange={(e) => setConfig({ ...config, mensagemOferta: e.target.value })}
+          className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white h-24"
+          placeholder="Aproveite agora! Oferta válida por tempo limitado..."
+        />
+      </div>
+
+      <div className="p-4 bg-[#151515] border border-gray-700 rounded-lg space-y-3">
+        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider text-center">⏳ Duração da Oferta</label>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setConfig({ ...config, duracao: { ...config.duracao, tipo: 'tempo' } })}
+            className={`flex-1 py-1.5 text-xs rounded border ${config.duracao?.tipo === 'tempo' ? 'border-primary text-primary bg-primary/10' : 'border-gray-700 text-gray-500'}`}
+          >
+            Tempo Parcial
+          </button>
+          <button
+            onClick={() => setConfig({ ...config, duracao: { ...config.duracao, tipo: 'fixo' } })}
+            className={`flex-1 py-1.5 text-xs rounded border ${config.duracao?.tipo === 'fixo' ? 'border-primary text-primary bg-primary/10' : 'border-gray-700 text-gray-500'}`}
+          >
+            Hora Fixa
+          </button>
+        </div>
+
+        {config.duracao?.tipo === 'tempo' ? (
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="number"
+              value={config.duracao?.horas || 0}
+              onChange={(e) => setConfig({ ...config, duracao: { ...config.duracao, horas: parseInt(e.target.value) } })}
+              placeholder="Horas"
+              className="bg-[#0d0d0d] border border-gray-700 rounded px-2 py-1.5 text-sm text-center"
+            />
+            <input
+              type="number"
+              value={config.duracao?.minutos || 15}
+              onChange={(e) => setConfig({ ...config, duracao: { ...config.duracao, minutos: parseInt(e.target.value) } })}
+              placeholder="Minutos"
+              className="bg-[#0d0d0d] border border-gray-700 rounded px-2 py-1.5 text-sm text-center"
+            />
+          </div>
+        ) : (
+          <input
+            type="time"
+            value={config.duracao?.horaFixa || '23:59'}
+            onChange={(e) => setConfig({ ...config, duracao: { ...config.duracao, horaFixa: e.target.value } })}
+            className="w-full bg-[#0d0d0d] border border-gray-700 rounded px-2 py-1.5 text-sm text-center text-white"
+          />
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1.5 text-gray-200">🏁 Mensagem de Encerramento (Automática)</label>
+        <textarea
+          value={config.mensagemEncerramento || ''}
+          onChange={(e) => setConfig({ ...config, mensagemEncerramento: e.target.value })}
+          className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white h-20"
+          placeholder="A oferta acabou! Em breve traremos novas promoções."
+        />
+      </div>
+
+      <div className="flex items-center justify-between p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
+        <span className="text-xs text-yellow-500">Mencionar ao abrir oferta?</span>
+        <button
+          onClick={() => setConfig({ ...config, mencionarAoAbrir: !config.mencionarAoAbrir })}
+          className={`w-9 h-5 rounded-full relative ${config.mencionarAoAbrir ? 'bg-yellow-500' : 'bg-gray-600'}`}
+        >
+          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${config.mencionarAoAbrir ? 'left-4.5' : 'left-0.5'}`} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AquecimentoConfig({ config, setConfig }: any) {
+  const addDia = () => {
+    const sequencia = [...(config.sequencia || []), { dia: (config.sequencia?.length || 0) + 1, mensagem: '', mencionarTodos: false }];
+    setConfig({ ...config, sequencia });
+  };
+
+  const updateDia = (index: number, field: string, value: any) => {
+    const sequencia = [...(config.sequencia || [])];
+    sequencia[index] = { ...sequencia[index], [field]: value };
+    setConfig({ ...config, sequencia });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-bold text-gray-200">Sequência de Aquecimento</label>
+        <button onClick={addDia} className="text-xs text-primary">+ Adicionar Dia</button>
+      </div>
+
+      <div className="space-y-3 max-h-[400px] overflow-y-auto p-1">
+        {(config.sequencia || []).map((s: any, i: number) => (
+          <div key={i} className="p-4 bg-[#151515] border border-gray-700 rounded-lg space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-primary italic">DIA {s.dia}</span>
+              <button onClick={() => setConfig({ ...config, sequencia: config.sequencia.filter((_: any, idx: number) => idx !== i) })} className="text-xs text-red-500">Remover</button>
+            </div>
+            <textarea
+              value={s.mensagem}
+              onChange={(e) => updateDia(i, 'mensagem', e.target.value)}
+              placeholder={`Mensagem para o dia ${s.dia}...`}
+              className="w-full bg-[#0d0d0d] border border-gray-700 rounded p-2 text-xs h-20"
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-400">Mencionar todos?</span>
+              <button
+                onClick={() => updateDia(i, 'mencionarTodos', !s.mencionarTodos)}
+                className={`w-8 h-4 rounded-full relative ${s.mencionarTodos ? 'bg-primary' : 'bg-gray-600'}`}
+              >
+                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${s.mencionarTodos ? 'left-4.5' : 'left-0.5'}`} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LembreteRecorrenteConfig({ config, setConfig }: any) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium mb-1.5 text-gray-200">⏰ Horário (HH:MM)</label>
+        <input
+          type="time"
+          value={config.horario || '09:00'}
+          onChange={(e) => setConfig({ ...config, horario: e.target.value })}
+          className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded text-center text-white font-mono"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1.5 text-gray-200">💬 Mensagem do Lembrete</label>
+        <textarea
+          value={config.mensagem || ''}
+          onChange={(e) => setConfig({ ...config, mensagem: e.target.value })}
+          className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white h-24"
+          placeholder="Bom dia! Lembrete de que hoje temos live às 20h..."
+        />
+      </div>
+
+      <div className="flex items-center justify-between p-3 bg-[#151515] border border-gray-700 rounded-lg">
+        <span className="text-xs text-gray-300">Mencionar todos?</span>
+        <button
+          onClick={() => setConfig({ ...config, mencionarTodos: !config.mencionarTodos })}
+          className={`w-9 h-5 rounded-full relative ${config.mencionarTodos ? 'bg-primary' : 'bg-gray-600'}`}
+        >
+          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${config.mencionarTodos ? 'left-4.5' : 'left-0.5'}`} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // Editor de código Monaco (VS Code)
@@ -854,6 +1325,27 @@ export default function NodeConfigModal({
     switch (node.type) {
       case WorkflowNodeType.PROMO_ML:
         return <PromoMLConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.MENCIONAR_TODOS:
+        return <MencionarTodosConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.AQUECIMENTO:
+        return <AquecimentoConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.OFERTA_RELAMPAGO:
+        return <OfertaRelampagoConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.LEMBRETE_RECORRENTE:
+        return <LembreteRecorrenteConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.ENQUETE_GRUPO:
+        return <EnqueteGrupoConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.SEQUENCIA_LANCAMENTO:
+        return <SequenciaLancamentoConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.PROMO_ML_API:
+        return <PromoMLApiConfig config={config} setConfig={setConfig} />
 
       case 'TRIGGER_MESSAGE':
         return (

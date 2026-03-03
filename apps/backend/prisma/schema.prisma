@@ -371,3 +371,43 @@ model PromoMLSent {
   @@index([tenantId])
   @@map("promo_ml_sent")
 }
+
+model GroupWorkflowLink {
+  id          String   @id @default(cuid())
+  groupJid    String
+  workflowId  String
+  tenantId    String
+  isActive    Boolean  @default(true)
+  activatedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([groupJid])
+  @@index([workflowId])
+  @@index([tenantId])
+  @@map("group_workflow_links")
+}
+
+model GroupOffer {
+  id        String   @id @default(cuid())
+  groupJid  String
+  message   String
+  expiresAt DateTime
+  tenantId  String
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+
+  @@index([groupJid])
+  @@index([tenantId])
+  @@map("group_offers")
+}
+
+model GroupMentionLog {
+  id          String   @id @default(cuid())
+  groupJid    String
+  tenantId    String
+  mentionedAt DateTime @default(now())
+
+  @@index([groupJid])
+  @@index([tenantId])
+  @@map("group_mention_log")
+}

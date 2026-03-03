@@ -239,6 +239,71 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         borderColor: 'border-[#7d3b3b]',
         description: 'Finaliza o workflow'
       }
+    ],
+    GROUPS: [
+      {
+        type: WorkflowNodeType.MENCIONAR_TODOS,
+        label: 'Mencionar Todos',
+        icon: '📢',
+        color: 'from-indigo-500 to-indigo-600',
+        bgColor: 'bg-[#1a1c3a]',
+        borderColor: 'border-[#3b3b7d]',
+        description: 'Menciona todos os membros do grupo (respeita 1h de intervalo)'
+      },
+      {
+        type: WorkflowNodeType.AQUECIMENTO,
+        label: 'Aquecimento',
+        icon: '🔥',
+        color: 'from-orange-500 to-red-600',
+        bgColor: 'bg-[#2a1a1a]',
+        borderColor: 'border-[#7d3b3b]',
+        description: 'Sequência diária para aquecer grupos novos'
+      },
+      {
+        type: WorkflowNodeType.OFERTA_RELAMPAGO,
+        label: 'Oferta Relâmpago',
+        icon: '⚡',
+        color: 'from-yellow-400 to-yellow-600',
+        bgColor: 'bg-[#2a261a]',
+        borderColor: 'border-[#7d6b3b]',
+        description: 'Cria uma oferta com cronômetro e encerramento automático'
+      },
+      {
+        type: WorkflowNodeType.LEMBRETE_RECORRENTE,
+        label: 'Lembrete Recorrente',
+        icon: '⏰',
+        color: 'from-blue-400 to-blue-600',
+        bgColor: 'bg-[#1a242e]',
+        borderColor: 'border-[#3b5d7d]',
+        description: 'Envia lembretes em horários fixos para o grupo'
+      },
+      {
+        type: WorkflowNodeType.ENQUETE_GRUPO,
+        label: 'Enquete de Grupo',
+        icon: '📊',
+        color: 'from-teal-400 to-teal-600',
+        bgColor: 'bg-[#1a2e2e]',
+        borderColor: 'border-[#3b7d7d]',
+        description: 'Cria enquetes interativas no grupo'
+      },
+      {
+        type: WorkflowNodeType.SEQUENCIA_LANCAMENTO,
+        label: 'Sequência de Lançamento',
+        icon: '🚀',
+        color: 'from-purple-500 to-pink-600',
+        bgColor: 'bg-[#2e1a2e]',
+        borderColor: 'border-[#7d3b7d]',
+        description: 'Automação completa para fases de lançamento (PPL/L)'
+      },
+      {
+        type: WorkflowNodeType.PROMO_ML_API,
+        label: 'Promo ML (API)',
+        icon: '🛒',
+        color: 'from-yellow-400 to-yellow-500',
+        bgColor: 'bg-[#2a2a0a]',
+        borderColor: 'border-[#8a7a0a]',
+        description: 'Busca oficial via API do ML com filtros avançados'
+      }
     ]
   }
   const [searchTerm, setSearchTerm] = useState('')
@@ -296,10 +361,10 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
             >
               <div className="flex items-center gap-2">
                 <span className="text-lg">
-                  {category === 'TRIGGERS' ? '🎯' : '⚡'}
+                  {category === 'TRIGGERS' ? '🎯' : category === 'GROUPS' ? '👥' : '⚡'}
                 </span>
                 <span className="text-sm font-semibold text-gray-300">
-                  {category === 'TRIGGERS' ? '🎯 GATILHOS' : '⚡ AÇÕES DO FLUXO'}
+                  {category === 'TRIGGERS' ? '🎯 GATILHOS' : category === 'GROUPS' ? '👥 FLUXOS DE GRUPO' : '⚡ AÇÕES DO FLUXO'}
                 </span>
               </div>
               <span className="text-gray-500">

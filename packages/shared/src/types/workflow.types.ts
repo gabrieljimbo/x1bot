@@ -23,6 +23,13 @@ export enum WorkflowNodeType {
   SEND_PIX = 'SEND_PIX',
   MARK_STAGE = 'MARK_STAGE',
   PROMO_ML = 'PROMO_ML',
+  MENCIONAR_TODOS = 'MENCIONAR_TODOS',
+  AQUECIMENTO = 'AQUECIMENTO',
+  OFERTA_RELAMPAGO = 'OFERTA_RELAMPAGO',
+  LEMBRETE_RECORRENTE = 'LEMBRETE_RECORRENTE',
+  ENQUETE_GRUPO = 'ENQUETE_GRUPO',
+  SEQUENCIA_LANCAMENTO = 'SEQUENCIA_LANCAMENTO',
+  PROMO_ML_API = 'PROMO_ML_API',
   END = 'END',
 }
 
@@ -384,5 +391,93 @@ export interface PromoMLConfig {
   messageInterval: number;
   ignoreAlreadySent: boolean;
   saveResponseAs?: string;
+}
+
+export interface MencionarTodosConfig {
+  mensagem: string;
+  mencionarMembros: boolean;
+  incluirAdmins: boolean;
+  sessionId?: string;
+}
+
+export interface AquecimentoDia {
+  dia: number;
+  horario: string;
+  mensagem: string;
+  mencionarTodos: boolean;
+}
+
+export interface AquecimentoConfig {
+  sequencia: AquecimentoDia[];
+  sessionId?: string;
+  contarAtivado?: boolean;
+  pausarAposSequencia?: boolean;
+}
+
+export interface OfertaRelampagoConfig {
+  mensagemOferta: string;
+  duracao: {
+    tipo: 'tempo' | 'hora_fixa';
+    horas?: number;
+    minutos?: number;
+    horaFixa?: string;
+  };
+  mensagemEncerramento: string;
+  mencionarAoAbrir: boolean;
+  mencionarAoEncerrar: boolean;
+  sessionId?: string;
+}
+
+export interface LembreteRecorrenteConfig {
+  mensagem: string;
+  recorrencia: {
+    tipo: 'diario' | 'semanal' | 'intervalo';
+    horario?: string;
+    diasSemana?: number[];
+    intervaloHoras?: number;
+  };
+  mencionarTodos: boolean;
+  sessionId?: string;
+}
+
+export interface EnqueteGrupoConfig {
+  pergunta: string;
+  opcoes: string[];
+  multiplas: boolean;
+  mencionarTodos: boolean;
+  sessionId?: string;
+}
+
+export interface SequenciaLancamentoFase {
+  id: string;
+  nome: string;
+  diaInicio: number;
+  diaFim: number;
+  horario: string;
+  mensagem: string;
+  mencionarTodos: boolean;
+}
+
+export interface SequenciaLancamentoConfig {
+  fases: SequenciaLancamentoFase[];
+  contarAtivado?: boolean;
+  notificarAdmin?: boolean;
+  sessionId?: string;
+}
+
+export interface PromoMLApiConfig {
+  searchTerm: string;
+  category: string;
+  minRating: number;
+  minDiscount: number;
+  bestValue: boolean;
+  maxQuantity: number;
+  affiliateTag?: string;
+  introText?: string;
+  footerText?: string;
+  messageInterval: number;
+  ignoreAlreadySent: boolean;
+  saveResponseAs?: string;
+  sessionId?: string;
 }
 

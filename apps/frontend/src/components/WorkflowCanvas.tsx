@@ -282,7 +282,7 @@ export default function WorkflowCanvas({
     event.preventDefault()
     if (!reactFlowWrapper.current) return
 
-    // Explicitly select the node on right click
+    // Ensure the node is selected
     setNodes((nds) => nds.map((n) => ({
       ...n,
       selected: n.id === node.id
@@ -469,81 +469,66 @@ export default function WorkflowCanvas({
     [onAddNode]
   )
 
-  const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: Node[], edges: Edge[] }) => {
+  const onSelectionChange = ({ nodes: selectedNodes, edges: selectedEdges }: { nodes: Node[], edges: Edge[] }) => {
     setSelectedNodes(selectedNodes.map(n => n.id))
     setSelectedEdges(selectedEdges.map(e => e.id))
-  }, [])
+  }
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback((specificNodeId?: string) => {
     if (readonly) return
 
-    if (selectedNodes.length > 0) {
-      const updatedNodes = nodes.filter(n => !selectedNodes.includes(n.id))
-      const updatedEdges = edges.filter(e => !selectedNodes.includes(e.source) && !selectedNodes.includes(e.target))
+    const nodeIdsToDelete = specificNodeId ? [specificNodeId] : selectedNodes
 
-      setNodes(updatedNodes)
-      setEdges(updatedEdges)
+    if (nodeIdsToDelete.length > 0) {
+      setNodes((currentNodes) => {
+        const updatedNodes = currentNodes.filter(n => !nodeIdsToDelete.includes(n.id))
 
-      if (onChange) {
-        const workflowNodes: WorkflowNode[] = updatedNodes.map((node) => ({
-          id: node.id,
-          type: node.data.type,
-          config: node.data.config,
-          position: node.position,
-        }))
+        setEdges((currentEdges) => {
+          const updatedEdges = currentEdges.filter(e =>
+            !nodeIdsToDelete.includes(e.source) && !nodeIdsToDelete.includes(e.target)
+          )
 
-        const workflowEdges: WorkflowEdge[] = updatedEdges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          label: typeof e.label === 'string' ? e.label : undefined,
-          condition: e.sourceHandle || undefined,
-        }))
+          if (onChange) {
+            const workflowNodes: WorkflowNode[] = updatedNodes.map((node) => ({
+              id: node.id,
+              type: node.data.type,
+              config: node.data.config,
+              position: node.position,
+            }))
 
-        onChange(workflowNodes, workflowEdges)
-      }
+            const workflowEdges: WorkflowEdge[] = updatedEdges.map((e) => ({
+              id: e.id,
+              source: e.source,
+              target: e.target,
+              label: typeof e.label === 'string' ? e.label : undefined,
+              condition: e.sourceHandle || undefined,
+            }))
+
+            onChange(workflowNodes, workflowEdges)
+          }
+
+          return updatedEdges
+        })
+
+        return updatedNodes
+      })
 
       setSelectedNodes([])
     }
+  }, [readonly, selectedNodes, selectedEdges, onChange, setNodes, setEdges])
 
-    if (selectedEdges.length > 0) {
-      const updatedEdges = edges.filter(e => !selectedEdges.includes(e.id))
+  const handleCopy = useCallback((specificNodeId?: string) => {
+    const nodeIdsToCopy = specificNodeId ? [specificNodeId] : selectedNodes
 
-      setEdges(updatedEdges)
-
-      if (onChange) {
-        const workflowNodes: WorkflowNode[] = nodes.map((node) => ({
-          id: node.id,
-          type: node.data.type,
-          config: node.data.config,
-          position: node.position,
-        }))
-
-        const workflowEdges: WorkflowEdge[] = updatedEdges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          label: typeof e.label === 'string' ? e.label : undefined,
-          condition: e.sourceHandle || undefined,
-        }))
-
-        onChange(workflowNodes, workflowEdges)
-      }
-
-      setSelectedEdges([])
-    }
-  }, [readonly, selectedNodes, selectedEdges, nodes, edges, onChange])
-
-  const clipboard = useRef<{ nodes: Node[], edges: Edge[] } | null>(null)
-
-  const handleCopy = useCallback(() => {
-    const nodesToCopy = nodes.filter(n => n.selected || selectedNodes.includes(n.id))
-    const edgesToCopy = edges.filter(e => e.selected || selectedEdges.includes(e.id))
+    const nodesToCopy = nodes.filter(n => nodeIdsToCopy.includes(n.id))
+    const edgesToCopy = edges.filter(e =>
+      nodeIdsToCopy.includes(e.source) && nodeIdsToCopy.includes(e.target)
+    )
 
     if (nodesToCopy.length > 0) {
       clipboard.current = { nodes: nodesToCopy, edges: edgesToCopy }
     }
-  }, [nodes, edges, selectedNodes, selectedEdges])
+  }, [nodes, edges, selectedNodes])
 
   const handlePaste = useCallback(() => {
     if (!clipboard.current || readonly) return
@@ -809,14 +794,20 @@ export default function WorkflowCanvas({
                   ✏️ Editar Node
                 </button>
                 <button
-                  onClick={() => { handleCopy(); closeMenu() }}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/5 transition-colors text-sm text-gray-300"
+                  onClick={() => {
+                    handleCopy(menu.id)
+                    closeMenu()
+                  }}
+                  className="w-full px-4 py-1.5 flex items-center gap-3 hover:bg-white/5 transition-colors text-sm text-gray-300"
                 >
                   📋 Copiar Node
                 </button>
                 <button
-                  onClick={() => { handleDelete(); closeMenu() }}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-500/10 hover:text-red-500 transition-colors text-sm text-gray-400"
+                  onClick={() => {
+                    handleDelete(menu.id)
+                    closeMenu()
+                  }}
+                  className="w-full px-4 py-1.5 flex items-center gap-3 hover:bg-red-500/10 hover:text-red-500 transition-colors text-sm text-gray-400"
                 >
                   🗑️ Deletar Node
                 </button>

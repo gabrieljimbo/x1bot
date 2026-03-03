@@ -31,6 +31,8 @@ export class WhatsappSenderService {
   private sendMediaCallback: ((sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) => Promise<void>) | null = null;
   private sendPresenceCallback: ((sessionId: string, contactPhone: string, presence: 'composing' | 'recording' | 'paused') => Promise<void>) | null = null;
   private sendPixCallback: ((sessionId: string, contactPhone: string, config: PixConfig) => Promise<void>) | null = null;
+  private sendPollCallback: ((sessionId: string, contactPhone: string, name: string, values: string[], selectableCount: number) => Promise<void>) | null = null;
+  private sendMessageWithMentionsCallback: ((sessionId: string, contactPhone: string, message: string, mentions: string[]) => Promise<void>) | null = null;
 
   /**
    * Register the send presence callback
@@ -182,6 +184,54 @@ export class WhatsappSenderService {
       await this.sendPixCallback(sessionId, contactPhone, config);
     } catch (error) {
       console.error('Error sending WhatsApp PIX:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Register the send poll callback
+   */
+  registerSendPoll(callback: (sessionId: string, contactPhone: string, name: string, values: string[], selectableCount: number) => Promise<void>) {
+    this.sendPollCallback = callback;
+  }
+
+  /**
+   * Send WhatsApp poll message
+   */
+  async sendPoll(sessionId: string, contactPhone: string, name: string, values: string[], selectableCount: number): Promise<void> {
+    if (!this.sendPollCallback) {
+      console.warn('WhatsApp send poll callback not registered yet');
+      return;
+    }
+
+    try {
+      await this.sendPollCallback(sessionId, contactPhone, name, values, selectableCount);
+    } catch (error) {
+      console.error('Error sending WhatsApp poll:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Register the send message with mentions callback
+   */
+  registerSendMessageWithMentions(callback: (sessionId: string, contactPhone: string, message: string, mentions: string[]) => Promise<void>) {
+    this.sendMessageWithMentionsCallback = callback;
+  }
+
+  /**
+   * Send WhatsApp message with mentions
+   */
+  async sendMessageWithMentions(sessionId: string, contactPhone: string, message: string, mentions: string[]): Promise<void> {
+    if (!this.sendMessageWithMentionsCallback) {
+      console.warn('WhatsApp send message with mentions callback not registered yet');
+      return;
+    }
+
+    try {
+      await this.sendMessageWithMentionsCallback(sessionId, contactPhone, message, mentions);
+    } catch (error) {
+      console.error('Error sending WhatsApp message with mentions:', error);
       throw error;
     }
   }

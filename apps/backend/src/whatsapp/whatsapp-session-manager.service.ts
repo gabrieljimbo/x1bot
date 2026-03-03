@@ -105,6 +105,18 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         this.sendPix(sessionId, contactPhone, config)
     );
 
+    // Register send poll callback
+    this.whatsappSender.registerSendPoll(
+      (sessionId: string, contactPhone: string, name: string, values: string[], selectableCount: number) =>
+        this.sendPoll(sessionId, contactPhone, name, values, selectableCount)
+    );
+
+    // Register send message with mentions callback
+    this.whatsappSender.registerSendMessageWithMentions(
+      (sessionId: string, contactPhone: string, message: string, mentions: string[]) =>
+        this.sendMessageWithMentions(sessionId, contactPhone, message, mentions)
+    );
+
     // Auto-reconnect active sessions with staggered delay
     this.reconnectActiveSessions();
   }
@@ -1091,4 +1103,67 @@ Após o pagamento, envie o comprovante aqui. ✅
       await fs.unlink(outputFile).catch(() => { });
     }
   }
+
+  /**
+   * Send WhatsApp poll message
+   */
+  async sendPoll(sessionId: string, contactPhone: string, name: string, values: string[], selectableCount: number): Promise<void> {
+    const sessionClient = this.resolveSessionClient(sessionId);
+    if (!sessionClient) throw new Error(`Session ${sessionId} not found`);
+
+    const jid = this.formatJid(contactPhone);
+    await this.messageQueue.enqueue(
+      sessionId,
+      jid,
+      sessionClient.socket,
+      { type: 'poll', payload: { name, values, selectableCount } },
+      async () => {
+        await sessionClient.socket.sendMessage(jid, {
+          poll: {
+            name,
+            values,
+            selectableCount
+          }
+        });
+      }
+    );
+  }
+
+  /**
+   * Send WhatsApp message with mentions
+   */
+  async sendMessageWithMentions(sessionId: string, contactPhone: string, message: string, mentions: string[]): Promise<void> {
+    const sessionClient = this.resolveSessionClient(sessionId);
+    if (!sessionClient) throw new Error(`Session ${sessionId} not found`);
+
+    const jid = this.formatJid(contactPhone);
+    await this.messageQueue.enqueue(
+      sessionId,
+      jid,
+      sessionClient.socket,
+      { type: 'text', payload: { text: message, mentions } },
+      async () => {
+        await sessionClient.socket.sendMessage(jid, {
+          text: message,
+          mentions
+        });
+      }
+    );
+  }
+
+  /**
+   * Get group metadata
+   */
+  async getGroupMetadata(sessionId: string, groupJid: string): Promise<any> {
+    const sessionClient = this.resolveSessionClient(sessionId);
+    if (!sessionClient) throw new Error(`Session ${sessionId} not found`);
+
+    try {
+      return await sessionClient.socket.groupMetadata(groupJid);
+    } catch (error: any) {
+      console.error(`[GROUP_METADATA] Failed to fetch metadata for ${groupJid}:`, error.message);
+      throw error;
+    }
+  }
 }
+

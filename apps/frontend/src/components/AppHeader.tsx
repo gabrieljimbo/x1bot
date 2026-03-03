@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { LogOut, User, ShieldCheck, Star, MessageSquare, Menu, X, Building2, Shield } from 'lucide-react'
+import { LogOut, User, ShieldCheck, Star, MessageSquare, Menu, X, Building2, Shield, Users } from 'lucide-react'
 import { isSuperAdmin, UserRole } from '@/lib/permissions'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
@@ -67,6 +67,14 @@ export default function AppHeader() {
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
+            </Link>
+
+            <Link
+              href="/workflows/groups"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
+            >
+              <Users size={16} />
+              Fluxos de Grupo
             </Link>
 
             {isSuperAdmin(user?.role) && (
