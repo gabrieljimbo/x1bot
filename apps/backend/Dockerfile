@@ -9,8 +9,17 @@ COPY .npmrc ./
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV npm_config_ignore_scripts=false
 
-# Install native build tools for canvas
+# Install native build tools for canvas and puppeteer
 RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto-emoji \
+    udev \
+    ttf-liberation \
     build-base \
     g++ \
     cairo-dev \
@@ -20,6 +29,9 @@ RUN apk add --no-cache \
     pixman-dev \
     glib-dev \
     python3
+
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared ./packages/shared
@@ -59,11 +71,11 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    ttf-opensans \
-    postgresql-client \
-    openssl \
+    font-noto-emoji \
     udev \
     ttf-liberation \
+    postgresql-client \
+    openssl \
     ffmpeg \
     cairo \
     pango \
@@ -73,7 +85,8 @@ RUN apk add --no-cache \
     && rm -rf /var/cache/apk/*
 
 # Use direct chromium path to avoid symlink issues
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Copy all pre-compiled node_modules from base stage
 # This avoids running pnpm install --prod in production (which would try to recompiling canvas)
