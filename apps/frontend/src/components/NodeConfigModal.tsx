@@ -960,6 +960,396 @@ function SequenciaLancamentoConfig({ config, setConfig }: any) {
   );
 }
 
+function ScheduleTriggerConfig({ config, setConfig, sessions, loading }: any) {
+  const scheduleModes = [
+    { id: 'datetime', label: '📅 Data e Hora Específica', desc: 'Executar uma vez em data e hora específica' },
+    { id: 'daily', label: '🕐 Hora Fixa Diária', desc: 'Executar todo dia em um horário fixo' },
+    { id: 'interval', label: '⏱️ Intervalo Regular', desc: 'Repetir em intervalos regulares' },
+    { id: 'weekly', label: '📆 Dias da Semana Específicos', desc: 'Executar apenas nos dias selecionados' },
+    { id: 'cron', label: '⚙️ Expressão Cron (Avançado)', desc: 'Configuração manual' }
+  ];
+
+  const [mode, setMode] = useState(config.scheduleMode || 'datetime');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Helper to generate Cron string from visual selections
+  const regenerateCron = (newConfig: any, currentMode: string) => {
+    let cron = '';
+    const date = new Date(newConfig.specificDate || Date.now());
+    const [hour, minute] = (newConfig.time || '09:00').split(':');
+
+    switch (currentMode) {
+      case 'datetime':
+        // e.g., "0 9 25 12 *"
+        cron = `${parseInt(minute)} ${parseInt(hour)} ${date.getDate()} ${date.getMonth() + 1} *`;
+        break;
+      case 'daily': {
+        // e.g., "0 9 * * 1,3,5" or "0 9 * * *"
+        const days = newConfig.selectedDays?.length ? newConfig.selectedDays.join(',') : '*';
+        cron = `${parseInt(minute)} ${parseInt(hour)} * * ${days}`;
+        break;
+      }
+      case 'interval': {
+        // "A cada X horas entre H1 e H2"
+        const intHours = parseInt(newConfig.intervalHours || '2');
+        const [startH] = (newConfig.timeStart || '08:00').split(':');
+        const [endH] = (newConfig.timeEnd || '20:00').split(':');
+
+        const hoursList = [];
+        let currentH = parseInt(startH);
+        const endHourNum = parseInt(endH);
+
+        while (currentH <= endHourNum) {
+          hoursList.push(currentH);
+          currentH += intHours;
+        }
+
+        if (hoursList.length === 0) hoursList.push(parseInt(startH));
+
+        cron = `0 ${hoursList.join(',')} * * *`;
+        break;
+      }
+      case 'weekly': {
+        const days = newConfig.selectedDays?.length ? newConfig.selectedDays.join(',') : '*';
+        cron = `${parseInt(minute)} ${parseInt(hour)} * * ${days}`;
+        break;
+      }
+      case 'cron':
+        cron = newConfig.cronExpression || '0 * * * *';
+        break;
+    }
+
+    return cron;
+  };
+
+  const updateField = (field: string, value: any) => {
+    const newConfig = { ...config, [field]: value };
+    // Only auto-generate cron if we are not manually editing it
+    if (mode !== 'cron') {
+      newConfig.cronExpression = regenerateCron(newConfig, mode);
+      newConfig.scheduleType = 'cron'; // Backend always expects cron
+    }
+    newConfig.scheduleMode = mode;
+    setConfig(newConfig);
+  };
+
+  const handleModeChange = (newMode: string) => {
+    setMode(newMode);
+
+    // Set some sane defaults strictly when changing modes
+    let newDefaults = { ...config, scheduleMode: newMode };
+    if (!newDefaults.time) newDefaults.time = '09:00';
+    if (!newDefaults.selectedDays) newDefaults.selectedDays = [];
+
+    const newCron = regenerateCron(newDefaults, newMode);
+    setConfig({ ...newDefaults, cronExpression: newCron, scheduleType: 'cron' });
+  };
+
+  const toggleDay = (dayIndex: number) => {
+    const current = config.selectedDays || [];
+    const updated = current.includes(dayIndex)
+      ? current.filter((d: number) => d !== dayIndex)
+      : [...current, dayIndex].sort();
+    updateField('selectedDays', updated);
+  };
+
+  const daysOfWeek = [
+    { label: 'Dom', val: 0 }, { label: 'Seg', val: 1 }, { label: 'Ter', val: 2 },
+    { label: 'Qua', val: 3 }, { label: 'Qui', val: 4 }, { label: 'Sex', val: 5 }, { label: 'Sáb', val: 6 }
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Session Selection */}
+      <div>
+        <label className="block text-sm font-medium mb-2 text-gray-200">
+          Sessão WhatsApp
+        </label>
+        <select
+          value={config.sessionId || ''}
+          onChange={(e) => updateField('sessionId', e.target.value)}
+          className="w-full px-4 py-2 bg-[#151515] border border-gray-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-sm text-white"
+          disabled={loading}
+        >
+          <option value="">Primeira sessão ativa</option>
+          {sessions.map((session: any) => (
+            <option key={session.id} value={session.id}>
+              {session.name} ({session.phoneNumber})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Mode Selector */}
+      <div className="bg-[#151515] p-1 rounded-lg border border-gray-800 flex flex-col gap-1">
+        {scheduleModes.map(m => (
+          <button
+            key={m.id}
+            onClick={() => handleModeChange(m.id)}
+            className={`w-full text-left px-3 py-2 rounded-md transition-all flex items-start flex-col
+              ${mode === m.id ? 'bg-[#252525] border-l-2 border-primary' : 'hover:bg-[#1a1a1a] border-l-2 border-transparent text-gray-400'}`}
+          >
+            <span className={`text-sm font-semibold ${mode === m.id ? 'text-white' : ''}`}>{m.label}</span>
+            <span className="text-[10px] opacity-70 mt-0.5">{m.desc}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Specific Content Based on Mode */}
+      <div className="p-4 bg-[#111] border border-gray-800 rounded-lg space-y-4">
+
+        {mode === 'datetime' && (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Data</label>
+              <input type="date" value={config.specificDate || ''} onChange={e => updateField('specificDate', e.target.value)} className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-sm text-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Hora</label>
+              <input type="time" value={config.time || '09:00'} onChange={e => updateField('time', e.target.value)} className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-sm text-white" />
+            </div>
+          </div>
+        )}
+
+        {(mode === 'daily' || mode === 'weekly') && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Horário</label>
+              <input type="time" value={config.time || '09:00'} onChange={e => updateField('time', e.target.value)} className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-sm text-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Dias da Semana {mode === 'daily' && '(Opcional)'}</label>
+              <div className="flex gap-1">
+                {daysOfWeek.map(d => {
+                  const active = (config.selectedDays || []).includes(d.val);
+                  return (
+                    <button
+                      key={d.val}
+                      onClick={() => toggleDay(d.val)}
+                      className={`flex-1 py-1.5 rounded text-xs font-bold transition-colors border
+                        ${active ? 'bg-primary/20 text-primary border-primary/50' : 'bg-[#0a0a0a] text-gray-500 border-gray-800 hover:border-gray-600'}`}
+                    >
+                      {d.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {mode === 'interval' && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">A Cada (Horas)</label>
+              <select value={config.intervalHours || '2'} onChange={e => updateField('intervalHours', e.target.value)} className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-sm text-white">
+                {[1, 2, 3, 4, 6, 8, 12, 24].map(h => <option key={h} value={h}>{h} Hora{h > 1 ? 's' : ''}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4 border-t border-gray-800 mt-4 pt-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Início</label>
+                <input type="time" value={config.timeStart || '08:00'} onChange={e => updateField('timeStart', e.target.value)} className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-sm text-white" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Fim</label>
+                <input type="time" value={config.timeEnd || '20:00'} onChange={e => updateField('timeEnd', e.target.value)} className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-sm text-white" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {mode === 'cron' && (
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest">Expressão Cron</label>
+            <input type="text" value={config.cronExpression || '0 * * * *'} onChange={e => updateField('cronExpression', e.target.value)} className="w-full bg-[#0a0a0a] border border-primary/30 rounded px-3 py-2 text-sm text-white font-mono" />
+          </div>
+        )}
+      </div>
+
+      {/* Computed Preview */}
+      <div className="flex items-center gap-3 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
+        <span className="text-xl">⚙️</span>
+        <div>
+          <p className="text-xs text-indigo-300 font-semibold mb-0.5">Resultado Cron</p>
+          <code className="text-xs text-white font-mono bg-black/40 px-2 py-0.5 rounded">{config.cronExpression || '* * * * *'}</code>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GroupTriggerConfig({ config, setConfig }: any) {
+  // Inicializar com padrões se vazio
+  useEffect(() => {
+    if (!config.executions || config.executions.length === 0) {
+      setConfig({
+        ...config,
+        executions: [
+          { id: crypto.randomUUID(), type: 'days_after', day: 1, time: '09:00' },
+          { id: crypto.randomUUID(), type: 'days_after', day: 2, time: '09:00' },
+          { id: crypto.randomUUID(), type: 'days_after', day: 7, time: '09:00' }
+        ],
+        repeatSequence: false,
+        ignoreIfOffline: false
+      });
+    }
+  }, []);
+
+  const executions = config.executions || [];
+
+  const addExecution = () => {
+    setConfig({
+      ...config,
+      executions: [...executions, { id: crypto.randomUUID(), type: 'days_after', day: 1, time: '09:00' }]
+    });
+  };
+
+  const removeExecution = (id: string) => {
+    setConfig({
+      ...config,
+      executions: executions.filter((e: any) => e.id !== id)
+    });
+  };
+
+  const updateExecution = (id: string, field: string, value: any) => {
+    setConfig({
+      ...config,
+      executions: executions.map((e: any) => e.id === id ? { ...e, [field]: value } : e)
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+
+      {/* Container Principal */}
+      <div className="bg-[#111] border border-gray-800 rounded-lg p-4 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-gray-800">
+          <h3 className="text-sm font-semibold text-gray-200">📅 Agenda de Execução</h3>
+          <button
+            onClick={addExecution}
+            className="text-xs bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 font-medium px-3 py-1.5 rounded transition-colors flex items-center gap-1.5"
+          >
+            + Adicionar Execução
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {executions.map((exec: any, index: number) => (
+            <div key={exec.id} className="bg-[#1a1a1a] p-3 rounded border border-gray-700 relative group">
+
+              <button
+                onClick={() => removeExecution(exec.id)}
+                className="absolute -top-2 -right-2 w-6 h-6 bg-red-500/20 hover:bg-red-500/40 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Remover execução"
+              >
+                ✕
+              </button>
+
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-500 bg-black/40 px-2 py-0.5 rounded">#{index + 1}</span>
+                  <select
+                    value={exec.type || 'days_after'}
+                    onChange={(e) => updateExecution(exec.id, 'type', e.target.value)}
+                    className="flex-1 bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-xs text-white"
+                  >
+                    <option value="days_after">Dias após início (Relativo)</option>
+                    <option value="fixed_date">Data e hora fixas (Absoluto)</option>
+                  </select>
+                </div>
+
+                {exec.type === 'days_after' ? (
+                  <div className="grid grid-cols-[1fr,100px] gap-2 items-center">
+                    <div className="flex items-center gap-2 bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 relative">
+                      <span className="text-xs text-gray-400 select-none ml-1">Dia</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={exec.day || 0}
+                        onChange={(e) => updateExecution(exec.id, 'day', parseInt(e.target.value) || 0)}
+                        className="bg-transparent text-white text-sm w-full outline-none"
+                      />
+                    </div>
+                    <input
+                      type="time"
+                      value={exec.time || '09:00'}
+                      onChange={(e) => updateExecution(exec.id, 'time', e.target.value)}
+                      className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-sm text-white w-full"
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={exec.date || ''}
+                      onChange={(e) => updateExecution(exec.id, 'date', e.target.value)}
+                      className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-sm text-white w-full"
+                    />
+                    <input
+                      type="time"
+                      value={exec.time || '09:00'}
+                      onChange={(e) => updateExecution(exec.id, 'time', e.target.value)}
+                      className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-sm text-white w-full"
+                    />
+                  </div>
+                )}
+
+                <p className="text-[10px] text-gray-500 leading-tight">
+                  {exec.type === 'days_after'
+                    ? `Executará no ${exec.day}º dia após o fluxo ser ativado no grupo, às ${exec.time}.`
+                    : `Executará exatamente no dia ${exec.date ? new Date(exec.date).toLocaleDateString('pt-BR') : '...'} às ${exec.time} (independente da data de ativação).`}
+                </p>
+              </div>
+            </div>
+          ))}
+
+          {executions.length === 0 && (
+            <div className="text-center py-6 text-gray-500 text-sm border border-dashed border-gray-700 rounded">
+              Nenhuma execução configurada.<br />Clique em "+ Adicionar Execução".
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-4 pt-2">
+        <div className="flex items-center justify-between p-3 bg-[#151515] border border-gray-800 rounded-lg">
+          <div>
+            <span className="text-sm text-gray-200 block">🔄 Repetir sequência</span>
+            <span className="text-[10px] text-gray-500">Após completar todas as execuções, reiniciar do dia 1</span>
+          </div>
+          <button
+            onClick={() => setConfig({ ...config, repeatSequence: !config.repeatSequence })}
+            className={`w-10 h-6 rounded-full relative transition-colors ${config.repeatSequence ? 'bg-indigo-500' : 'bg-gray-700'}`}
+          >
+            <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${config.repeatSequence ? 'left-5' : 'left-1'}`} />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between p-3 bg-[#151515] border border-gray-800 rounded-lg">
+          <div>
+            <span className="text-sm text-gray-200 block">🔕 Ignorar se grupo offline</span>
+            <span className="text-[10px] text-gray-500">Pular execução se o bot não estiver no grupo</span>
+          </div>
+          <button
+            onClick={() => setConfig({ ...config, ignoreIfOffline: !config.ignoreIfOffline })}
+            className={`w-10 h-6 rounded-full relative transition-colors ${config.ignoreIfOffline ? 'bg-indigo-500' : 'bg-gray-700'}`}
+          >
+            <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${config.ignoreIfOffline ? 'left-5' : 'left-1'}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Info Box */}
+      <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-3">
+        <p className="text-xs text-indigo-300 leading-relaxed">
+          💡 <strong>Como funciona:</strong> Este fluxo será iniciado automaticamente quando vinculado a um grupo na tela "Group Management". O dia 0 é o momento da ativação.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function OfertaRelampagoConfig({ config, setConfig }: any) {
   // Logic for durations/fixed times
   return (
@@ -1469,6 +1859,20 @@ export default function NodeConfigModal({
       case WorkflowNodeType.PROMO_ML_API:
         return <PromoMLApiConfig config={config} setConfig={setConfig} />
 
+      case 'TRIGGER_GRUPO':
+      case WorkflowNodeType.TRIGGER_GRUPO:
+        return <GroupTriggerConfig config={config} setConfig={setConfig} />
+        return <LembreteRecorrenteConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.ENQUETE_GRUPO:
+        return <EnqueteGrupoConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.SEQUENCIA_LANCAMENTO:
+        return <SequenciaLancamentoConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.PROMO_ML_API:
+        return <PromoMLApiConfig config={config} setConfig={setConfig} />
+
       case 'TRIGGER_MESSAGE':
         return (
           <div className="space-y-6">
@@ -1561,115 +1965,12 @@ export default function NodeConfigModal({
 
       case 'TRIGGER_SCHEDULE':
         return (
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-200">
-                WhatsApp Session
-              </label>
-              <select
-                value={config.sessionId || ''}
-                onChange={(e) => setConfig({ ...config, sessionId: e.target.value })}
-                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
-                disabled={loading}
-              >
-                <option value="">Primeira sessão disponível</option>
-                {sessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {session.name} ({session.phoneNumber})
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1.5">
-                Sessão WhatsApp que será usada para executar o workflow
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-200">
-                Tipo de Agendamento
-              </label>
-              <select
-                value={config.scheduleType || 'cron'}
-                onChange={(e) => setConfig({ ...config, scheduleType: e.target.value })}
-                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
-              >
-                <option value="cron">Expressão Cron</option>
-                <option value="interval">Intervalo</option>
-              </select>
-            </div>
-
-            {config.scheduleType === 'cron' ? (
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-200">
-                  Expressão Cron
-                </label>
-                <input
-                  type="text"
-                  value={config.cronExpression || ''}
-                  onChange={(e) => setConfig({ ...config, cronExpression: e.target.value })}
-                  placeholder="*/5 * * * *"
-                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500 font-mono"
-                />
-                <p className="text-xs text-gray-500 mt-1.5">
-                  Formato: minuto hora dia mês dia-da-semana
-                </p>
-
-                {/* Cron Examples */}
-                <div className="mt-4 bg-[#1a1a1a] border border-gray-700 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-gray-200 mb-3">Exemplos:</h4>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <code className="px-2 py-1 bg-gray-800 rounded text-primary font-mono">*/5 * * * *</code>
-                      <span className="text-gray-400">A cada 5 minutos</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <code className="px-2 py-1 bg-gray-800 rounded text-primary font-mono">0 9 * * *</code>
-                      <span className="text-gray-400">Todos os dias às 9h</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <code className="px-2 py-1 bg-gray-800 rounded text-primary font-mono">0 9 * * 1</code>
-                      <span className="text-gray-400">Toda segunda-feira às 9h</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <code className="px-2 py-1 bg-gray-800 rounded text-primary font-mono">0 0 1 * *</code>
-                      <span className="text-gray-400">Todo dia 1 do mês à meia-noite</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <code className="px-2 py-1 bg-gray-800 rounded text-primary font-mono">0 */2 * * *</code>
-                      <span className="text-gray-400">A cada 2 horas</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-200">
-                  Intervalo (em minutos)
-                </label>
-                <input
-                  type="number"
-                  value={config.intervalMinutes || 5}
-                  onChange={(e) => setConfig({ ...config, intervalMinutes: parseInt(e.target.value) || 5 })}
-                  placeholder="5"
-                  min="1"
-                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
-                />
-                <p className="text-xs text-gray-500 mt-1.5">
-                  O workflow será executado a cada {config.intervalMinutes || 5} minuto(s)
-                </p>
-              </div>
-            )}
-
-            {/* Info Box */}
-            <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
-              <p className="text-xs text-purple-300 leading-relaxed">
-                ⏰ <strong>Agendamento:</strong> Este workflow será executado automaticamente de acordo com o agendamento configurado.
-                {config.scheduleType === 'cron'
-                  ? ' Use expressões cron para controle preciso de horários.'
-                  : ' O workflow será executado em intervalos regulares.'}
-              </p>
-            </div>
-          </div>
+          <ScheduleTriggerConfig
+            config={config}
+            setConfig={setConfig}
+            sessions={sessions}
+            loading={loading}
+          />
         )
 
       case 'SEND_MESSAGE':

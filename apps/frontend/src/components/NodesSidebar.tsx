@@ -38,6 +38,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         bgColor: 'bg-[#1a2a1a]',
         borderColor: 'border-[#3b7d3b]',
         description: 'Dispara manualmente com um clique'
+      },
+      {
+        type: 'TRIGGER_GRUPO' as WorkflowNodeType,
+        label: 'Início de Grupo',
+        icon: '👥',
+        color: 'from-indigo-500 to-indigo-600',
+        bgColor: 'bg-[#1e1b4b]',
+        borderColor: 'border-[#6366f1]',
+        description: 'Dispara em dias específicos após ativar no grupo'
       }
     ],
     ACTIONS: [

@@ -13,12 +13,20 @@ const nodeConfig: Record<string, any> = {
     iconBg: 'bg-gradient-to-br from-blue-500 to-blue-600',
   },
   'TRIGGER_SCHEDULE': {
-    label: 'Agendamento',
-    subtitle: 'TRIGGER',
-    icon: '⏰',
-    bgColor: 'bg-[#2a1942]',
-    borderColor: 'border-[#7b5998]',
-    iconBg: 'bg-gradient-to-br from-purple-500 to-purple-600',
+    label: 'Agendamento / Cron',
+    subtitle: 'GATILHO',
+    icon: '⏳',
+    bgColor: 'bg-[#1a2e2d]',
+    borderColor: 'border-[#3b827c]',
+    iconBg: 'bg-gradient-to-br from-teal-500 to-teal-600',
+  },
+  'TRIGGER_GRUPO': {
+    label: 'Início de Grupo',
+    subtitle: 'GATILHO',
+    icon: '👥',
+    bgColor: 'bg-[#1e1b4b]',
+    borderColor: 'border-[#6366f1]',
+    iconBg: 'bg-gradient-to-br from-indigo-500 to-indigo-600',
   },
   'TRIGGER_MANUAL': {
     label: 'Manual',
@@ -344,24 +352,25 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
 
   // Get preview text
   const getPreviewText = () => {
-    if (data.config.message) {
-      return data.config.message.length > 30
-        ? data.config.message.substring(0, 30) + '...'
-        : data.config.message
+    const { type, config } = data
+    if (config.message) {
+      return config.message.length > 30
+        ? config.message.substring(0, 30) + '...'
+        : config.message
     }
-    if (data.type === 'TRIGGER_MESSAGE') {
-      if (data.config.pattern && data.config.pattern.trim() !== '') {
-        return `Ao receber: ${data.config.pattern}`
+    if (type === 'TRIGGER_MESSAGE') {
+      if (config.pattern && config.pattern.trim() !== '') {
+        return `Ao receber: ${config.pattern}`
       } else {
         return '📨 Todas as mensagens'
       }
     }
-    if (data.type === 'TRIGGER_MANUAL') {
+    if (type === 'TRIGGER_MANUAL') {
       return '▶️ Clique para executar'
     }
-    if (data.type === 'WAIT') {
-      const amount = data.config.amount || 1
-      const unit = data.config.unit || 'seconds'
+    if (type === 'WAIT') {
+      const amount = config.amount || 1
+      const unit = config.unit || 'seconds'
       const unitLabel: Record<string, string> = {
         seconds: 'segundo(s)',
         minutes: 'minuto(s)',
@@ -370,8 +379,8 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
       }
       return `⏱️ Aguardar ${amount} ${unitLabel[unit] || unit}`
     }
-    if (data.type === 'SEND_MEDIA') {
-      const mediaType = data.config.mediaType || 'image'
+    if (type === 'SEND_MEDIA') {
+      const mediaType = config.mediaType || 'image'
       const mediaTypeLabel: Record<string, string> = {
         image: '📷 Imagem',
         video: '🎥 Vídeo',
@@ -380,52 +389,52 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
       }
       const label = mediaTypeLabel[mediaType]
 
-      if (data.config.mediaUrl) {
-        const url = data.config.mediaUrl.length > 25
-          ? data.config.mediaUrl.substring(0, 25) + '...'
-          : data.config.mediaUrl
+      if (config.mediaUrl) {
+        const url = config.mediaUrl.length > 25
+          ? config.mediaUrl.substring(0, 25) + '...'
+          : config.mediaUrl
         return `${label}: ${url}`
       }
       return label
     }
-    if (data.config.pattern) {
-      return `Ao receber: ${data.config.pattern}`
+    if (config.pattern) {
+      return `Ao receber: ${config.pattern}`
     }
-    if (data.config.saveAs) {
-      return `Salvar em: ${data.config.saveAs}`
+    if (config.saveAs) {
+      return `Salvar em: ${config.saveAs}`
     }
-    if (data.config.expression) {
-      return data.config.expression.length > 30
-        ? data.config.expression.substring(0, 30) + '...'
-        : data.config.expression
+    if (config.expression) {
+      return config.expression.length > 30
+        ? config.expression.substring(0, 30) + '...'
+        : config.expression
     }
-    if (data.config.rules && Array.isArray(data.config.rules)) {
-      const count = data.config.rules.length
+    if (config.rules && Array.isArray(config.rules)) {
+      const count = config.rules.length
       return `${count} ${count === 1 ? 'regra' : 'regras'} configurada${count === 1 ? '' : 's'}`
     }
-    if (data.type === 'HTTP_REQUEST' && data.config.url) {
-      const method = data.config.method || 'GET'
-      return `${method} ${data.config.url.length > 25 ? data.config.url.substring(0, 25) + '...' : data.config.url}`
+    if (type === 'HTTP_REQUEST' && config.url) {
+      const method = config.method || 'GET'
+      return `${method} ${config.url.length > 25 ? config.url.substring(0, 25) + '...' : config.url}`
     }
-    if (data.type === 'HTTP_SCRAPE' && data.config.url) {
-      return `🕷️ ${data.config.url.length > 25 ? data.config.url.substring(0, 25) + '...' : data.config.url}`
+    if (type === 'HTTP_SCRAPE' && config.url) {
+      return `🕷️ ${config.url.length > 25 ? config.url.substring(0, 25) + '...' : config.url}`
     }
-    if (data.type === 'CODE' && data.config.code) {
-      const mode = data.config.mode === 'runOnceForEachItem' ? 'Para cada item' : 'Uma vez'
-      const lines = data.config.code.split('\n').length
+    if (type === 'CODE' && config.code) {
+      const mode = config.mode === 'runOnceForEachItem' ? 'Para cada item' : 'Uma vez'
+      const lines = config.code.split('\n').length
       return `${mode} • ${lines} linha${lines > 1 ? 's' : ''}`
     }
-    if (data.type === 'EDIT_FIELDS') {
-      const mode = data.config.mode || 'fields'
-      const count = data.config.operations?.length || 0
+    if (type === 'EDIT_FIELDS') {
+      const mode = config.mode || 'fields'
+      const count = config.operations?.length || 0
       if (mode === 'json') {
         return '📝 Modo JSON'
       }
       return `✏️ ${count} campo${count !== 1 ? 's' : ''}`
     }
-    if (data.type === 'SET_TAGS') {
-      const action = data.config.action || 'add'
-      const tags = data.config.tags || []
+    if (type === 'SET_TAGS') {
+      const action = config.action || 'add'
+      const tags = config.tags || []
       const actionLabels: Record<string, string> = {
         add: '➕ Adicionar',
         remove: '➖ Remover',
@@ -447,42 +456,65 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
       }
       return `${actionLabel} ${count} tags`
     }
-    if (data.type === 'LOOP') {
-      const mode = data.config.loopMode || 'array'
+    if (type === 'LOOP') {
+      const mode = config.loopMode || 'array'
       if (mode === 'count') {
-        const count = data.config.count || 1
+        const count = config.count || 1
         return `🔁 Executar ${count}x`
       } else {
-        const source = data.config.arraySource || 'array'
+        const source = config.arraySource || 'array'
         return `🔁 Iterar: ${source.length > 20 ? source.substring(0, 20) + '...' : source}`
       }
     }
-    if (data.type === 'PIX_RECOGNITION') {
-      const validate = data.config.validateAmount
-      const amount = data.config.expectedAmount
+    if (type === 'PIX_RECOGNITION') {
+      const validate = config.validateAmount
+      const amount = config.expectedAmount
       return validate
         ? `💸 Validar R$ ${amount || '?'}`
         : '💸 Ler comprovante PIX'
     }
-    if (data.type === 'RMKT') {
-      const amount = data.config.amount || 0
-      const unit = data.config.unit || 'seconds'
-      const type = data.config.messageType || 'text'
+    if (type === 'RMKT') {
+      const amount = config.amount || 0
+      const unit = config.unit || 'seconds'
+      const type = config.messageType || 'text'
       const icons = { text: '📝', image: '📸', audio: '🎵' }
       const unitLabels = { seconds: 's', minutes: 'min', hours: 'h', days: 'd' }
       return `⏱ ${amount}${unitLabels[unit as keyof typeof unitLabels]} → ${icons[type as keyof typeof icons]}`
     }
-    if (data.type === 'SEND_PIX') {
-      const valor = data.config.valor || '?'
-      const timeout = data.config.timeoutMinutos || 30
+    if (type === 'TRIGGER_SCHEDULE') {
+      if (config.scheduleMode === 'datetime' && config.specificDate) {
+        return `📅 ${new Date(config.specificDate).toLocaleDateString('pt-BR')} às ${config.time || '09:00'}`
+      }
+      if (config.scheduleMode === 'daily') {
+        const days = config.selectedDays?.length ? `${config.selectedDays.length} dias` : 'Todo dia'
+        return `🕐 ${days} às ${config.time || '09:00'}`
+      }
+      if (config.scheduleMode === 'interval') {
+        return `⏱️ A cada ${config.intervalHours || 2}h`
+      }
+      if (config.scheduleMode === 'weekly' && config.selectedDays?.length) {
+        return `📆 ${config.selectedDays.length} dias na semana às ${config.time || '09:00'}`
+      }
+      if (config.cronExpression) return `⚙️ Cron: ${config.cronExpression}`
+      return '⏳ Não configurado'
+    }
+
+    if (type === 'TRIGGER_GRUPO') {
+      if (!config.executions || config.executions.length === 0) return '👥 Nenhuma execução'
+      return `📅 ${config.executions.length} execução(ões) configurada(s)`
+    }
+
+    if (type === 'SEND_PIX') {
+      const valor = config.valor || '?'
+      const timeout = config.timeoutMinutos || 30
       return `💰 R$ ${valor} • ⏱ ${timeout}min`
     }
-    if (data.type === 'MARK_STAGE') {
-      const stageName = data.config.stageName || 'Nova Etapa'
-      const emoji = data.config.emoji || '🚩'
+    if (type === 'MARK_STAGE') {
+      const stageName = config.stageName || 'Nova Etapa'
+      const emoji = config.emoji || '🚩'
       return `${emoji} Etapa: ${stageName}`
     }
-    if (data.type === 'MENCIONAR_TODOS') {
+    if (type === 'MENCIONAR_TODOS') {
       return '📣 Chamar a atenção de todos'
     }
     if (data.type === 'AQUECIMENTO') {

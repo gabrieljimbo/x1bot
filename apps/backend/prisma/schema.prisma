@@ -411,3 +411,17 @@ model GroupMentionLog {
   @@index([tenantId])
   @@map("group_mention_log")
 }
+
+model GroupTriggerExecution {
+  id           String   @id @default(cuid())
+  groupJid     String
+  workflowId   String
+  executionDay Int?
+  executedAt   DateTime @default(now())
+  tenantId     String
+
+  @@index([groupJid])
+  @@index([workflowId])
+  @@index([tenantId])
+  @@map("group_trigger_executions")
+}
