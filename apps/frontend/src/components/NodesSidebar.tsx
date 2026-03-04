@@ -244,64 +244,64 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
       {
         type: WorkflowNodeType.MENCIONAR_TODOS,
         label: 'Mencionar Todos',
-        icon: '📢',
-        color: 'from-indigo-500 to-indigo-600',
-        bgColor: 'bg-[#1a1c3a]',
-        borderColor: 'border-[#3b3b7d]',
+        icon: '📣',
+        color: 'from-violet-500 to-violet-600',
+        bgColor: 'bg-[#2a1a3a]',
+        borderColor: 'border-[#7c3aed]',
         description: 'Menciona todos os membros do grupo (respeita 1h de intervalo)'
       },
       {
         type: WorkflowNodeType.AQUECIMENTO,
         label: 'Aquecimento',
         icon: '🔥',
-        color: 'from-orange-500 to-red-600',
-        bgColor: 'bg-[#2a1a1a]',
-        borderColor: 'border-[#7d3b3b]',
+        color: 'from-orange-500 to-orange-600',
+        bgColor: 'bg-[#2e1a0e]',
+        borderColor: 'border-[#f97316]',
         description: 'Sequência diária para aquecer grupos novos'
       },
       {
         type: WorkflowNodeType.OFERTA_RELAMPAGO,
         label: 'Oferta Relâmpago',
         icon: '⚡',
-        color: 'from-yellow-400 to-yellow-600',
-        bgColor: 'bg-[#2a261a]',
-        borderColor: 'border-[#7d6b3b]',
+        color: 'from-yellow-500 to-yellow-600',
+        bgColor: 'bg-[#2e2a12]',
+        borderColor: 'border-[#eab308]',
         description: 'Cria uma oferta com cronômetro e encerramento automático'
       },
       {
         type: WorkflowNodeType.LEMBRETE_RECORRENTE,
-        label: 'Lembrete Recorrente',
+        label: 'Lembrete',
         icon: '⏰',
-        color: 'from-blue-400 to-blue-600',
-        bgColor: 'bg-[#1a242e]',
-        borderColor: 'border-[#3b5d7d]',
+        color: 'from-green-500 to-green-600',
+        bgColor: 'bg-[#1a2e1a]',
+        borderColor: 'border-[#22c55e]',
         description: 'Envia lembretes em horários fixos para o grupo'
       },
       {
         type: WorkflowNodeType.ENQUETE_GRUPO,
-        label: 'Enquete de Grupo',
+        label: 'Enquete',
         icon: '📊',
-        color: 'from-teal-400 to-teal-600',
-        bgColor: 'bg-[#1a2e2e]',
-        borderColor: 'border-[#3b7d7d]',
+        color: 'from-pink-500 to-pink-600',
+        bgColor: 'bg-[#2e1a26]',
+        borderColor: 'border-[#ec4899]',
         description: 'Cria enquetes interativas no grupo'
       },
       {
         type: WorkflowNodeType.SEQUENCIA_LANCAMENTO,
-        label: 'Sequência de Lançamento',
-        icon: '🚀',
-        color: 'from-purple-500 to-pink-600',
-        bgColor: 'bg-[#2e1a2e]',
-        borderColor: 'border-[#7d3b7d]',
+        label: 'Lançamento',
+        icon: '🎯',
+        color: 'from-red-500 to-red-600',
+        bgColor: 'bg-[#2e1a1a]',
+        borderColor: 'border-[#ef4444]',
         description: 'Automação completa para fases de lançamento (PPL/L)'
       },
       {
         type: WorkflowNodeType.PROMO_ML_API,
-        label: 'Promo ML (API)',
+        label: 'Promo ML API',
         icon: '🛒',
-        color: 'from-yellow-400 to-yellow-500',
+        color: 'from-[#ffe600] to-[#ffcc00]',
         bgColor: 'bg-[#2a2a0a]',
-        borderColor: 'border-[#8a7a0a]',
+        borderColor: 'border-[#ffe600]',
         description: 'Busca oficial via API do ML com filtros avançados'
       }
     ]
@@ -324,6 +324,9 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
     e.dataTransfer.setData('application/reactflow', nodeType)
     e.dataTransfer.effectAllowed = 'move'
   }
+
+  // No need to hide categories entirely if filtered, but let's ensure we render them
+  const categoriesToRender = ['TRIGGERS', 'ACTIONS', 'GROUPS']
 
   return (
     <div className="w-[280px] bg-[#1a1a1a] border-r border-gray-700 flex flex-col h-full shadow-2xl">
@@ -352,73 +355,78 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
 
       {/* Categories */}
       <div className="flex-1 overflow-y-auto">
-        {Object.entries(filteredCategories).map(([category, nodes]) => (
-          <div key={category} className="border-b border-gray-800">
-            {/* Category Header */}
-            <button
-              onClick={() => setExpandedCategory(expandedCategory === category ? null : category)}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#151515] transition"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-lg">
-                  {category === 'TRIGGERS' ? '🎯' : category === 'GROUPS' ? '👥' : '⚡'}
-                </span>
-                <span className="text-sm font-semibold text-gray-300">
-                  {category === 'TRIGGERS' ? '🎯 GATILHOS' : category === 'GROUPS' ? '👥 FLUXOS DE GRUPO' : '⚡ AÇÕES DO FLUXO'}
-                </span>
-              </div>
-              <span className="text-gray-500">
-                {expandedCategory === category ? '▼' : '▶'}
-              </span>
-            </button>
+        {categoriesToRender.map((category) => {
+          const nodes = filteredCategories[category] || []
+          if (nodes.length === 0 && searchTerm !== '') return null // Hide if search filter doesn't match
 
-            {/* Warning for Triggers if hasTrigger is true */}
-            {category === 'TRIGGERS' && hasTrigger && expandedCategory === 'TRIGGERS' && (
-              <div className="mx-4 mb-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-[10px] text-yellow-500 leading-tight">
-                ⚠️ Este fluxo já possui um gatilho configurado.
-              </div>
-            )}
+          return (
+            <div key={category} className="border-b border-gray-800">
+              {/* Category Header */}
+              <button
+                onClick={() => setExpandedCategory(expandedCategory === category ? null : category)}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#151515] transition"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">
+                    {category === 'TRIGGERS' ? '🎯' : category === 'GROUPS' ? '👥' : '⚡'}
+                  </span>
+                  <span className="text-sm font-semibold text-gray-300">
+                    {category === 'TRIGGERS' ? '🎯 GATILHOS' : category === 'GROUPS' ? '👥 FLUXOS DE GRUPO' : '⚡ AÇÕES DO FLUXO'}
+                  </span>
+                </div>
+                <span className="text-gray-500">
+                  {expandedCategory === category ? '▼' : '▶'}
+                </span>
+              </button>
 
-            {/* Nodes List */}
-            {expandedCategory === category && (
-              <div className="pb-2">
-                {nodes.map((node) => (
-                  <div
-                    key={node.type}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, node.type)}
-                    onClick={() => {
-                      onAddNode(node.type);
-                    }}
-                    className={`
+              {/* Warning for Triggers if hasTrigger is true */}
+              {category === 'TRIGGERS' && hasTrigger && expandedCategory === 'TRIGGERS' && (
+                <div className="mx-4 mb-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-[10px] text-yellow-500 leading-tight">
+                  ⚠️ Este fluxo já possui um gatilho configurado.
+                </div>
+              )}
+
+              {/* Nodes List */}
+              {expandedCategory === category && (
+                <div className="pb-2">
+                  {nodes.map((node: any) => (
+                    <div
+                      key={node.type}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, node.type)}
+                      onClick={() => {
+                        onAddNode(node.type);
+                      }}
+                      className={`
                       mx-2 mb-2 p-3 rounded-lg cursor-move transition-all group
                       ${node.bgColor} ${node.borderColor}
                       border-2 hover:scale-[1.02] hover:shadow-lg
                     `}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`
                         w-10 h-10 rounded-lg bg-gradient-to-br ${node.color} 
                         flex items-center justify-center text-lg flex-shrink-0 
                         group-hover:scale-110 transition-transform shadow-lg
                       `}>
-                        {node.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-semibold text-white mb-1">
-                          {node.label}
-                        </h3>
-                        <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
-                          {node.description}
-                        </p>
+                          {node.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-semibold text-white mb-1">
+                            {node.label}
+                          </h3>
+                          <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
+                            {node.description}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Footer Hint */}

@@ -828,9 +828,32 @@ function PromoMLApiConfig({ config, setConfig }: any) {
   );
 }
 
+
 function SequenciaLancamentoConfig({ config, setConfig }: any) {
+  useEffect(() => {
+    if (!config.fases || config.fases.length === 0) {
+      const defaultPhases = [
+        { id: '1', nome: 'Aquecimento', diaInicio: 1, diaFim: 3, horario: '09:00', mensagem: '🔥 Começamos o aquecimento! Fique atento às novidades que traremos nos próximos dias. 👀', mencionarTodos: true },
+        { id: '2', nome: 'Abertura', diaInicio: 4, diaFim: 4, horario: '08:00', mensagem: '🚀 AS INSCRIÇÕES ESTÃO ABERTAS! Garanta sua vaga agora pelo link: {{link}}', mencionarTodos: true },
+        { id: '3', nome: 'Oferta', diaInicio: 5, diaFim: 6, horario: '10:00', mensagem: '⚡ Aproveite a oferta especial de lançamento! Restam poucas vagas com desconto.', mencionarTodos: false },
+        { id: '4', nome: 'Fechamento', diaInicio: 7, diaFim: 7, horario: '19:00', mensagem: '⏰ ÚLTIMAS HORAS! As inscrições se encerram hoje às 23:59. Não fique de fora!', mencionarTodos: true },
+        { id: '5', nome: 'Pós-venda', diaInicio: 8, diaFim: 10, horario: '09:00', mensagem: '💎 Parabéns aos novos membros! Em breve iniciaremos nossa jornada juntos.', mencionarTodos: false },
+      ];
+      setConfig({ ...config, fases: defaultPhases });
+    }
+  }, []);
+
   const addFase = () => {
-    const fases = [...(config.fases || []), { id: Date.now().toString(), nome: '', diaInicio: 1, diaFim: 1, mensagem: '', mencionarTodos: false }];
+    const nextStart = config.fases?.length > 0 ? (config.fases[config.fases.length - 1].diaFim + 1) : 1;
+    const fases = [...(config.fases || []), {
+      id: Date.now().toString(),
+      nome: '',
+      diaInicio: nextStart,
+      diaFim: nextStart,
+      horario: '09:00',
+      mensagem: '',
+      mencionarTodos: false
+    }];
     setConfig({ ...config, fases });
   };
 
@@ -840,52 +863,94 @@ function SequenciaLancamentoConfig({ config, setConfig }: any) {
     setConfig({ ...config, fases });
   };
 
+  const removeFase = (index: number) => {
+    const fases = config.fases.filter((_: any, idx: number) => idx !== index);
+    setConfig({ ...config, fases });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <label className="text-sm font-bold text-gray-200">Fases do Lançamento</label>
-        <button onClick={addFase} className="text-xs text-primary">+ Adicionar Fase</button>
+        <label className="text-sm font-bold text-gray-200 uppercase tracking-wider">🎯 Sequência de Lançamento</label>
+        <button
+          onClick={addFase}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 text-red-500 border border-red-500/30 rounded-full text-xs font-semibold hover:bg-red-500/30 transition-colors"
+        >
+          <span>+</span> Adicionar Fase
+        </button>
       </div>
 
-      <div className="space-y-3 max-h-[400px] overflow-y-auto p-1">
+      <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
         {(config.fases || []).map((fase: any, i: number) => (
-          <div key={fase.id} className="p-4 bg-[#151515] border border-gray-700 rounded-lg space-y-3">
-            <input
-              type="text"
-              value={fase.nome}
-              onChange={(e) => updateFase(i, 'nome', e.target.value)}
-              placeholder="Nome da fase (ex: PPL, L)"
-              className="w-full bg-transparent border-b border-gray-600 focus:border-primary text-sm font-bold"
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="number"
-                value={fase.diaInicio}
-                onChange={(e) => updateFase(i, 'diaInicio', parseInt(e.target.value))}
-                placeholder="Dia Início"
-                className="bg-[#0d0d0d] border border-gray-700 rounded px-2 py-1 text-xs"
-              />
-              <input
-                type="number"
-                value={fase.diaFim}
-                onChange={(e) => updateFase(i, 'diaFim', parseInt(e.target.value))}
-                placeholder="Dia Fim"
-                className="bg-[#0d0d0d] border border-gray-700 rounded px-2 py-1 text-xs"
+          <div key={fase.id} className="p-4 bg-[#151515] border border-gray-700 rounded-xl space-y-4 relative group">
+            <button
+              onClick={() => removeFase(i)}
+              className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity z-10"
+            >
+              ×
+            </button>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-[10px] text-gray-400 uppercase mb-1">Nome da Fase</label>
+                <input
+                  type="text"
+                  value={fase.nome}
+                  onChange={(e) => updateFase(i, 'nome', e.target.value)}
+                  placeholder="Ex: Aquecimento, Vendas..."
+                  className="w-full bg-[#0d0d0d] border border-gray-700 rounded-lg px-3 py-2 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-red-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-gray-400 uppercase mb-1">Duração (Dias)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={fase.diaInicio}
+                    onChange={(e) => updateFase(i, 'diaInicio', parseInt(e.target.value))}
+                    className="w-full bg-[#0d0d0d] border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-center outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                  <span className="text-gray-600 text-xs">à</span>
+                  <input
+                    type="number"
+                    value={fase.diaFim}
+                    onChange={(e) => updateFase(i, 'diaFim', parseInt(e.target.value))}
+                    className="w-full bg-[#0d0d0d] border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-center outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-gray-400 uppercase mb-1">Horário Envios</label>
+                <input
+                  type="time"
+                  value={fase.horario || '09:00'}
+                  onChange={(e) => updateFase(i, 'horario', e.target.value)}
+                  className="w-full bg-[#0d0d0d] border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-center font-mono outline-none focus:ring-1 focus:ring-red-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] text-gray-400 uppercase mb-1">Mensagem Base</label>
+              <textarea
+                value={fase.mensagem}
+                onChange={(e) => updateFase(i, 'mensagem', e.target.value)}
+                placeholder="Qual a mensagem principal desta fase?"
+                className="w-full bg-[#0d0d0d] border border-gray-700 rounded-lg p-3 text-xs h-24 resize-none focus:ring-1 focus:ring-red-500 outline-none"
               />
             </div>
-            <textarea
-              value={fase.mensagem}
-              onChange={(e) => updateFase(i, 'mensagem', e.target.value)}
-              placeholder="Mensagem da fase..."
-              className="w-full bg-[#0d0d0d] border border-gray-700 rounded p-2 text-xs h-20"
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-gray-400">Mencionar todos?</span>
+
+            <div className="flex items-center justify-between px-3 py-2 bg-black/20 rounded-lg">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-400">📣 Mencionar todos nesta fase?</span>
+              </div>
               <button
                 onClick={() => updateFase(i, 'mencionarTodos', !fase.mencionarTodos)}
-                className={`w-8 h-4 rounded-full relative ${fase.mencionarTodos ? 'bg-primary' : 'bg-gray-600'}`}
+                className={`w-10 h-5 rounded-full relative transition-colors ${fase.mencionarTodos ? 'bg-red-500' : 'bg-gray-700'}`}
               >
-                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${fase.mencionarTodos ? 'left-4.5' : 'left-0.5'}`} />
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${fase.mencionarTodos ? 'left-5.5' : 'left-0.5'}`} />
               </button>
             </div>
           </div>
@@ -977,8 +1042,25 @@ function OfertaRelampagoConfig({ config, setConfig }: any) {
 }
 
 function AquecimentoConfig({ config, setConfig }: any) {
+  useEffect(() => {
+    if (!config.sequencia || config.sequencia.length === 0) {
+      const defaultDays = [
+        { dia: 1, horario: '09:00', mensagem: '👋 Olá pessoal! Bem-vindos ao grupo! Nos próximos dias vou compartilhar conteúdos incríveis com vocês. Fiquem ligados! 🔥', mencionarTodos: true },
+        { dia: 2, horario: '10:00', mensagem: '🔥 Dia 2! Hoje quero te contar um pouco mais sobre o que vem por aí... Algo que vai mudar tudo! 👀', mencionarTodos: false },
+        { dia: 3, horario: '09:00', mensagem: '⚡ É amanhã! Prepare-se pois o que eu tenho para te mostrar vai revolucionar a sua forma de trabalhar. Não perca! 🚀', mencionarTodos: true },
+      ];
+      setConfig({ ...config, sequencia: defaultDays });
+    }
+  }, []);
+
   const addDia = () => {
-    const sequencia = [...(config.sequencia || []), { dia: (config.sequencia?.length || 0) + 1, mensagem: '', mencionarTodos: false }];
+    const nextDia = (config.sequencia?.length || 0) + 1;
+    const sequencia = [...(config.sequencia || []), {
+      dia: nextDia,
+      horario: '09:00',
+      mensagem: '',
+      mencionarTodos: false
+    }];
     setConfig({ ...config, sequencia });
   };
 
@@ -988,38 +1070,78 @@ function AquecimentoConfig({ config, setConfig }: any) {
     setConfig({ ...config, sequencia });
   };
 
+  const removeDia = (index: number) => {
+    const sequencia = config.sequencia.filter((_: any, idx: number) => idx !== index);
+    // Reordenar os dias após remover
+    const updatedSequencia = sequencia.map((s: any, idx: number) => ({ ...s, dia: idx + 1 }));
+    setConfig({ ...config, sequencia: updatedSequencia });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <label className="text-sm font-bold text-gray-200">Sequência de Aquecimento</label>
-        <button onClick={addDia} className="text-xs text-primary">+ Adicionar Dia</button>
+        <label className="text-sm font-bold text-gray-200 uppercase tracking-wider">🔥 Sequência de Aquecimento</label>
+        <button
+          onClick={addDia}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/20 text-orange-500 border border-orange-500/30 rounded-full text-xs font-semibold hover:bg-orange-500/30 transition-colors"
+        >
+          <span>+</span> Adicionar Dia
+        </button>
       </div>
 
-      <div className="space-y-3 max-h-[400px] overflow-y-auto p-1">
+      <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
         {(config.sequencia || []).map((s: any, i: number) => (
-          <div key={i} className="p-4 bg-[#151515] border border-gray-700 rounded-lg space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-primary italic">DIA {s.dia}</span>
-              <button onClick={() => setConfig({ ...config, sequencia: config.sequencia.filter((_: any, idx: number) => idx !== i) })} className="text-xs text-red-500">Remover</button>
+          <div key={i} className="p-4 bg-[#151515] border border-gray-700 rounded-xl space-y-4 relative group">
+            <button
+              onClick={() => removeDia(i)}
+              className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity z-10"
+            >
+              ×
+            </button>
+
+            <div className="flex justify-between items-center mb-1">
+              <span className="bg-orange-500/10 text-orange-500 text-[10px] font-bold px-2 py-0.5 rounded border border-orange-500/20 italic">DIA {s.dia}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-500">⏰</span>
+                <input
+                  type="time"
+                  value={s.horario || '09:00'}
+                  onChange={(e) => updateDia(i, 'horario', e.target.value)}
+                  className="bg-[#0d0d0d] border border-gray-700 rounded-lg px-2 py-1 text-xs text-center font-mono outline-none focus:ring-1 focus:ring-orange-500"
+                />
+              </div>
             </div>
-            <textarea
-              value={s.mensagem}
-              onChange={(e) => updateDia(i, 'mensagem', e.target.value)}
-              placeholder={`Mensagem para o dia ${s.dia}...`}
-              className="w-full bg-[#0d0d0d] border border-gray-700 rounded p-2 text-xs h-20"
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-gray-400">Mencionar todos?</span>
+
+            <div>
+              <label className="block text-[10px] text-gray-400 uppercase mb-1">Mensagem do Dia</label>
+              <textarea
+                value={s.mensagem}
+                onChange={(e) => updateDia(i, 'mensagem', e.target.value)}
+                placeholder={`O que enviar no dia ${s.dia}?`}
+                className="w-full bg-[#0d0d0d] border border-gray-700 rounded-lg p-3 text-xs h-24 resize-none focus:ring-1 focus:ring-orange-500 outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-between px-3 py-2 bg-black/20 rounded-lg">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-400">📣 Mencionar todos neste dia?</span>
+              </div>
               <button
                 onClick={() => updateDia(i, 'mencionarTodos', !s.mencionarTodos)}
-                className={`w-8 h-4 rounded-full relative ${s.mencionarTodos ? 'bg-primary' : 'bg-gray-600'}`}
+                className={`w-10 h-5 rounded-full relative transition-colors ${s.mencionarTodos ? 'bg-orange-500' : 'bg-gray-700'}`}
               >
-                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${s.mencionarTodos ? 'left-4.5' : 'left-0.5'}`} />
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${s.mencionarTodos ? 'left-5.5' : 'left-0.5'}`} />
               </button>
             </div>
           </div>
         ))}
       </div>
+
+      {!config.sequencia || config.sequencia.length === 0 ? (
+        <div className="p-8 text-center bg-[#151515] border border-dashed border-gray-700 rounded-xl">
+          <p className="text-sm text-gray-500 italic">Preparando sugestões de aquecimento...</p>
+        </div>
+      ) : null}
     </div>
   );
 }

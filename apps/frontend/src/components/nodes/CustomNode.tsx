@@ -197,6 +197,63 @@ const nodeConfig: Record<string, any> = {
     iconBg: 'bg-gradient-to-br from-[#FFE600] to-[#FFCC00]',
     iconColor: 'text-black',
   },
+  'MENCIONAR_TODOS': {
+    label: 'Mencionar Todos',
+    subtitle: 'GRUPO',
+    icon: '📣',
+    bgColor: 'bg-[#2a1a3a]',
+    borderColor: 'border-[#7c3aed]',
+    iconBg: 'bg-gradient-to-br from-violet-500 to-violet-600',
+  },
+  'AQUECIMENTO': {
+    label: 'Aquecimento',
+    subtitle: 'GRUPO',
+    icon: '🔥',
+    bgColor: 'bg-[#2e1a0e]',
+    borderColor: 'border-[#f97316]',
+    iconBg: 'bg-gradient-to-br from-orange-500 to-orange-600',
+  },
+  'OFERTA_RELAMPAGO': {
+    label: 'Oferta Relâmpago',
+    subtitle: 'GRUPO',
+    icon: '⚡',
+    bgColor: 'bg-[#2e2a12]',
+    borderColor: 'border-[#eab308]',
+    iconBg: 'bg-gradient-to-br from-yellow-500 to-yellow-600',
+  },
+  'LEMBRETE_RECORRENTE': {
+    label: 'Lembrete',
+    subtitle: 'GRUPO',
+    icon: '⏰',
+    bgColor: 'bg-[#1a2e1a]',
+    borderColor: 'border-[#22c55e]',
+    iconBg: 'bg-gradient-to-br from-green-500 to-green-600',
+  },
+  'ENQUETE_GRUPO': {
+    label: 'Enquete',
+    subtitle: 'GRUPO',
+    icon: '📊',
+    bgColor: 'bg-[#2e1a26]',
+    borderColor: 'border-[#ec4899]',
+    iconBg: 'bg-gradient-to-br from-pink-500 to-pink-600',
+  },
+  'SEQUENCIA_LANCAMENTO': {
+    label: 'Lançamento',
+    subtitle: 'GRUPO',
+    icon: '🎯',
+    bgColor: 'bg-[#2e1a1a]',
+    borderColor: 'border-[#ef4444]',
+    iconBg: 'bg-gradient-to-br from-red-500 to-red-600',
+  },
+  'PROMO_ML_API': {
+    label: 'Promo ML API',
+    subtitle: 'API',
+    icon: '🛒',
+    bgColor: 'bg-[#2a2a0a]',
+    borderColor: 'border-[#ffe600]',
+    iconBg: 'bg-gradient-to-br from-[#ffe600] to-[#ffcc00]',
+    iconColor: 'text-black',
+  },
 }
 
 
@@ -424,6 +481,29 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
       const stageName = data.config.stageName || 'Nova Etapa'
       const emoji = data.config.emoji || '🚩'
       return `${emoji} Etapa: ${stageName}`
+    }
+    if (data.type === 'MENCIONAR_TODOS') {
+      return '📣 Chamar a atenção de todos'
+    }
+    if (data.type === 'AQUECIMENTO') {
+      const count = data.config.sequencia?.length || 0
+      return `🔥 ${count} dia${count !== 1 ? 's' : ''} de aquecimento`
+    }
+    if (data.type === 'OFERTA_RELAMPAGO') {
+      return `⚡ Oferta: ${data.config.mensagemOferta?.substring(0, 20)}...`
+    }
+    if (data.type === 'LEMBRETE_RECORRENTE') {
+      return `⏰ Diariamente às ${data.config.horario || '09:00'}`
+    }
+    if (data.type === 'ENQUETE_GRUPO') {
+      return `📊 Pergunta: ${data.config.question?.substring(0, 20)}...`
+    }
+    if (data.type === 'SEQUENCIA_LANCAMENTO') {
+      const count = data.config.fases?.length || 0
+      return `🎯 Lançamento: ${count} fase${count !== 1 ? 's' : ''}`
+    }
+    if (data.type === 'PROMO_ML_API') {
+      return '🛒 Busca em tempo real (API)'
     }
     return null
   }
