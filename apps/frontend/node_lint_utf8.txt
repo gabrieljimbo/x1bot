@@ -1,0 +1,47 @@
+﻿node.exe : npm warn 
+Unknown project config 
+"always-auth". This 
+will stop working in 
+the next major version 
+of npm.
+No linha:1 caractere:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (npm warn Unkn   
+ ow...version of np    
+m.:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+
+C:\Users\gabri\X1bot\apps\frontend\src\components\NodeConfigModal.tsx
+    33:6    warning  React Hook useEffect has missing dependencies: 'config' and 'setConfig'. Either include them or remove the dependency array. If 'setConfig' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+   172:122  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                   react/no-unescaped-entities
+   172:126  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                   react/no-unescaped-entities
+  1422:82   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                   react/no-unescaped-entities
+  1422:90   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                   react/no-unescaped-entities
+  1630:6    warning  React Hook useEffect has a missing dependency: 'loadGroups'. Either include it or remove the dependency array                                                                                                                                     react-hooks/exhaustive-deps
+  2107:6    warning  React Hook useEffect has missing dependencies: 'config' and 'setConfig'. Either include them or remove the dependency array. If 'setConfig' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+  2460:6    warning  React Hook useEffect has missing dependencies: 'config' and 'setConfig'. Either include them or remove the dependency array. If 'setConfig' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+  2572:60   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                   react/no-unescaped-entities
+  2572:81   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                   react/no-unescaped-entities
+  2609:123  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                   react/no-unescaped-entities
+  2609:140  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                   react/no-unescaped-entities
+  2709:6    warning  React Hook useEffect has missing dependencies: 'config' and 'setConfig'. Either include them or remove the dependency array. If 'setConfig' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+  3039:6    warning  React Hook useEffect has a missing dependency: 'loadSessions'. Either include it or remove the dependency array                                                                                                                                   react-hooks/exhaustive-deps
+  3046:6    warning  React Hook useEffect has a missing dependency: 'loadLabels'. Either include it or remove the dependency array                                                                                                                                     react-hooks/exhaustive-deps
+  4024:48   error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                                                                                                                                                   react/no-unescaped-entities
+
+Ô£û 16 problems (9 errors, 7 warnings)
+
