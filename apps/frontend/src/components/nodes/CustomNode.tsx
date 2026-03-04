@@ -270,6 +270,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#6366f1]',
     iconBg: 'bg-gradient-to-br from-indigo-500 to-indigo-600',
   },
+  'RANDOMIZER': {
+    label: 'Randomizador',
+    subtitle: 'LÓGICA',
+    icon: '🎲',
+    bgColor: 'bg-[#2a1a3a]',
+    borderColor: 'border-[#A855F7]',
+    iconBg: 'bg-gradient-to-br from-[#A855F7] to-[#9333EA]',
+  },
 }
 
 
@@ -308,12 +316,14 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
   const isEnd = data.type === 'END'
   const isCondition = data.type === 'CONDITION'
   const isSwitch = data.type === 'SWITCH'
+  const isRandomizer = data.type === 'RANDOMIZER'
   const isLoop = data.type === 'LOOP'
   const isButtons = data.type === 'SEND_BUTTONS'
   const isPix = data.type === 'SEND_PIX'
 
-  // Get switch rules for dynamic handles
+  // Get switch/randomizer rules for dynamic handles
   const switchRules = isSwitch && data.config.rules ? data.config.rules : []
+  const randomizerSaidas = isRandomizer && data.config.saidas ? data.config.saidas : []
   const buttonsNode = isButtons && data.config.buttons ? data.config.buttons : []
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -549,6 +559,11 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
       const types: Record<string, string> = { image: '🖼️ Imagem', audio: '🎵 Áudio', ptt: '🎤 Áudio Voz', video: '🎬 Vídeo' }
       const label = types[data.config.mediaType] || '📲 Mídia'
       return data.config.scheduling?.enabled ? `${label} ⏰ Agendado` : label
+    }
+    if (data.type === 'RANDOMIZER') {
+      const count = data.config.saidas?.length || 0
+      const percentages = data.config.saidas?.map((s: any) => s.porcentagem).join('/') || '0'
+      return `🎲 ${count} saídas: ${percentages}%`
     }
     return null
   }
@@ -831,6 +846,43 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
                 />
               </div>
             </div>
+          ) : isRandomizer ? (
+            <>
+              {/* Dynamic handles for each output */}
+              {randomizerSaidas.map((saida: any, index: number) => {
+                const total = randomizerSaidas.length
+                const position = ((index + 1) / (total + 1)) * 100
+                const colors = [
+                  '!bg-purple-400 !border-purple-600 hover:!bg-purple-300',
+                  '!bg-blue-400 !border-blue-600 hover:!bg-blue-300',
+                  '!bg-pink-400 !border-pink-600 hover:!bg-pink-300',
+                  '!bg-cyan-400 !border-cyan-600 hover:!bg-cyan-300',
+                  '!bg-indigo-400 !border-indigo-600 hover:!bg-indigo-300',
+                ]
+                const colorClass = colors[index % colors.length]
+
+                return (
+                  <Handle
+                    key={saida.id || index}
+                    type="source"
+                    position={Position.Right}
+                    id={saida.id || String(index)}
+                    style={{ top: `${position}%` }}
+                    className={`!w-3 !h-3 !border-2 transition-colors ${colorClass}`}
+                  />
+                )
+              })}
+              {/* Labels for randomizer outputs */}
+              <div className="absolute -right-2 top-0 bottom-0 flex flex-col justify-around text-[8px] font-bold py-2 translate-x-full">
+                {randomizerSaidas.map((saida: any, index: number) => (
+                  <div key={saida.id || index} className="flex items-center">
+                    <div className="bg-[#151515] px-1.5 py-0.5 rounded border border-purple-900/50 text-purple-400 truncate max-w-[100px] shadow-sm">
+                      {saida.nome || `Saída ${index + 1}`} ({saida.porcentagem}%)
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : isLoop ? (
             <>
               {/* Loop iteration handle (top) */}
@@ -897,4 +949,3 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
 }
 
 export default memo(CustomNode)
-

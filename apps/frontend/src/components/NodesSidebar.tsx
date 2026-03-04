@@ -150,6 +150,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         description: 'Aguarda um tempo e envia mensagem automática (remarketing)'
       },
       {
+        type: WorkflowNodeType.RANDOMIZER,
+        label: 'Randomizador',
+        icon: '🎲',
+        color: 'from-[#A855F7] to-[#9333EA]',
+        bgColor: 'bg-[#2a1a3a]',
+        borderColor: 'border-[#A855F7]',
+        description: 'Distribui leads entre saídas com porcentagens configuráveis'
+      },
+      {
         type: 'CODE' as WorkflowNodeType,
         label: 'Code',
         icon: '{}',

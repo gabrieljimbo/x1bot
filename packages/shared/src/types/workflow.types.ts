@@ -33,6 +33,7 @@ export enum WorkflowNodeType {
   PROMO_ML_API = 'PROMO_ML_API',
   GRUPO_MEDIA = 'GRUPO_MEDIA',
   GRUPO_WAIT = 'GRUPO_WAIT',
+  RANDOMIZER = 'RANDOMIZER',
   END = 'END',
 }
 
@@ -84,6 +85,10 @@ export interface ExecutionContext {
   input: Record<string, any>;
   output: Record<string, any>;
   variables: Record<string, any>;
+  workflowId?: string;
+  executionId?: string;
+  contactId?: string;
+  contactPhone?: string;
 }
 
 export interface WorkflowExecution {
@@ -495,3 +500,16 @@ export interface GrupoWaitConfig {
   notifyOnResume?: boolean;
 }
 
+export interface RandomizerOutput {
+  id: string;
+  nome: string;
+  porcentagem: number;
+}
+
+export interface RandomizerConfig {
+  saidas: RandomizerOutput[];
+  fixarPorContato?: boolean;
+  resetPeriod?: 'never' | 'daily' | 'weekly' | 'monthly';
+  saveAs?: string; // Default 'randomizerSaida'
+  enableAnalytics?: boolean;
+}

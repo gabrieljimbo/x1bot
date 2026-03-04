@@ -32,6 +32,7 @@ import {
   SequenciaLancamentoConfig,
   PromoMLApiConfig,
   GrupoWaitConfig,
+  RandomizerConfig,
   ExecutionStatus,
 } from '@n9n/shared';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -245,6 +246,9 @@ export class NodeExecutorService {
 
       case WorkflowNodeType.GRUPO_WAIT:
         return this.executeGrupoWait(node, context, undefined, edges, workflowId!, executionId!, sessionId, contactPhone);
+
+      case WorkflowNodeType.RANDOMIZER:
+        return this.executeRandomizer(node, context, edges, workflowId, executionId);
 
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
@@ -3130,6 +3134,103 @@ ${config.footerText || ''}`;
         mentionsSent: mentions.length,
       });
     }
+
+    return {
+      nextNodeId,
+      shouldWait: false,
+    };
+  }
+
+  /**
+   * Execute RANDOMIZER node
+   */
+  private async executeRandomizer(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    workflowId?: string,
+    executionId?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as RandomizerConfig;
+    const saidas = config.saidas || [];
+    const tenantId = context.variables._tenantId || 'unknown';
+
+    if (saidas.length === 0) {
+      throw new Error('Randomizer node must have at least one output');
+    }
+
+    let selectedSaida = null;
+
+    // 1. Check consistency (A/B Test / Sticky sessions)
+    // We use a contact variable prefixed with _rand_ to persist the choice
+    if (config.fixarPorContato) {
+      const consistencyKey = `_rand_sticky_${node.id}`;
+      const previousSelectionId = this.contextService.getVariable(context, consistencyKey);
+
+      if (previousSelectionId) {
+        selectedSaida = saidas.find(s => s.id === previousSelectionId);
+      }
+    }
+
+    // 2. Weighted selection (if not already selected by consistency)
+    if (!selectedSaida) {
+      const random = Math.random() * 100;
+      let cumulative = 0;
+
+      for (const saida of saidas) {
+        cumulative += saida.porcentagem;
+        if (random <= cumulative) {
+          selectedSaida = saida;
+          break;
+        }
+      }
+
+      // Fallback to last one if rounding issues/misconfiguration
+      if (!selectedSaida) selectedSaida = saidas[saidas.length - 1];
+
+      // Save selection for future consistency
+      if (config.fixarPorContato && selectedSaida) {
+        const consistencyKey = `_rand_sticky_${node.id}`;
+        this.contextService.setVariable(context, consistencyKey, selectedSaida.id);
+      }
+    }
+
+    // 3. Store result in variable if requested
+    if (config.saveAs && selectedSaida) {
+      this.contextService.setVariable(context, config.saveAs, selectedSaida.nome);
+    }
+
+    // 4. Record Analytics in Database
+    if (config.enableAnalytics && selectedSaida) {
+      try {
+        await this.prisma.randomizerStat.create({
+          data: {
+            nodeId: node.id,
+            saidaId: selectedSaida.id,
+            saidaNome: selectedSaida.nome,
+            workflowId: workflowId || context.workflowId || 'unknown',
+            executionId: executionId || context.executionId || 'unknown',
+            contactId: context.contactId || 'unknown',
+            tenantId,
+          }
+        });
+      } catch (err) {
+        console.error(`[RANDOMIZER] Failed to log analytics for node ${node.id}:`, err);
+      }
+    }
+
+    // 5. Routing - Find edge matching selected saida ID
+    const nextEdge = edges.find(
+      (e) => e.source === node.id && (e.condition === selectedSaida?.id || e.label === selectedSaida?.nome),
+    );
+
+    const nextNodeId = nextEdge ? nextEdge.target : null;
+
+    this.contextService.setOutput(context, {
+      selectedSaidaId: selectedSaida?.id,
+      selectedSaidaNome: selectedSaida?.nome,
+      porcentagem: selectedSaida?.porcentagem,
+    });
 
     return {
       nextNodeId,

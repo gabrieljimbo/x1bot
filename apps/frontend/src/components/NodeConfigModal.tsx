@@ -865,6 +865,201 @@ function ConditionConfig({ config, setConfig }: any) {
   )
 }
 
+function RandomizerConfig({ config, setConfig }: any) {
+  const saidas = config.saidas || [
+    { id: '1', nome: 'Saída A', porcentagem: 50 },
+    { id: '2', nome: 'Saída B', porcentagem: 50 }
+  ]
+
+  const totalPorcentagem = saidas.reduce((acc: number, s: any) => acc + s.porcentagem, 0)
+
+  const addSaida = () => {
+    if (saidas.length >= 10) return
+    const newSaida = {
+      id: Date.now().toString(),
+      nome: `Saída ${String.fromCharCode(65 + saidas.length)}`,
+      porcentagem: 0
+    }
+    setConfig({ ...config, saidas: [...saidas, newSaida] })
+  }
+
+  const removeSaida = (id: string) => {
+    if (saidas.length <= 2) return
+    setConfig({ ...config, saidas: saidas.filter((s: any) => s.id !== id) })
+  }
+
+  const updateSaida = (id: string, field: string, value: any) => {
+    setConfig({
+      ...config,
+      saidas: saidas.map((s: any) => s.id === id ? { ...s, [field]: value } : s)
+    })
+  }
+
+  const distribuirIgualmente = () => {
+    const total = saidas.length
+    const base = Math.floor(100 / total)
+    const resto = 100 % total
+    setConfig({
+      ...config,
+      saidas: saidas.map((s: any, i: number) => ({
+        ...s,
+        porcentagem: i < resto ? base + 1 : base
+      }))
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-200">🎯 Saídas e Distribuição</h3>
+          <button
+            onClick={addSaida}
+            disabled={saidas.length >= 10}
+            className="px-3 py-1.5 bg-primary text-black rounded text-xs font-semibold hover:bg-primary/80 transition disabled:opacity-50"
+          >
+            + Adicionar Saída
+          </button>
+        </div>
+
+        {/* Visual Distribution Bar */}
+        <div className="h-4 w-full bg-gray-800 rounded-full overflow-hidden flex mb-6 shadow-inner border border-gray-700">
+          {saidas.map((saida: any, i: number) => {
+            const colors = ['bg-purple-500', 'bg-blue-500', 'bg-pink-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-violet-500', 'bg-fuchsia-500', 'bg-sky-500', 'bg-emerald-500', 'bg-rose-500']
+            return (
+              <div
+                key={saida.id}
+                title={`${saida.nome}: ${saida.porcentagem}%`}
+                className={`${colors[i % colors.length]} transition-all duration-300 h-full`}
+                style={{ width: `${saida.porcentagem}%` }}
+              />
+            )
+          })}
+        </div>
+
+        <div className="space-y-4">
+          {saidas.map((saida: any, index: number) => (
+            <div key={saida.id} className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-3 group relative">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 rounded bg-gray-800 flex items-center justify-center text-xs font-bold text-gray-400">
+                  {String.fromCharCode(65 + index)}
+                </div>
+                <input
+                  type="text"
+                  value={saida.nome}
+                  onChange={(e) => updateSaida(saida.id, 'nome', e.target.value)}
+                  placeholder="Nome da saída"
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-white font-medium p-0"
+                />
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold ${totalPorcentagem === 100 ? 'text-primary' : 'text-red-400'}`}>
+                    {saida.porcentagem}%
+                  </span>
+                  <button
+                    onClick={() => removeSaida(saida.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-500 hover:text-red-400 transition"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={saida.porcentagem}
+                onChange={(e) => updateSaida(saida.id, 'porcentagem', parseInt(e.target.value))}
+                className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 flex items-center justify-between p-3 bg-black/40 rounded-lg border border-gray-800">
+          <div className="flex flex-col">
+            <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Total Acumulado</span>
+            <span className={`text-xl font-black ${totalPorcentagem === 100 ? 'text-primary' : 'text-red-400'}`}>
+              {totalPorcentagem}%
+            </span>
+          </div>
+          <button
+            onClick={distribuirIgualmente}
+            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded text-xs font-bold transition flex items-center gap-2 border border-gray-700"
+          >
+            ⚖️ Distribuir Igualmente
+          </button>
+        </div>
+        {totalPorcentagem !== 100 && (
+          <p className="text-[10px] text-red-400 mt-2 text-center animate-pulse">
+            ⚠️ A soma das porcentagens deve ser exatamente 100%
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-gray-200 px-1">⚙️ Configurações Avançadas</h3>
+
+        <div className="bg-[#151515] border border-gray-700 rounded-lg p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-200 font-medium">Fixar saída por contato</p>
+              <p className="text-[11px] text-gray-500">Garante que o mesmo contato sempre caia na mesma saída (A/B Test)</p>
+            </div>
+            <button
+              onClick={() => setConfig({ ...config, fixarPorContato: !config.fixarPorContato })}
+              className={`w-10 h-5 rounded-full transition-colors relative ${config.fixarPorContato ? 'bg-primary' : 'bg-gray-700'}`}
+            >
+              <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${config.fixarPorContato ? 'left-6' : 'left-1'}`} />
+            </button>
+          </div>
+
+          {config.fixarPorContato && (
+            <div className="pt-2 border-t border-gray-800">
+              <label className="block text-[11px] font-medium text-gray-400 mb-2 uppercase">Resetar consistência:</label>
+              <select
+                value={config.resetPeriod || 'never'}
+                onChange={(e) => setConfig({ ...config, resetPeriod: e.target.value })}
+                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-[11px] text-white focus:outline-none focus:border-primary"
+              >
+                <option value="never">Nunca (Sempre a mesma saída)</option>
+                <option value="daily">Diariamente</option>
+                <option value="weekly">Semanalmente</option>
+                <option value="monthly">Mensalmente</option>
+              </select>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-2 border-t border-gray-800">
+            <div>
+              <p className="text-sm text-gray-200 font-medium">Habilitar Analytics</p>
+              <p className="text-[11px] text-gray-500">Registra estatísticas de distribuição no banco de dados</p>
+            </div>
+            <button
+              onClick={() => setConfig({ ...config, enableAnalytics: !config.enableAnalytics })}
+              className={`w-10 h-5 rounded-full transition-colors relative ${config.enableAnalytics ? 'bg-primary' : 'bg-gray-700'}`}
+            >
+              <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${config.enableAnalytics ? 'left-6' : 'left-1'}`} />
+            </button>
+          </div>
+
+          <div className="pt-2 border-t border-gray-800">
+            <label className="block text-[11px] font-medium text-gray-400 mb-2 uppercase tracking-wide">Salvar saída na variável:</label>
+            <input
+              type="text"
+              value={config.saveAs || ''}
+              onChange={(e) => setConfig({ ...config, saveAs: e.target.value })}
+              placeholder="ex: saida_escolhida"
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-sm text-white placeholder-gray-600 focus:outline-none focus:border-primary font-mono"
+            />
+            <p className="text-[10px] text-gray-500 mt-1.5">O nome da saída (ex: "Saída A") será salvo nesta variável.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PromoMLConfig({ config, setConfig }: any) {
   const [activeTab, setActiveTab] = useState<'params' | 'filters' | 'message'>('params');
 
@@ -4168,6 +4363,9 @@ export default function NodeConfigModal({
             </div>
           </div>
         )
+
+      case 'RANDOMIZER':
+        return <RandomizerConfig config={config} setConfig={setConfig} />
 
       case 'CONDITION':
         return <ConditionConfig config={config} setConfig={setConfig} />

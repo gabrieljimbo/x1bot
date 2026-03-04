@@ -425,3 +425,20 @@ model GroupTriggerExecution {
   @@index([tenantId])
   @@map("group_trigger_executions")
 }
+
+model RandomizerStat {
+  id          String   @id @default(cuid())
+  nodeId      String
+  workflowId  String
+  executionId String?
+  contactId   String?
+  saidaId     String
+  saidaNome   String
+  tenantId    String
+  createdAt   DateTime @default(now())
+
+  @@index([workflowId])
+  @@index([tenantId])
+  @@map("randomizer_stats")
+}
+
