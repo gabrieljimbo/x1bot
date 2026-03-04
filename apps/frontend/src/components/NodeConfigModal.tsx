@@ -169,7 +169,7 @@ function SetTagsConfig({ config, setConfig, tenantId: _tenantId }: any) {
               As tags são armazenadas internamente e ficam disponíveis em todos os nodes através da variável <code className="bg-purple-500/20 px-1 py-0.5 rounded">contactTags</code>.
             </p>
             <p className="text-xs text-purple-200/80">
-              Exemplo: Use em condições como <code className="bg-purple-500/20 px-1 py-0.5 rounded">contactTags.includes("vip")</code>
+              Exemplo: Use em condições como <code className="bg-purple-500/20 px-1 py-0.5 rounded">contactTags.includes(&quot;vip&quot;)</code>
             </p>
           </div>
         </div>
@@ -463,7 +463,7 @@ function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node
   )
 }
 
-function MessageComposer({ value, onChange, placeholder }: { value: any, onChange: (val: any) => void, placeholder?: string }) {
+function MessageComposer({ value, onChange, placeholder, tenantId, node }: { value: any, onChange: (val: any) => void, placeholder?: string, tenantId?: string, node?: any }) {
   const [activeTab, setActiveTab] = useState<'text' | 'image' | 'video' | 'audio'>(
     typeof value === 'object' ? value?.type || 'text' : 'text'
   );
@@ -541,11 +541,126 @@ function MessageComposer({ value, onChange, placeholder }: { value: any, onChang
               <input
                 type="text"
                 value={config.mediaUrl || ''}
-                onChange={(e) => update({ mediaUrl: e.target.value })}
+                onChange={(e) => update({ mediaUrl: e.target.value, uploadedMediaId: undefined })}
                 placeholder="https://exemplo.com/media.jpg"
                 className="w-full px-3 py-2 bg-[#0d0d0d] border border-gray-700 rounded text-xs text-white"
+                disabled={!!config.uploadedMediaId}
               />
             </div>
+
+            {/* File upload section */}
+            {!config.uploadedMediaId ? (
+              <div className="mt-3">
+                <div className="flex items-center gap-2 my-2">
+                  <div className="flex-1 h-px bg-gray-700"></div>
+                  <span className="text-xs text-gray-500">ou</span>
+                  <div className="flex-1 h-px bg-gray-700"></div>
+                </div>
+                <label className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#151515] border border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-[#1a1a1a] transition-colors">
+                  <span className="text-sm text-gray-300">📎 Upload de arquivo</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept={
+                      activeTab === 'image' ? '.jpg,.jpeg,.png,.webp' :
+                        activeTab === 'video' ? '.mp4' : '*'
+                    }
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+
+                      const sizeLimits: Record<string, number> = {
+                        image: 5 * 1024 * 1024,
+                        video: 50 * 1024 * 1024,
+                      }
+
+                      if (file.size > (sizeLimits[activeTab] || 5 * 1024 * 1024)) {
+                        const maxMB = Math.round((sizeLimits[activeTab] || 5 * 1024 * 1024) / (1024 * 1024))
+                        alert(`Arquivo muito grande. Máximo para ${activeTab}: ${maxMB}MB`)
+                        e.target.value = ''
+                        return
+                      }
+
+                      try {
+                        const formData = new FormData()
+                        formData.append('file', file)
+                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                        const token = localStorage.getItem('n9n_token')
+                        const headers: HeadersInit = {}
+                        if (token) {
+                          headers['Authorization'] = `Bearer ${token}`
+                        }
+                        const res = await fetch(
+                          `${API_URL}/media/upload?tenantId=${tenantId}&mediaType=${activeTab}&nodeId=${node?.id}&workflowId=${(node as any)?.workflowId || ''}`,
+                          { method: 'POST', headers, body: formData }
+                        )
+
+                        if (!res.ok) {
+                          const err = await res.json()
+                          alert(err.message || 'Erro ao fazer upload')
+                          e.target.value = ''
+                          return
+                        }
+
+                        const data = await res.json()
+                        update({
+                          mediaUrl: data.url,
+                          uploadedMediaId: data.id,
+                          uploadedFileName: data.originalName,
+                          uploadedFileSize: data.size,
+                        })
+                      } catch (err) {
+                        alert('Erro ao fazer upload do arquivo')
+                      }
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+                <p className="text-xs text-gray-500 mt-1.5">
+                  {activeTab === 'image' ? 'JPG, PNG, WEBP — máx 5MB' :
+                    activeTab === 'video' ? 'MP4 — máx 50MB' : ''}
+                </p>
+              </div>
+            ) : (
+              <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-[#1a1a2e] border border-primary/30 rounded-lg">
+                <span className="text-xl">
+                  {activeTab === 'image' ? '🖼️' :
+                    activeTab === 'video' ? '🎥' : '📄'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-200 truncate">{config.uploadedFileName || 'Arquivo'}</p>
+                  <p className="text-xs text-gray-500">
+                    {config.uploadedFileSize ? `${(config.uploadedFileSize / 1024).toFixed(1)} KB` : ''}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="text-red-400 hover:text-red-300 text-sm px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                  onClick={async () => {
+                    try {
+                      if (tenantId && config.uploadedMediaId) {
+                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                        const token = localStorage.getItem('n9n_token')
+                        const headers: HeadersInit = {}
+                        if (token) {
+                          headers['Authorization'] = `Bearer ${token}`
+                        }
+                        await fetch(`${API_URL}/media/${config.uploadedMediaId}?tenantId=${tenantId}`, { method: 'DELETE', headers })
+                      }
+                    } catch (e) { /* ignore */ }
+                    update({
+                      mediaUrl: '',
+                      uploadedMediaId: undefined,
+                      uploadedFileName: undefined,
+                      uploadedFileSize: undefined,
+                    })
+                  }}
+                >
+                  🗑️ Remover
+                </button>
+              </div>
+            )}
+
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">💬 Legenda</label>
               <textarea
@@ -574,11 +689,110 @@ function MessageComposer({ value, onChange, placeholder }: { value: any, onChang
               <input
                 type="text"
                 value={config.mediaUrl || ''}
-                onChange={(e) => update({ mediaUrl: e.target.value })}
+                onChange={(e) => update({ mediaUrl: e.target.value, uploadedMediaId: undefined })}
                 placeholder="https://exemplo.com/audio.mp3"
                 className="w-full px-3 py-2 bg-[#0d0d0d] border border-gray-700 rounded text-xs text-white"
+                disabled={!!config.uploadedMediaId}
               />
             </div>
+
+            {/* File upload section for Audio */}
+            {!config.uploadedMediaId ? (
+              <div className="mt-3">
+                <div className="flex items-center gap-2 my-2">
+                  <div className="flex-1 h-px bg-gray-700"></div>
+                  <span className="text-xs text-gray-500">ou</span>
+                  <div className="flex-1 h-px bg-gray-700"></div>
+                </div>
+                <label className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#151515] border border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-[#1a1a1a] transition-colors">
+                  <span className="text-sm text-gray-300">📎 Upload de arquivo</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".mp3,.ogg,.aac"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+
+                      if (file.size > (10 * 1024 * 1024)) {
+                        alert(`Arquivo muito grande. Máximo para áudio: 10MB`)
+                        e.target.value = ''
+                        return
+                      }
+
+                      try {
+                        const formData = new FormData()
+                        formData.append('file', file)
+                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                        const token = localStorage.getItem('n9n_token')
+                        const headers: HeadersInit = {}
+                        if (token) {
+                          headers['Authorization'] = `Bearer ${token}`
+                        }
+                        const res = await fetch(
+                          `${API_URL}/media/upload?tenantId=${tenantId}&mediaType=audio&nodeId=${node?.id}&workflowId=${(node as any)?.workflowId || ''}`,
+                          { method: 'POST', headers, body: formData }
+                        )
+
+                        if (!res.ok) {
+                          const err = await res.json()
+                          alert(err.message || 'Erro ao fazer upload')
+                          e.target.value = ''
+                          return
+                        }
+
+                        const data = await res.json()
+                        update({
+                          mediaUrl: data.url,
+                          uploadedMediaId: data.id,
+                          uploadedFileName: data.originalName,
+                          uploadedFileSize: data.size,
+                        })
+                      } catch (err) {
+                        alert('Erro ao fazer upload do arquivo')
+                      }
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+                <p className="text-xs text-gray-500 mt-1.5">MP3, OGG, AAC — máx 10MB</p>
+              </div>
+            ) : (
+              <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-[#1a1a2e] border border-primary/30 rounded-lg">
+                <span className="text-xl">🎵</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-200 truncate">{config.uploadedFileName || 'Arquivo'}</p>
+                  <p className="text-xs text-gray-500">
+                    {config.uploadedFileSize ? `${(config.uploadedFileSize / 1024).toFixed(1)} KB` : ''}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="text-red-400 hover:text-red-300 text-sm px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                  onClick={async () => {
+                    try {
+                      if (tenantId && config.uploadedMediaId) {
+                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                        const token = localStorage.getItem('n9n_token')
+                        const headers: HeadersInit = {}
+                        if (token) {
+                          headers['Authorization'] = `Bearer ${token}`
+                        }
+                        await fetch(`${API_URL}/media/${config.uploadedMediaId}?tenantId=${tenantId}`, { method: 'DELETE', headers })
+                      }
+                    } catch (e) { /* ignore */ }
+                    update({
+                      mediaUrl: '',
+                      uploadedMediaId: undefined,
+                      uploadedFileName: undefined,
+                      uploadedFileSize: undefined,
+                    })
+                  }}
+                >
+                  🗑️ Remover
+                </button>
+              </div>
+            )}
 
             <div className="flex items-center justify-between p-2 bg-black/40 rounded-lg border border-primary/20">
               <span className="text-[10px] text-primary font-bold">🎤 Enviar como PTT (Gravado na hora)</span>
@@ -1205,7 +1419,7 @@ function RandomizerConfig({ config, setConfig }: any) {
               placeholder="ex: saida_escolhida"
               className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-sm text-white placeholder-gray-600 focus:outline-none focus:border-primary font-mono"
             />
-            <p className="text-[10px] text-gray-500 mt-1.5">O nome da saída (ex: "Saída A") será salvo nesta variável.</p>
+            <p className="text-[10px] text-gray-500 mt-1.5">O nome da saída (ex: &quot;Saída A&quot;) será salvo nesta variável.</p>
           </div>
         </div>
       </div>
@@ -1624,7 +1838,7 @@ function TriggerManualConfig({ config, setConfig, tenantId, sessions, loading }:
   );
 }
 
-function MencionarTodosConfig({ config, setConfig }: any) {
+function MencionarTodosConfig({ config, setConfig, tenantId, node }: any) {
   return (
     <div className="space-y-4">
       <div>
@@ -1633,6 +1847,20 @@ function MencionarTodosConfig({ config, setConfig }: any) {
           value={config.mensagem}
           onChange={(val) => setConfig({ ...config, mensagem: val })}
           placeholder="Ex: Pessoal, olhem essa oferta imperdível!"
+          tenantId={tenantId}
+          node={node}
+        />
+        <p className="text-[10px] text-gray-500 mt-1">A mensagem será enviada mencionando todos os membros.</p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1.5 text-gray-200">⏳ Mensagem Final (Opcional)</label>
+        <MessageComposer
+          value={config.mensagemFinal}
+          onChange={(val) => setConfig({ ...config, mensagemFinal: val })}
+          placeholder="Ex: OFERTA ENCERRADA! Obrigado a todos..."
+          tenantId={tenantId}
+          node={node}
         />
         <p className="text-[10px] text-gray-500 mt-1">A mensagem será enviada mencionando todos os membros.</p>
       </div>
@@ -1864,15 +2092,15 @@ function PromoMLApiConfig({ config, setConfig }: any) {
 }
 
 
-function SequenciaLancamentoConfig({ config, setConfig }: any) {
+function SequenciaLancamentoConfig({ config, setConfig, tenantId, node }: any) {
   useEffect(() => {
     if (!config.fases || config.fases.length === 0) {
       const defaultPhases = [
-        { id: '1', nome: 'Aquecimento', diaInicio: 1, diaFim: 3, horario: '09:00', mensagem: '🔥 Começamos o aquecimento! Fique atento às novidades que traremos nos próximos dias. 👀', mencionarTodos: true },
-        { id: '2', nome: 'Abertura', diaInicio: 4, diaFim: 4, horario: '08:00', mensagem: '🚀 AS INSCRIÇÕES ESTÃO ABERTAS! Garanta sua vaga agora pelo link: {{link}}', mencionarTodos: true },
-        { id: '3', nome: 'Oferta', diaInicio: 5, diaFim: 6, horario: '10:00', mensagem: '⚡ Aproveite a oferta especial de lançamento! Restam poucas vagas com desconto.', mencionarTodos: false },
-        { id: '4', nome: 'Fechamento', diaInicio: 7, diaFim: 7, horario: '19:00', mensagem: '⏰ ÚLTIMAS HORAS! As inscrições se encerram hoje às 23:59. Não fique de fora!', mencionarTodos: true },
-        { id: '5', nome: 'Pós-venda', diaInicio: 8, diaFim: 10, horario: '09:00', mensagem: '💎 Parabéns aos novos membros! Em breve iniciaremos nossa jornada juntos.', mencionarTodos: false },
+        { id: '1', nome: 'Aquecimento', diaInicio: 1, diaFim: 3, horario: '09:00', mensagem: { type: 'text', text: '🔥 Começamos o aquecimento! Fique atento às novidades que traremos nos próximos dias. 👀' }, mencionarTodos: true },
+        { id: '2', nome: 'Abertura', diaInicio: 4, diaFim: 4, horario: '08:00', mensagem: { type: 'text', text: '🚀 AS INSCRIÇÕES ESTÃO ABERTAS! Garanta sua vaga agora pelo link: {{link}}' }, mencionarTodos: true },
+        { id: '3', nome: 'Oferta', diaInicio: 5, diaFim: 6, horario: '10:00', mensagem: { type: 'text', text: '⚡ Aproveite a oferta especial de lançamento! Restam poucas vagas com desconto.' }, mencionarTodos: false },
+        { id: '4', nome: 'Fechamento', diaInicio: 7, diaFim: 7, horario: '19:00', mensagem: { type: 'text', text: '⏰ ÚLTIMAS HORAS! As inscrições se encerram hoje às 23:59. Não fique de fora!' }, mencionarTodos: true },
+        { id: '5', nome: 'Pós-venda', diaInicio: 8, diaFim: 10, horario: '09:00', mensagem: { type: 'text', text: '💎 Parabéns aos novos membros! Em breve iniciaremos nossa jornada juntos.' }, mencionarTodos: false },
       ];
       setConfig({ ...config, fases: defaultPhases });
     }
@@ -1886,7 +2114,7 @@ function SequenciaLancamentoConfig({ config, setConfig }: any) {
       diaInicio: nextStart,
       diaFim: nextStart,
       horario: '09:00',
-      mensagem: '',
+      mensagem: { type: 'text', text: '' },
       mencionarTodos: false
     }];
     setConfig({ ...config, fases });
@@ -1972,6 +2200,8 @@ function SequenciaLancamentoConfig({ config, setConfig }: any) {
               <MessageComposer
                 value={fase.mensagem}
                 onChange={(val: any) => updateFase(i, 'mensagem', val)}
+                tenantId={tenantId}
+                node={node}
               />
             </div>
 
@@ -2339,7 +2569,7 @@ function GroupTriggerConfig({ config, setConfig }: any) {
 
           {executions.length === 0 && (
             <div className="text-center py-6 text-gray-500 text-sm border border-dashed border-gray-700 rounded">
-              Nenhuma execução configurada.<br />Clique em "+ Adicionar Execução".
+              Nenhuma execução configurada.<br />Clique em &quot;+ Adicionar Execução&quot;.
             </div>
           )}
         </div>
@@ -2376,14 +2606,14 @@ function GroupTriggerConfig({ config, setConfig }: any) {
       {/* Info Box */}
       <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-3">
         <p className="text-xs text-indigo-300 leading-relaxed">
-          💡 <strong>Como funciona:</strong> Este fluxo será iniciado automaticamente quando vinculado a um grupo na tela "Group Management". O dia 0 é o momento da ativação.
+          💡 <strong>Como funciona:</strong> Este fluxo será iniciado automaticamente quando vinculado a um grupo na tela &quot;Group Management&quot;. O dia 0 é o momento da ativação.
         </p>
       </div>
     </div>
   );
 }
 
-function OfertaRelampagoConfig({ config, setConfig }: any) {
+function OfertaRelampagoConfig({ config, setConfig, tenantId, node }: any) {
   // Logic for durations/fixed times
   return (
     <div className="space-y-4">
@@ -2393,6 +2623,8 @@ function OfertaRelampagoConfig({ config, setConfig }: any) {
           value={config.mensagemOferta}
           onChange={(val: any) => setConfig({ ...config, mensagemOferta: val })}
           placeholder="Aproveite agora! Oferta válida por tempo limitado..."
+          tenantId={tenantId}
+          node={node}
         />
       </div>
 
@@ -2446,6 +2678,8 @@ function OfertaRelampagoConfig({ config, setConfig }: any) {
           value={config.mensagemEncerramento}
           onChange={(val: any) => setConfig({ ...config, mensagemEncerramento: val })}
           placeholder="A oferta acabou! Em breve traremos novas promoções."
+          tenantId={tenantId}
+          node={node}
         />
       </div>
 
@@ -2462,13 +2696,13 @@ function OfertaRelampagoConfig({ config, setConfig }: any) {
   );
 }
 
-function AquecimentoConfig({ config, setConfig }: any) {
+function AquecimentoConfig({ config, setConfig, tenantId, node }: any) {
   useEffect(() => {
     if (!config.sequencia || config.sequencia.length === 0) {
       const defaultDays = [
-        { dia: 1, horario: '09:00', mensagem: '👋 Olá pessoal! Bem-vindos ao grupo! Nos próximos dias vou compartilhar conteúdos incríveis com vocês. Fiquem ligados! 🔥', mencionarTodos: true },
-        { dia: 2, horario: '10:00', mensagem: '🔥 Dia 2! Hoje quero te contar um pouco mais sobre o que vem por aí... Algo que vai mudar tudo! 👀', mencionarTodos: false },
-        { dia: 3, horario: '09:00', mensagem: '⚡ É amanhã! Prepare-se pois o que eu tenho para te mostrar vai revolucionar a sua forma de trabalhar. Não perca! 🚀', mencionarTodos: true },
+        { dia: 1, horario: '09:00', mensagem: { type: 'text', text: '👋 Olá pessoal! Bem-vindos ao grupo! Nos próximos dias vou compartilhar conteúdos incríveis com vocês. Fiquem ligados! 🔥' }, mencionarTodos: true },
+        { dia: 2, horario: '10:00', mensagem: { type: 'text', text: '🔥 Dia 2! Hoje quero te contar um pouco mais sobre o que vem por aí... Algo que vai mudar tudo! 👀' }, mencionarTodos: false },
+        { dia: 3, horario: '09:00', mensagem: { type: 'text', text: '⚡ É amanhã! Prepare-se pois o que eu tenho para te mostrar vai revolucionar a sua forma de trabalhar. Não perca! 🚀' }, mencionarTodos: true },
       ];
       setConfig({ ...config, sequencia: defaultDays });
     }
@@ -2479,7 +2713,7 @@ function AquecimentoConfig({ config, setConfig }: any) {
     const sequencia = [...(config.sequencia || []), {
       dia: nextDia,
       horario: '09:00',
-      mensagem: '',
+      mensagem: { type: 'text', text: '' },
       mencionarTodos: false
     }];
     setConfig({ ...config, sequencia });
@@ -2539,6 +2773,8 @@ function AquecimentoConfig({ config, setConfig }: any) {
                 value={s.mensagem}
                 onChange={(val: any) => updateDia(i, 'mensagem', val)}
                 placeholder={`O que enviar no dia ${s.dia}?`}
+                tenantId={tenantId}
+                node={node}
               />
             </div>
 
@@ -2566,7 +2802,7 @@ function AquecimentoConfig({ config, setConfig }: any) {
   );
 }
 
-function LembreteRecorrenteConfig({ config, setConfig }: any) {
+function LembreteRecorrenteConfig({ config, setConfig, tenantId, node }: any) {
   return (
     <div className="space-y-4">
       <div>
@@ -2581,11 +2817,12 @@ function LembreteRecorrenteConfig({ config, setConfig }: any) {
 
       <div>
         <label className="block text-sm font-medium mb-1.5 text-gray-200">💬 Mensagem do Lembrete</label>
-        <textarea
-          value={config.mensagem || ''}
-          onChange={(e) => setConfig({ ...config, mensagem: e.target.value })}
-          className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white h-24"
+        <MessageComposer
+          value={config.mensagem || { type: 'text', text: '' }}
+          onChange={(val) => setConfig({ ...config, mensagem: val })}
           placeholder="Bom dia! Lembrete de que hoje temos live às 20h..."
+          tenantId={tenantId}
+          node={node}
         />
       </div>
 
@@ -2869,7 +3106,7 @@ export default function NodeConfigModal({
         return <PromoMLConfig config={config} setConfig={setConfig} />
 
       case WorkflowNodeType.MENCIONAR_TODOS:
-        return <MencionarTodosConfig config={config} setConfig={setConfig} />
+        return <MencionarTodosConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} />
 
       case WorkflowNodeType.GRUPO_MEDIA:
         return (
@@ -2887,19 +3124,19 @@ export default function NodeConfigModal({
         return <GrupoWaitConfig config={config} setConfig={setConfig} />
 
       case WorkflowNodeType.AQUECIMENTO:
-        return <AquecimentoConfig config={config} setConfig={setConfig} />
+        return <AquecimentoConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} />
 
       case WorkflowNodeType.OFERTA_RELAMPAGO:
-        return <OfertaRelampagoConfig config={config} setConfig={setConfig} />
+        return <OfertaRelampagoConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} />
 
       case WorkflowNodeType.LEMBRETE_RECORRENTE:
-        return <LembreteRecorrenteConfig config={config} setConfig={setConfig} />
+        return <LembreteRecorrenteConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} />
 
       case WorkflowNodeType.ENQUETE_GRUPO:
         return <EnqueteGrupoConfig config={config} setConfig={setConfig} />
 
       case WorkflowNodeType.SEQUENCIA_LANCAMENTO:
-        return <SequenciaLancamentoConfig config={config} setConfig={setConfig} />
+        return <SequenciaLancamentoConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} />
 
       case WorkflowNodeType.PROMO_ML_API:
         return <PromoMLApiConfig config={config} setConfig={setConfig} />
@@ -3784,7 +4021,7 @@ export default function NodeConfigModal({
                 className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
               />
               <p className="text-xs text-gray-500 mt-1.5">
-                Variable name to store the user's reply
+                Variable name to store the user&apos;s reply
               </p>
             </div>
 
