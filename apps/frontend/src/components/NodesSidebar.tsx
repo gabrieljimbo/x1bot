@@ -314,14 +314,23 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         description: 'Busca oficial via API do ML com filtros avançados'
       },
       {
-        type: 'GRUPO_MEDIA' as WorkflowNodeType,
+        type: WorkflowNodeType.GRUPO_MEDIA,
         label: 'Mídia para Grupo',
         icon: '📲',
-        color: 'from-indigo-500 to-indigo-600',
+        color: '#6366F1',
         bgColor: 'bg-[#1e1b4b]',
         borderColor: 'border-[#6366f1]',
-        description: 'Envia mídia agendada para grupos do WhatsApp'
-      }
+        description: 'Envia mídia agendada para grupos do WhatsApp',
+      },
+      {
+        type: WorkflowNodeType.GRUPO_WAIT,
+        label: 'Aguardar (Grupo)',
+        icon: '⏳',
+        color: '#8B5CF6',
+        bgColor: 'bg-[#2a1942]',
+        borderColor: 'border-[#8b5cf6]',
+        description: 'Pausa o fluxo e retoma em dia/horário configurado',
+      },
     ]
   }
   const [searchTerm, setSearchTerm] = useState('')

@@ -31,6 +31,8 @@ import {
   EnqueteGrupoConfig,
   SequenciaLancamentoConfig,
   PromoMLApiConfig,
+  GrupoWaitConfig,
+  ExecutionStatus,
 } from '@n9n/shared';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -48,6 +50,7 @@ export interface NodeExecutionResult {
   nextNodeId: string | null;
   shouldWait: boolean;
   waitTimeoutSeconds?: number;
+  [key: string]: any;
   onTimeout?: 'END' | 'GOTO_NODE';
   timeoutTargetNodeId?: string;
   output?: Record<string, any>;
@@ -148,6 +151,8 @@ export class NodeExecutorService {
     edges: any[],
     sessionId?: string,
     contactPhone?: string,
+    workflowId?: string,
+    executionId?: string,
   ): Promise<NodeExecutionResult> {
     switch (node.type) {
       case WorkflowNodeType.SEND_MESSAGE:
@@ -237,6 +242,9 @@ export class NodeExecutorService {
 
       case WorkflowNodeType.GRUPO_MEDIA:
         return this.executeGrupoMedia(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.GRUPO_WAIT:
+        return this.executeGrupoWait(node, context, undefined, edges, workflowId!, executionId!, sessionId, contactPhone);
 
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
@@ -2816,6 +2824,127 @@ ${config.footerText || ''}`;
     return {
       nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
       shouldWait: false
+    };
+  }
+
+  /**
+   * Execute GRUPO_WAIT node – pauses the flow and resumes at a specific day/time.
+   * Supports: Days after group activation, next fixed time, specific datetime, and simple interval.
+   * Completely independent from executeWait.
+   */
+  async executeGrupoWait(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    _inputData: any,
+    edges: any[],
+    workflowId: string,
+    executionId: string,
+    defaultSessionId?: string,
+    defaultContactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as GrupoWaitConfig;
+    const contactPhone = defaultContactPhone;
+    const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
+
+    // Check if we are resuming from a wait
+    if ((context.variables as any)?._resumingGrupoWait) {
+      console.log(`[GRUPO_WAIT] Resuming execution ${executionId} for node ${node.id}`);
+      return {
+        nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
+        shouldWait: false
+      };
+    }
+
+    // Protection against duplicate pending executions for the same group + workflow + node
+    const pendingExecution = await this.prisma.workflowExecution.findFirst({
+      where: {
+        workflowId,
+        currentNodeId: node.id,
+        contactPhone,
+        status: ExecutionStatus.WAITING,
+        id: { not: executionId }
+      }
+    });
+
+    if (pendingExecution) {
+      console.warn(`[GRUPO_WAIT] Duplicate pending execution found for group ${contactPhone}, skipping this one.`);
+      return { nextNodeId: null, shouldWait: false };
+    }
+
+    let wakeUpAt: Date;
+    const now = new Date();
+
+    switch (config.mode) {
+      case 'days_after': {
+        // 1. Get activatedAt from group_workflow_links
+        const groupLink = await this.prisma.groupWorkflowLink.findFirst({
+          where: {
+            groupJid: contactPhone,
+            workflowId: workflowId,
+            tenantId: tenantId!
+          },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        const baseDate = groupLink?.activatedAt || now;
+        const days = config.daysAfter || 0;
+        const [hours, minutes] = (config.time || '09:00').split(':').map(Number);
+
+        wakeUpAt = new Date(baseDate);
+        wakeUpAt.setDate(wakeUpAt.getDate() + days);
+        wakeUpAt.setHours(hours || 9, minutes || 0, 0, 0);
+        break;
+      }
+
+      case 'fixed_time': {
+        const [hours, minutes] = (config.time || '09:00').split(':').map(Number);
+        wakeUpAt = new Date(now);
+        wakeUpAt.setHours(hours || 9, minutes || 0, 0, 0);
+
+        if (wakeUpAt <= now) {
+          wakeUpAt.setDate(wakeUpAt.getDate() + 1);
+        }
+        break;
+      }
+
+      case 'datetime': {
+        const [year, month, day] = (config.date || now.toISOString().split('T')[0]).split('-').map(Number);
+        const [hours, minutes] = (config.time || '09:00').split(':').map(Number);
+        wakeUpAt = new Date(year, month - 1, day, hours, minutes, 0, 0);
+        break;
+      }
+
+      case 'interval': {
+        const amount = config.intervalAmount || 1;
+        const unit = config.intervalUnit || 'hours';
+        wakeUpAt = new Date(now);
+        if (unit === 'days') {
+          wakeUpAt.setDate(wakeUpAt.getDate() + amount);
+        } else {
+          wakeUpAt.setHours(wakeUpAt.getHours() + amount);
+        }
+        break;
+      }
+
+      default:
+        wakeUpAt = new Date(now.getTime() + 60000); // 1 minute fallback
+    }
+
+    // Protection: if wakeUpAt is in the past, resume almost immediately
+    if (wakeUpAt <= now) {
+      console.log(`[GRUPO_WAIT] Calculated wakeUpAt is in the past (${wakeUpAt.toISOString()}), resuming in 5s.`);
+      wakeUpAt = new Date(now.getTime() + 5000);
+    }
+
+    const waitTimeoutSeconds = Math.max(1, Math.floor((wakeUpAt.getTime() - now.getTime()) / 1000));
+
+    console.log(`[GRUPO_WAIT] Node ${node.id} waiting until ${wakeUpAt.toISOString()} (${waitTimeoutSeconds}s) for group ${contactPhone}`);
+
+    return {
+      nextNodeId: node.id,
+      shouldWait: true,
+      waitTimeoutSeconds,
+      _resumingGrupoWait: true
     };
   }
 

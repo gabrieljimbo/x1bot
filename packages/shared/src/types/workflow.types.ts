@@ -32,6 +32,7 @@ export enum WorkflowNodeType {
   SEQUENCIA_LANCAMENTO = 'SEQUENCIA_LANCAMENTO',
   PROMO_ML_API = 'PROMO_ML_API',
   GRUPO_MEDIA = 'GRUPO_MEDIA',
+  GRUPO_WAIT = 'GRUPO_WAIT',
   END = 'END',
 }
 
@@ -481,5 +482,16 @@ export interface PromoMLApiConfig {
   ignoreAlreadySent: boolean;
   saveResponseAs?: string;
   sessionId?: string;
+}
+
+export interface GrupoWaitConfig {
+  mode: 'days_after' | 'fixed_time' | 'datetime' | 'interval';
+  daysAfter?: number;
+  time?: string; // HH:mm
+  date?: string; // YYYY-MM-DD
+  intervalAmount?: number;
+  intervalUnit?: 'hours' | 'days';
+  cancelIfLeftGroup?: boolean;
+  notifyOnResume?: boolean;
 }
 

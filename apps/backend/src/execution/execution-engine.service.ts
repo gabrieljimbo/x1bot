@@ -731,6 +731,8 @@ export class ExecutionEngineService implements OnModuleInit {
           workflow.edges,
           execution.sessionId,
           execution.contactPhone,
+          execution.workflowId,
+          execution.id,
         );
       } catch (nodeError: any) {
         console.error(`[EXECUTION] Node ${currentNode.id} (${currentNode.type}) failed:`, nodeError.message);
@@ -773,7 +775,7 @@ export class ExecutionEngineService implements OnModuleInit {
         execution.status = ExecutionStatus.WAITING;
 
         // Check if it's a WAIT node (automatic resume) or WAIT_REPLY (manual resume)
-        const isWaitNode = currentNode.type === WorkflowNodeType.WAIT || currentNode.type === WorkflowNodeType.GRUPO_MEDIA;
+        const isWaitNode = currentNode.type === WorkflowNodeType.WAIT || currentNode.type === WorkflowNodeType.GRUPO_MEDIA || currentNode.type === WorkflowNodeType.GRUPO_WAIT;
 
         if (isWaitNode) {
           // Store the expected resume time in context for restart recovery

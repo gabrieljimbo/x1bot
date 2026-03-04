@@ -463,6 +463,408 @@ function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node
   )
 }
 
+function GrupoWaitConfig({ config, setConfig }: any) {
+  const [activeTab, setActiveTab] = useState<'params' | 'config'>('params');
+
+  const updateMode = (mode: string) => {
+    setConfig({
+      ...config,
+      mode,
+      // Reset mode-specific fields
+      daysAfter: mode === 'days_after' ? (config.daysAfter || 0) : config.daysAfter,
+      time: (mode === 'days_after' || mode === 'fixed_time' || mode === 'datetime') ? (config.time || '09:00') : config.time,
+      date: mode === 'datetime' ? (config.date || new Date().toISOString().split('T')[0]) : config.date,
+      intervalAmount: mode === 'interval' ? (config.intervalAmount || 1) : config.intervalAmount,
+      intervalUnit: mode === 'interval' ? (config.intervalUnit || 'hours') : config.intervalUnit
+    });
+  };
+
+  const getPreviewText = () => {
+    if (config.mode === 'days_after') {
+      return `▶️ Retoma no Dia ${config.daysAfter || 0} às ${config.time || '09:00'}`;
+    }
+    if (config.mode === 'fixed_time') {
+      return `▶️ Retoma amanhã às ${config.time || '09:00'}`;
+    }
+    if (config.mode === 'datetime') {
+      const d = config.date ? config.date.split('-').reverse().join('/') : '--/--/----';
+      return `▶️ Retoma em ${d} às ${config.time || '09:00'}`;
+    }
+    if (config.mode === 'interval') {
+      return `▶️ Retoma em ${config.intervalAmount || 1} ${config.intervalUnit === 'days' ? 'dia(s)' : 'hora(s)'}`;
+    }
+    return '▶️ Configuração pendente';
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex border-b border-gray-700 mb-2 overflow-x-auto no-scrollbar">
+        <button
+          onClick={() => setActiveTab('params')}
+          className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'params' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`}
+        ><span>📝</span> Parâmetros</button>
+        <button
+          onClick={() => setActiveTab('config')}
+          className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'config' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`}
+        ><span>⚙️</span> Configurações</button>
+      </div>
+
+      {activeTab === 'params' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-gray-200">Modo de Espera</label>
+            <select
+              value={config.mode || 'days_after'}
+              onChange={(e) => updateMode(e.target.value)}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+            >
+              <option value="days_after">📅 Dias após início do grupo</option>
+              <option value="fixed_time">🕐 Próximo horário fixo</option>
+              <option value="datetime">📆 Data e hora específica</option>
+              <option value="interval">⏱️ Intervalo simples</option>
+            </select>
+          </div>
+
+          {config.mode === 'days_after' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">⏳ Aguardar até o dia</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={config.daysAfter ?? 2}
+                  onChange={(e) => setConfig({ ...config, daysAfter: parseInt(e.target.value) || 0 })}
+                  placeholder="2"
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+                <p className="text-xs text-gray-500 mt-1">Retomar no dia X após ativação no grupo</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">🕐 às</label>
+                <input
+                  type="time"
+                  value={config.time || '09:00'}
+                  onChange={(e) => setConfig({ ...config, time: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+              </div>
+            </div>
+          )}
+
+          {config.mode === 'fixed_time' && (
+            <div>
+              <label className="block text-sm font-medium mb-2 text-gray-200">Retomar às</label>
+              <input
+                type="time"
+                value={config.time || '09:00'}
+                onChange={(e) => setConfig({ ...config, time: e.target.value })}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+              />
+              <p className="text-xs text-gray-500 mt-1">Aguarda até o próximo horário fixo do dia</p>
+            </div>
+          )}
+
+          {config.mode === 'datetime' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">Data</label>
+                <input
+                  type="date"
+                  value={config.date || ''}
+                  onChange={(e) => setConfig({ ...config, date: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">Hora</label>
+                <input
+                  type="time"
+                  value={config.time || '09:00'}
+                  onChange={(e) => setConfig({ ...config, time: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+              </div>
+            </div>
+          )}
+
+          {config.mode === 'interval' && (
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-2 text-gray-200">Aguardar</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={config.intervalAmount || 1}
+                  onChange={(e) => setConfig({ ...config, intervalAmount: parseInt(e.target.value) || 1 })}
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-2 text-gray-200">Unidade</label>
+                <select
+                  value={config.intervalUnit || 'hours'}
+                  onChange={(e) => setConfig({ ...config, intervalUnit: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                >
+                  <option value="hours">Horas</option>
+                  <option value="days">Dias</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
+            <p className="text-sm font-medium text-primary flex items-center gap-2">
+              {getPreviewText()}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'config' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <label className="flex items-center cursor-pointer p-4 bg-[#1a1a1a] rounded border border-gray-700">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={config.cancelIfLeftGroup ?? true}
+              onChange={(e) => setConfig({ ...config, cancelIfLeftGroup: e.target.checked })}
+            />
+            <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary relative"></div>
+            <span className="ml-3 text-sm font-medium text-gray-200">🔕 Cancelar se grupo sair</span>
+          </label>
+
+          <label className="flex items-center cursor-pointer p-4 bg-[#1a1a1a] rounded border border-gray-700">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={config.notifyOnResume ?? false}
+              onChange={(e) => setConfig({ ...config, notifyOnResume: e.target.checked })}
+            />
+            <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary relative"></div>
+            <span className="ml-3 text-sm font-medium text-gray-200">📝 Notificar quando retomar</span>
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConditionConfig({ config, setConfig }: any) {
+  // Parse existing expression or use defaults
+  const parseExpression = (expr: string) => {
+    if (!expr) return { value1: '', operator: '==', value2: '' }
+
+    // Check for array operators first
+    if (expr.includes('.includes(') && !expr.includes('.toLowerCase()')) {
+      // Array contains: contactTags.includes("vendas")
+      const match = expr.match(/(.+?)\.includes\("([^"]+)"\)/)
+      if (match) {
+        return { value1: match[1].replace(/^!/, ''), operator: expr.startsWith('!') ? '.array_not_contains(' : '.array_contains(', value2: match[2] }
+      }
+    }
+
+    if (expr.includes('.length === 0')) {
+      const value1 = expr.replace('.length === 0', '').trim()
+      return { value1, operator: '.array_is_empty', value2: '' }
+    }
+
+    if (expr.includes('.length > 0')) {
+      const value1 = expr.replace('.length > 0', '').trim()
+      return { value1, operator: '.array_is_not_empty', value2: '' }
+    }
+
+    // Check for array contains any/all (multiple OR/AND conditions)
+    if (expr.includes(' || ') && expr.includes('.includes(')) {
+      const parts = expr.split(' || ')
+      const firstMatch = parts[0].match(/(.+?)\.includes\("([^"]+)"\)/)
+      if (firstMatch) {
+        const value1 = firstMatch[1]
+        const values = parts.map(p => {
+          const m = p.match(/\.includes\("([^"]+)"\)/)
+          return m ? m[1] : ''
+        }).filter(Boolean)
+        return { value1, operator: '.array_contains_any(', value2: values.join(', ') }
+      }
+    }
+
+    if (expr.includes(' && ') && expr.includes('.includes(')) {
+      const parts = expr.split(' && ')
+      const firstMatch = parts[0].match(/(.+?)\.includes\("([^"]+)"\)/)
+      if (firstMatch) {
+        const value1 = firstMatch[1]
+        const values = parts.map(p => {
+          const m = p.match(/\.includes\("([^"]+)"\)/)
+          return m ? m[1] : ''
+        }).filter(Boolean)
+        return { value1, operator: '.array_contains_all(', value2: values.join(', ') }
+      }
+    }
+
+    // Try to parse expressions like "variables.opcao == 2"
+    const operators = ['===', '!==', '==', '!=', '>=', '<=', '>', '<', '.includes(', '.startsWith(', '.endsWith(']
+    for (const op of operators) {
+      if (expr.includes(op)) {
+        const parts = expr.split(op)
+        if (parts.length >= 2) {
+          // Remove .toLowerCase() from parsed values to avoid duplication
+          let value1 = parts[0].trim().replace(/\.toLowerCase\(\)/g, '')
+          // For value2, remove everything after the closing quote/parenthesis
+          let value2Raw = parts[1].trim()
+          // Extract the actual value between quotes
+          const match = value2Raw.match(/"([^"]*)"/)
+          let value2 = match ? match[1] : value2Raw.replace(/[()'"]/g, '').replace(/\.toLowerCase\(\)/g, '')
+
+          return {
+            value1,
+            operator: op,
+            value2
+          }
+        }
+      }
+    }
+
+    return { value1: expr, operator: '==', value2: '' }
+  }
+
+  // Use state to manage condition parts independently
+  const [conditionParts, setConditionParts] = useState(() => parseExpression(config.expression || ''))
+
+  // Update parts when config.expression changes externally
+  useEffect(() => {
+    setConditionParts(parseExpression(config.expression || ''))
+  }, [config.expression])
+
+  const updateCondition = (field: string, value: string) => {
+    const parts = { ...conditionParts, [field]: value }
+    setConditionParts(parts)
+
+    let expression = ''
+
+    // Array operators
+    if (parts.operator === '.array_contains(') {
+      expression = `${parts.value1}.includes("${parts.value2}")`
+    } else if (parts.operator === '.array_not_contains(') {
+      expression = `!${parts.value1}.includes("${parts.value2}")`
+    } else if (parts.operator === '.array_contains_any(') {
+      const values = parts.value2.split(',').map(v => v.trim())
+      expression = values.map(v => `${parts.value1}.includes("${v}")`).join(' || ')
+    } else if (parts.operator === '.array_contains_all(') {
+      const values = parts.value2.split(',').map(v => v.trim())
+      expression = values.map(v => `${parts.value1}.includes("${v}")`).join(' && ')
+    } else if (parts.operator === '.array_is_empty') {
+      expression = `${parts.value1}.length === 0`
+    } else if (parts.operator === '.array_is_not_empty') {
+      expression = `${parts.value1}.length > 0`
+    } else if (parts.operator.includes('(')) {
+      // For string methods like includes, startsWith, endsWith - use lowercase for case-insensitive comparison
+      expression = `${parts.value1}.toLowerCase()${parts.operator}"${parts.value2}".toLowerCase())`
+    } else {
+      expression = `${parts.value1} ${parts.operator} ${parts.value2}`
+    }
+
+    setConfig({ ...config, expression })
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-200">Conditions</h3>
+          <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded font-mono">
+            {config.expression || 'no expression'}
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          {/* Value 1 */}
+          <div>
+            <label className="block text-xs font-medium mb-1.5 text-gray-400">
+              Value 1
+            </label>
+            <input
+              type="text"
+              value={conditionParts.value1}
+              onChange={(e) => updateCondition('value1', e.target.value)}
+              placeholder={conditionParts.operator.startsWith('.array_') ? "contactTags" : "variables.opcao"}
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+            />
+          </div>
+
+          {/* Operator */}
+          <div>
+            <label className="block text-xs font-medium mb-1.5 text-gray-400">
+              Operator
+            </label>
+            <select
+              value={conditionParts.operator}
+              onChange={(e) => updateCondition('operator', e.target.value)}
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white"
+            >
+              <optgroup label="Comparison">
+                <option value="==">is equal to (==)</option>
+                <option value="===">is equal to (===)</option>
+                <option value="!=">is not equal to (!=)</option>
+                <option value="!==">is not equal to (!==)</option>
+                <option value=">">is greater than (&gt;)</option>
+                <option value=">=">is greater or equal (&gt;=)</option>
+                <option value="<">is less than (&lt;)</option>
+                <option value="<=">is less or equal (&lt;=)</option>
+              </optgroup>
+              <optgroup label="String">
+                <option value=".includes(">contains (.includes)</option>
+                <option value=".startsWith(">starts with (.startsWith)</option>
+                <option value=".endsWith(">ends with (.endsWith)</option>
+              </optgroup>
+              <optgroup label="Array">
+                <option value=".array_contains(">array contains</option>
+                <option value=".array_not_contains(">array not contains</option>
+                <option value=".array_contains_any(">array contains any</option>
+                <option value=".array_contains_all(">array contains all</option>
+                <option value=".array_is_empty">array is empty</option>
+                <option value=".array_is_not_empty">array is not empty</option>
+              </optgroup>
+            </select>
+          </div>
+
+          {/* Value 2 */}
+          {!conditionParts.operator.includes('_is_empty') && !conditionParts.operator.includes('_is_not_empty') && (
+            <div>
+              <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                Value 2
+              </label>
+              <input
+                type="text"
+                value={conditionParts.value2}
+                onChange={(e) => updateCondition('value2', e.target.value)}
+                placeholder={
+                  conditionParts.operator.includes('array_contains_any') || conditionParts.operator.includes('array_contains_all')
+                    ? "vendas, vip, premium (separe por vírgula)"
+                    : conditionParts.operator.startsWith('.array_')
+                      ? "vendas"
+                      : conditionParts.operator.includes('(')
+                        ? "sim, s, ok (separe por vírgula)"
+                        : "2"
+                }
+                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+              />
+              {(conditionParts.operator.includes('array_contains_any') || conditionParts.operator.includes('array_contains_all')) && (
+                <p className="text-[10px] text-gray-500 mt-1">Separate multiple values with commas</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+        <p className="text-[11px] text-blue-300 leading-relaxed">
+          💡 <strong>Tip:</strong> Use variables like <code className="bg-blue-500/20 px-1 rounded">variables.key</code> or <code className="bg-blue-500/20 px-1 rounded">contactTags</code> for dynamic evaluations.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function PromoMLConfig({ config, setConfig }: any) {
   const [activeTab, setActiveTab] = useState<'params' | 'filters' | 'message'>('params');
 
@@ -2138,6 +2540,9 @@ export default function NodeConfigModal({
           />
         )
 
+      case WorkflowNodeType.GRUPO_WAIT:
+        return <GrupoWaitConfig config={config} setConfig={setConfig} />
+
       case WorkflowNodeType.AQUECIMENTO:
         return <AquecimentoConfig config={config} setConfig={setConfig} />
 
@@ -3765,245 +4170,7 @@ export default function NodeConfigModal({
         )
 
       case 'CONDITION':
-        // Parse existing expression or use defaults
-        const parseExpression = (expr: string) => {
-          if (!expr) return { value1: '', operator: '==', value2: '' }
-
-          // Check for array operators first
-          if (expr.includes('.includes(') && !expr.includes('.toLowerCase()')) {
-            // Array contains: contactTags.includes("vendas")
-            const match = expr.match(/(.+?)\.includes\("([^"]+)"\)/)
-            if (match) {
-              return { value1: match[1].replace(/^!/, ''), operator: expr.startsWith('!') ? '.array_not_contains(' : '.array_contains(', value2: match[2] }
-            }
-          }
-
-          if (expr.includes('.length === 0')) {
-            const value1 = expr.replace('.length === 0', '').trim()
-            return { value1, operator: '.array_is_empty', value2: '' }
-          }
-
-          if (expr.includes('.length > 0')) {
-            const value1 = expr.replace('.length > 0', '').trim()
-            return { value1, operator: '.array_is_not_empty', value2: '' }
-          }
-
-          // Check for array contains any/all (multiple OR/AND conditions)
-          if (expr.includes(' || ') && expr.includes('.includes(')) {
-            const parts = expr.split(' || ')
-            const firstMatch = parts[0].match(/(.+?)\.includes\("([^"]+)"\)/)
-            if (firstMatch) {
-              const value1 = firstMatch[1]
-              const values = parts.map(p => {
-                const m = p.match(/\.includes\("([^"]+)"\)/)
-                return m ? m[1] : ''
-              }).filter(Boolean)
-              return { value1, operator: '.array_contains_any(', value2: values.join(', ') }
-            }
-          }
-
-          if (expr.includes(' && ') && expr.includes('.includes(')) {
-            const parts = expr.split(' && ')
-            const firstMatch = parts[0].match(/(.+?)\.includes\("([^"]+)"\)/)
-            if (firstMatch) {
-              const value1 = firstMatch[1]
-              const values = parts.map(p => {
-                const m = p.match(/\.includes\("([^"]+)"\)/)
-                return m ? m[1] : ''
-              }).filter(Boolean)
-              return { value1, operator: '.array_contains_all(', value2: values.join(', ') }
-            }
-          }
-
-          // Try to parse expressions like "variables.opcao == 2"
-          const operators = ['===', '!==', '==', '!=', '>=', '<=', '>', '<', '.includes(', '.startsWith(', '.endsWith(']
-          for (const op of operators) {
-            if (expr.includes(op)) {
-              const parts = expr.split(op)
-              if (parts.length >= 2) {
-                // Remove .toLowerCase() from parsed values to avoid duplication
-                let value1 = parts[0].trim().replace(/\.toLowerCase\(\)/g, '')
-                // For value2, remove everything after the closing quote/parenthesis
-                let value2Raw = parts[1].trim()
-                // Extract the actual value between quotes
-                const match = value2Raw.match(/"([^"]*)"/)
-                let value2 = match ? match[1] : value2Raw.replace(/[()'"]/g, '').replace(/\.toLowerCase\(\)/g, '')
-
-                return {
-                  value1,
-                  operator: op,
-                  value2
-                }
-              }
-            }
-          }
-
-          return { value1: expr, operator: '==', value2: '' }
-        }
-
-        // Use state to manage condition parts independently
-        const [conditionParts, setConditionParts] = useState(() => parseExpression(config.expression || ''))
-
-        // Update parts when config.expression changes externally
-        useEffect(() => {
-          setConditionParts(parseExpression(config.expression || ''))
-        }, [config.expression])
-
-        const updateCondition = (field: string, value: string) => {
-          const parts = { ...conditionParts, [field]: value }
-          setConditionParts(parts)
-
-          let expression = ''
-
-          // Array operators
-          if (parts.operator === '.array_contains(') {
-            expression = `${parts.value1}.includes("${parts.value2}")`
-          } else if (parts.operator === '.array_not_contains(') {
-            expression = `!${parts.value1}.includes("${parts.value2}")`
-          } else if (parts.operator === '.array_contains_any(') {
-            const values = parts.value2.split(',').map(v => v.trim())
-            expression = values.map(v => `${parts.value1}.includes("${v}")`).join(' || ')
-          } else if (parts.operator === '.array_contains_all(') {
-            const values = parts.value2.split(',').map(v => v.trim())
-            expression = values.map(v => `${parts.value1}.includes("${v}")`).join(' && ')
-          } else if (parts.operator === '.array_is_empty') {
-            expression = `${parts.value1}.length === 0`
-          } else if (parts.operator === '.array_is_not_empty') {
-            expression = `${parts.value1}.length > 0`
-          } else if (parts.operator.includes('(')) {
-            // For string methods like includes, startsWith, endsWith - use lowercase for case-insensitive comparison
-            expression = `${parts.value1}.toLowerCase()${parts.operator}"${parts.value2}".toLowerCase())`
-          } else {
-            expression = `${parts.value1} ${parts.operator} ${parts.value2}`
-          }
-
-          setConfig({ ...config, expression })
-        }
-
-        return (
-          <div className="space-y-6">
-            <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-4">Conditions</h3>
-
-              <div className="space-y-3">
-                {/* Value 1 */}
-                <div>
-                  <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                    Value 1
-                  </label>
-                  <input
-                    type="text"
-                    value={conditionParts.value1}
-                    onChange={(e) => updateCondition('value1', e.target.value)}
-                    placeholder={conditionParts.operator.startsWith('.array_') ? "contactTags" : "variables.opcao"}
-                    className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
-                  />
-                </div>
-
-                {/* Operator */}
-                <div>
-                  <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                    Operator
-                  </label>
-                  <select
-                    value={conditionParts.operator}
-                    onChange={(e) => updateCondition('operator', e.target.value)}
-                    className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white"
-                  >
-                    <optgroup label="Comparison">
-                      <option value="==">is equal to (==)</option>
-                      <option value="===">is equal to (===)</option>
-                      <option value="!=">is not equal to (!=)</option>
-                      <option value="!==">is not equal to (!==)</option>
-                      <option value=">">is greater than (&gt;)</option>
-                      <option value=">=">is greater or equal (&gt;=)</option>
-                      <option value="<">is less than (&lt;)</option>
-                      <option value="<=">is less or equal (&lt;=)</option>
-                    </optgroup>
-                    <optgroup label="String">
-                      <option value=".includes(">contains (.includes)</option>
-                      <option value=".startsWith(">starts with (.startsWith)</option>
-                      <option value=".endsWith(">ends with (.endsWith)</option>
-                    </optgroup>
-                    <optgroup label="Array">
-                      <option value=".array_contains(">array contains</option>
-                      <option value=".array_not_contains(">array not contains</option>
-                      <option value=".array_contains_any(">array contains any</option>
-                      <option value=".array_contains_all(">array contains all</option>
-                      <option value=".array_is_empty">array is empty</option>
-                      <option value=".array_is_not_empty">array is not empty</option>
-                    </optgroup>
-                  </select>
-                </div>
-
-                {/* Value 2 */}
-                {!conditionParts.operator.includes('_is_empty') && !conditionParts.operator.includes('_is_not_empty') && (
-                  <div>
-                    <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                      Value 2
-                    </label>
-                    <input
-                      type="text"
-                      value={conditionParts.value2}
-                      onChange={(e) => updateCondition('value2', e.target.value)}
-                      placeholder={
-                        conditionParts.operator.includes('array_contains_any') || conditionParts.operator.includes('array_contains_all')
-                          ? "vendas, vip, premium (separe por vírgula)"
-                          : conditionParts.operator.startsWith('.array_')
-                            ? "vendas"
-                            : conditionParts.operator.includes('(')
-                              ? "sim, s, ok (separe por vírgula)"
-                              : "2"
-                      }
-                      className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
-                    />
-                    {(conditionParts.operator.includes('array_contains_any') || conditionParts.operator.includes('array_contains_all')) && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        💡 Dica: Use vírgulas para múltiplas tags (ex: vendas, vip, premium)
-                      </p>
-                    )}
-                    {conditionParts.operator.includes('(') && !conditionParts.operator.startsWith('.array_') && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        💡 Dica: Use vírgulas para múltiplas opções (ex: sim, s, ok, talvez)
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Preview */}
-              <div className="mt-4 pt-4 border-t border-gray-700">
-                <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                  Expression Preview
-                </label>
-                <div className="px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-sm text-primary font-mono">
-                  {(() => {
-                    const expr = config.expression || 'No expression set'
-                    // Show how multiple values will be processed
-                    if (conditionParts.operator.includes('(') && conditionParts.value2.includes(',')) {
-                      const values = conditionParts.value2.split(',').map(v => v.trim())
-                      return `${conditionParts.value1}.toLowerCase()${conditionParts.operator}"${values[0]}".toLowerCase()) OR ... OR ${conditionParts.operator}"${values[values.length - 1]}".toLowerCase())`
-                    }
-                    return expr
-                  })()}
-                </div>
-                {conditionParts.operator.includes('(') && conditionParts.value2.includes(',') && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    ℹ️ O backend vai testar cada valor separadamente: {conditionParts.value2.split(',').map(v => `"${v.trim()}"`).join(', ')}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Help Text */}
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-              <p className="text-xs text-blue-300 leading-relaxed">
-                💡 <strong>Tip:</strong> Use <code className="bg-blue-500/20 px-1 py-0.5 rounded">variables.name</code> to access saved variables,
-                or <code className="bg-blue-500/20 px-1 py-0.5 rounded">globals.contactId</code> for global values.
-              </p>
-            </div>
-          </div>
-        )
+        return <ConditionConfig config={config} setConfig={setConfig} />
 
       case 'SWITCH':
         const switchRules = config.rules || []
