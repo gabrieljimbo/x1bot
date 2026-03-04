@@ -178,6 +178,291 @@ function SetTagsConfig({ config, setConfig, tenantId: _tenantId }: any) {
   )
 }
 
+function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node }: any) {
+  const [activeTab, setActiveTab] = useState<'params' | 'config'>('params');
+
+  return (
+    <div className="space-y-6">
+      <div className="flex border-b border-gray-700 mb-2 overflow-x-auto no-scrollbar">
+        <button
+          onClick={() => setActiveTab('params')}
+          className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'params' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`}
+        ><span>📝</span> Parâmetros</button>
+        <button
+          onClick={() => setActiveTab('config')}
+          className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'config' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`}
+        ><span>⚙️</span> Configurações</button>
+      </div>
+
+      {activeTab === 'params' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-gray-200">Tipo de Mídia</label>
+            <select
+              value={config.mediaType || 'image'}
+              onChange={(e) => setConfig({ ...config, mediaType: e.target.value })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+            >
+              <option value="image">🖼️ Imagem (JPG, PNG, WEBP — máx 5MB)</option>
+              <option value="audio">🎵 Áudio (MP3, OGG, AAC — máx 10MB)</option>
+              <option value="ptt">🎤 Áudio de Voz (OGG — gravado na hora)</option>
+              <option value="video">🎬 Vídeo (MP4 — máx 50MB)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-gray-200">URL da Mídia</label>
+            <input
+              type="text"
+              value={config.mediaUrl || ''}
+              onChange={(e) => setConfig({ ...config, mediaUrl: e.target.value, uploadedMediaId: undefined })}
+              placeholder="https://example.com/media.jpg"
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white font-mono text-sm"
+              disabled={!!config.uploadedMediaId}
+            />
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className="text-xs text-gray-500">Suporta variáveis: <code className="px-1.5 py-0.5 bg-gray-800 rounded text-primary">{"{{variables.imageUrl}}"}</code></span>
+            </div>
+
+            {!config.uploadedMediaId ? (
+              <div className="mt-3">
+                <div className="flex items-center gap-2 my-2">
+                  <div className="flex-1 h-px bg-gray-700"></div>
+                  <span className="text-xs text-gray-500">ou</span>
+                  <div className="flex-1 h-px bg-gray-700"></div>
+                </div>
+                <label className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#151515] border border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-[#1a1a1a] transition-colors">
+                  <span className="text-sm text-gray-300">📎 Upload de arquivo</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept={
+                      config.mediaType === 'image' ? '.jpg,.jpeg,.png,.webp' :
+                        config.mediaType === 'audio' || config.mediaType === 'ptt' ? '.mp3,.ogg,.aac' :
+                          config.mediaType === 'video' ? '.mp4' : '*'
+                    }
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+
+                      const mediaType = config.mediaType || 'image'
+                      const sizeLimits: Record<string, number> = {
+                        image: 5 * 1024 * 1024,
+                        audio: 10 * 1024 * 1024,
+                        ptt: 10 * 1024 * 1024,
+                        video: 50 * 1024 * 1024,
+                      }
+
+                      if (file.size > (sizeLimits[mediaType] || 5 * 1024 * 1024)) {
+                        const maxMB = Math.round((sizeLimits[mediaType] || 5 * 1024 * 1024) / (1024 * 1024))
+                        alert(`Arquivo muito grande. Máximo para ${mediaType}: ${maxMB}MB`)
+                        e.target.value = ''
+                        return
+                      }
+
+                      try {
+                        const formData = new FormData()
+                        formData.append('file', file)
+                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                        const token = localStorage.getItem('n9n_token')
+                        const headers: HeadersInit = {}
+                        if (token) {
+                          headers['Authorization'] = `Bearer ${token}`
+                        }
+                        const res = await fetch(
+                          `${API_URL}/media/upload?tenantId=${tenantId}&mediaType=${mediaType}&nodeId=${node.id}&workflowId=${node.workflowId || ''}`,
+                          { method: 'POST', headers, body: formData }
+                        )
+
+                        if (!res.ok) {
+                          const err = await res.json()
+                          alert(err.message || 'Erro ao fazer upload')
+                          e.target.value = ''
+                          return
+                        }
+
+                        const data = await res.json()
+                        setConfig({
+                          ...config,
+                          mediaUrl: data.url,
+                          uploadedMediaId: data.id,
+                          uploadedFileName: data.originalName,
+                          uploadedFileSize: data.size,
+                        })
+                      } catch (err) {
+                        alert('Erro ao fazer upload do arquivo')
+                      }
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="mt-3 p-3 bg-[#151515] border border-green-500/30 rounded flex justify-between items-center group">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <span className="text-green-500 flex-shrink-0">✓</span>
+                  <span className="text-sm text-gray-300 truncate" title={config.uploadedFileName}>
+                    {config.uploadedFileName || 'Arquivo enviado'}
+                  </span>
+                  <span className="text-xs text-gray-500 flex-shrink-0">
+                    ({config.uploadedFileSize ? Math.round(config.uploadedFileSize / 1024) + ' KB' : '-'})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfig({
+                      ...config,
+                      mediaUrl: '',
+                      uploadedMediaId: undefined,
+                      uploadedFileName: undefined,
+                      uploadedFileSize: undefined,
+                    })
+                  }}
+                  className="text-red-400 hover:text-red-300 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Remover arquivo"
+                >
+                  🗑️
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-gray-200">💬 Legenda (opcional)</label>
+            <textarea
+              value={config.caption || ''}
+              onChange={(e) => setConfig({ ...config, caption: e.target.value })}
+              placeholder="Confira essa novidade! 🔥"
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+              rows={3}
+            />
+            <p className="text-xs text-gray-500 mt-1">Suporta variáveis: {'{{variables.nome}}'}</p>
+          </div>
+
+          <div className="bg-[#1a1a1a] p-4 rounded border border-gray-700">
+            <label className="flex items-center cursor-pointer mb-4">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={config.scheduling?.enabled || false}
+                onChange={(e) => setConfig({
+                  ...config,
+                  scheduling: { ...config.scheduling, enabled: e.target.checked, mode: config.scheduling?.mode || 'datetime' }
+                })}
+              />
+              <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary relative"></div>
+              <span className="ml-3 text-sm font-medium text-gray-200">⏰ Agendar envio</span>
+            </label>
+
+            {config.scheduling?.enabled && (
+              <div className="space-y-4 pt-4 border-t border-gray-700">
+                <select
+                  value={config.scheduling.mode || 'datetime'}
+                  onChange={(e) => setConfig({ ...config, scheduling: { ...config.scheduling, mode: e.target.value } })}
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white text-sm"
+                >
+                  <option value="datetime">📅 Data e hora específica</option>
+                  <option value="daily">🕐 Hora fixa diária</option>
+                  <option value="days_after">📆 Dias após início do grupo</option>
+                </select>
+
+                {config.scheduling.mode === 'datetime' && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-500">Enviar uma vez em data e hora específica</p>
+                    <div className="flex gap-4">
+                      <input type="date" value={config.scheduling.date || ''} onChange={(e) => setConfig({ ...config, scheduling: { ...config.scheduling, date: e.target.value } })} className="flex-1 px-4 py-2 bg-[#151515] border border-gray-700 rounded text-white text-sm" />
+                      <input type="time" value={config.scheduling.time || ''} onChange={(e) => setConfig({ ...config, scheduling: { ...config.scheduling, time: e.target.value } })} className="flex-1 px-4 py-2 bg-[#151515] border border-gray-700 rounded text-white text-sm" />
+                    </div>
+                  </div>
+                )}
+                {config.scheduling.mode === 'daily' && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-500">Enviar todo dia na mesma hora</p>
+                    <input type="time" value={config.scheduling.time || ''} onChange={(e) => setConfig({ ...config, scheduling: { ...config.scheduling, time: e.target.value } })} className="w-full px-4 py-2 bg-[#151515] border border-gray-700 rounded text-white text-sm" />
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((d, i) => (
+                        <label key={d} className="flex items-center gap-1 text-xs text-gray-300">
+                          <input type="checkbox" checked={config.scheduling.days?.includes(i) || false} onChange={(e) => {
+                            const days = new Set(config.scheduling.days || []);
+                            e.target.checked ? days.add(i) : days.delete(i);
+                            setConfig({ ...config, scheduling: { ...config.scheduling, days: Array.from(days) } })
+                          }} /> {d}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {config.scheduling.mode === 'days_after' && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-500">Envia X dias após a ativação do grupo</p>
+                    <div className="flex gap-4 items-center">
+                      <input type="number" min="0" placeholder="Dia (ex: 1)" value={config.scheduling.day ?? 0} onChange={(e) => setConfig({ ...config, scheduling: { ...config.scheduling, day: parseInt(e.target.value) || 0 } })} className="flex-1 px-4 py-2 bg-[#151515] border border-gray-700 rounded text-white text-sm" />
+                      <span className="text-gray-400 text-sm">às</span>
+                      <input type="time" value={config.scheduling.time || '09:00'} onChange={(e) => setConfig({ ...config, scheduling: { ...config.scheduling, time: e.target.value } })} className="flex-1 px-4 py-2 bg-[#151515] border border-gray-700 rounded text-white text-sm" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {(config.mediaType === 'image' || config.mediaType === 'ptt') && (
+            <label className="flex items-center cursor-pointer p-4 bg-[#1a1a1a] rounded border border-gray-700">
+              <input type="checkbox" className="sr-only peer" checked={config.mentionAll || false} onChange={(e) => setConfig({ ...config, mentionAll: e.target.checked })} />
+              <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary relative"></div>
+              <span className="ml-3 text-sm font-medium text-gray-200">📣 Mencionar todos ao enviar</span>
+            </label>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-gray-200">
+              Sessão WhatsApp
+            </label>
+            <select
+              value={config.sessionId || ''}
+              onChange={(e) => setConfig({ ...config, sessionId: e.target.value })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+              disabled={loading}
+            >
+              <option value="">Sessão do contexto (padrão)</option>
+              {sessions.map((session: any) => (
+                <option key={session.id} value={session.id}>
+                  {session.name} ({session.phoneNumber})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'config' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-gray-200">⏱️ Retry em caso de falha</label>
+            <select
+              value={config.retryCount ?? '3'}
+              onChange={(e) => setConfig({ ...config, retryCount: e.target.value })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+            >
+              <option value="0">Não tentar</option>
+              <option value="1">1x</option>
+              <option value="3">3x</option>
+              <option value="5">5x</option>
+            </select>
+          </div>
+
+          <label className="flex items-center cursor-pointer p-4 bg-[#1a1a1a] rounded border border-gray-700">
+            <input type="checkbox" className="sr-only peer" checked={config.logSend ?? true} onChange={(e) => setConfig({ ...config, logSend: e.target.checked })} />
+            <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary relative"></div>
+            <span className="ml-3 text-sm font-medium text-gray-200">📝 Registrar envio no log</span>
+          </label>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PromoMLConfig({ config, setConfig }: any) {
   const [activeTab, setActiveTab] = useState<'params' | 'filters' | 'message'>('params');
 
@@ -1841,6 +2126,18 @@ export default function NodeConfigModal({
       case WorkflowNodeType.MENCIONAR_TODOS:
         return <MencionarTodosConfig config={config} setConfig={setConfig} />
 
+      case WorkflowNodeType.GRUPO_MEDIA:
+        return (
+          <GrupoMediaConfig
+            node={node}
+            config={config}
+            setConfig={setConfig}
+            tenantId={tenantId}
+            sessions={sessions}
+            loading={loading}
+          />
+        )
+
       case WorkflowNodeType.AQUECIMENTO:
         return <AquecimentoConfig config={config} setConfig={setConfig} />
 
@@ -1862,16 +2159,6 @@ export default function NodeConfigModal({
       case 'TRIGGER_GRUPO':
       case WorkflowNodeType.TRIGGER_GRUPO:
         return <GroupTriggerConfig config={config} setConfig={setConfig} />
-        return <LembreteRecorrenteConfig config={config} setConfig={setConfig} />
-
-      case WorkflowNodeType.ENQUETE_GRUPO:
-        return <EnqueteGrupoConfig config={config} setConfig={setConfig} />
-
-      case WorkflowNodeType.SEQUENCIA_LANCAMENTO:
-        return <SequenciaLancamentoConfig config={config} setConfig={setConfig} />
-
-      case WorkflowNodeType.PROMO_ML_API:
-        return <PromoMLApiConfig config={config} setConfig={setConfig} />
 
       case 'TRIGGER_MESSAGE':
         return (
@@ -4920,7 +5207,7 @@ return produtos;`}
                   {(!config.operations || config.operations.length === 0) && (
                     <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-700 rounded-lg">
                       <p className="text-sm">Nenhum campo adicionado</p>
-                      <p className="text-xs mt-1">Clique em "Adicionar Campo" para começar</p>
+                      <p className="text-xs mt-1">Clique em &quot;Adicionar Campo&quot; para começar</p>
                     </div>
                   )}
 
@@ -5689,7 +5976,7 @@ return {
               <div>
                 <h4 className="text-sm font-bold text-white mb-0.5">Preview da Etapa</h4>
                 <p className="text-xs text-gray-400">
-                  Esta etapa aparecerá como <span className="text-white font-medium">"{config.stageName || 'Nova Etapa'}"</span> no funil do Insights.
+                  Esta etapa aparecerá como <span className="text-white font-medium">&quot;{config.stageName || 'Nova Etapa'}&quot;</span> no funil do Insights.
                 </p>
               </div>
             </div>

@@ -28,7 +28,7 @@ export class WhatsappSenderService {
   private sendMessageCallback: ((sessionId: string, contactPhone: string, message: string) => Promise<void>) | null = null;
   private sendButtonsCallback: ((sessionId: string, contactPhone: string, message: string, buttons: ButtonData[], footer?: string) => Promise<void>) | null = null;
   private sendListCallback: ((sessionId: string, contactPhone: string, message: string, buttonText: string, sections: ListSection[], footer?: string) => Promise<void>) | null = null;
-  private sendMediaCallback: ((sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) => Promise<void>) | null = null;
+  private sendMediaCallback: ((sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean; mentions?: string[]; mimetype?: string; ptt?: boolean }) => Promise<void>) | null = null;
   private sendPresenceCallback: ((sessionId: string, contactPhone: string, presence: 'composing' | 'recording' | 'paused') => Promise<void>) | null = null;
   private sendPixCallback: ((sessionId: string, contactPhone: string, config: PixConfig) => Promise<void>) | null = null;
   private sendPollCallback: ((sessionId: string, contactPhone: string, name: string, values: string[], selectableCount: number) => Promise<void>) | null = null;
@@ -65,7 +65,7 @@ export class WhatsappSenderService {
   /**
    * Register the send media callback
    */
-  registerSendMedia(callback: (sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) => Promise<void>) {
+  registerSendMedia(callback: (sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean; mentions?: string[]; mimetype?: string; ptt?: boolean }) => Promise<void>) {
     this.sendMediaCallback = callback;
   }
 
@@ -132,6 +132,9 @@ export class WhatsappSenderService {
       caption?: string;
       fileName?: string;
       sendAudioAsVoice?: boolean;
+      mentions?: string[];
+      mimetype?: string;
+      ptt?: boolean;
     }
   ): Promise<void> {
     if (!this.sendMediaCallback) {

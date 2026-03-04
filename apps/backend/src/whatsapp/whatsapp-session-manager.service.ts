@@ -89,7 +89,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     // Register send media callback
     this.whatsappSender.registerSendMedia(
-      (sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean }) =>
+      (sessionId: string, contactPhone: string, mediaType: 'image' | 'video' | 'audio' | 'document', mediaUrl: string, options?: { caption?: string; fileName?: string; sendAudioAsVoice?: boolean; mentions?: string[]; mimetype?: string; ptt?: boolean }) =>
         this.sendMedia(sessionId, contactPhone, mediaType, mediaUrl, options)
     );
 
@@ -462,6 +462,9 @@ Após o pagamento, envie o comprovante aqui. ✅
       caption?: string;
       fileName?: string;
       sendAudioAsVoice?: boolean;
+      mentions?: string[];
+      mimetype?: string;
+      ptt?: boolean;
       bypassDelay?: boolean;
     }
   ): Promise<void> {
@@ -502,7 +505,7 @@ Após o pagamento, envie o comprovante aqui. ✅
                 throw new Error(`Failed to download audio: HTTP ${audioResponse.status}`);
               }
               let audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
-              const isPtt = options?.sendAudioAsVoice || false;
+              const isPtt = options?.ptt ?? options?.sendAudioAsVoice ?? false;
               let audioMimetype: string;
 
               if (isPtt) {
@@ -514,10 +517,10 @@ Após o pagamento, envie o comprovante aqui. ✅
                 } catch (convError: any) {
                   console.error(`[SEND_MEDIA] OGG/Opus conversion failed:`, convError.message);
                 }
-                audioMimetype = 'audio/ogg; codecs=opus';
+                audioMimetype = options?.mimetype || 'audio/ogg; codecs=opus';
               } else {
                 const contentType = audioResponse.headers.get('content-type');
-                audioMimetype = this.getAudioMimeType(mediaUrl, contentType);
+                audioMimetype = options?.mimetype || this.getAudioMimeType(mediaUrl, contentType);
               }
 
               console.log(`[SEND_MEDIA] Audio ready: ${audioBuffer.length} bytes, mimetype: ${audioMimetype}, ptt: ${isPtt}`);
@@ -527,8 +530,8 @@ Após o pagamento, envie o comprovante aqui. ✅
             } catch (downloadError: any) {
               console.error(`[SEND_MEDIA] Audio download failed, falling back to URL:`, downloadError.message);
               messageContent.audio = { url: mediaUrl };
-              messageContent.mimetype = 'audio/ogg; codecs=opus';
-              messageContent.ptt = options?.sendAudioAsVoice || false;
+              messageContent.mimetype = options?.mimetype || 'audio/ogg; codecs=opus';
+              messageContent.ptt = options?.ptt ?? options?.sendAudioAsVoice ?? false;
             }
             break;
           case 'document':
@@ -537,6 +540,10 @@ Após o pagamento, envie o comprovante aqui. ✅
             messageContent.fileName = options?.fileName || 'document';
             messageContent.caption = options?.caption;
             break;
+        }
+
+        if (options?.mentions) {
+          messageContent.mentions = options.mentions;
         }
 
         await sessionClient.socket.sendMessage(jid, messageContent);

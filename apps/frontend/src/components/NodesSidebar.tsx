@@ -312,6 +312,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         bgColor: 'bg-[#2a2a0a]',
         borderColor: 'border-[#ffe600]',
         description: 'Busca oficial via API do ML com filtros avançados'
+      },
+      {
+        type: 'GRUPO_MEDIA' as WorkflowNodeType,
+        label: 'Mídia para Grupo',
+        icon: '📲',
+        color: 'from-indigo-500 to-indigo-600',
+        bgColor: 'bg-[#1e1b4b]',
+        borderColor: 'border-[#6366f1]',
+        description: 'Envia mídia agendada para grupos do WhatsApp'
       }
     ]
   }

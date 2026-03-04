@@ -235,6 +235,9 @@ export class NodeExecutorService {
       case WorkflowNodeType.PROMO_ML_API:
         return this.executePromoMLApi(node, context, edges, sessionId, contactPhone);
 
+      case WorkflowNodeType.GRUPO_MEDIA:
+        return this.executeGrupoMedia(node, context, edges, sessionId, contactPhone);
+
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
 
@@ -2815,5 +2818,195 @@ ${config.footerText || ''}`;
       shouldWait: false
     };
   }
+
+  /**
+   * Execute GRUPO_MEDIA node – sends media (image/audio/ptt/video) to a WhatsApp group.
+   * Supports: PTT audio, auto-mentions, retry logic, and scheduling.
+   * Completely independent from executeSendMedia.
+   */
+  /**
+   * Execute GRUPO_MEDIA node – sends media (image/audio/ptt/video) to a WhatsApp group.
+   * Supports: PTT audio, auto-mentions with cooldown, retry logic, and persistent scheduling.
+   * Completely independent from executeSendMedia.
+   */
+  private async executeGrupoMedia(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    defaultSessionId?: string,
+    defaultContactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as any;
+    const sessionId = config.sessionId || defaultSessionId;
+    const contactPhone = defaultContactPhone;
+    const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
+
+    // Find designated next node (if any)
+    const nextEdge = edges.find((e) => e.source === node.id);
+    const nextNodeId = nextEdge?.target || null;
+
+    if (!sessionId || !contactPhone) {
+      console.error('[GRUPO_MEDIA] Missing sessionId or contactPhone. Skipping.');
+      return { nextNodeId, shouldWait: false };
+    }
+
+    // ── Persistent Scheduling Integration ────────────────────────────────
+    const isResuming = context.variables._resumingGrupoMedia === true;
+
+    if (!isResuming && config.scheduling?.enabled) {
+      const now = new Date();
+      let scheduledTime: Date | null = null;
+      const scheduling = config.scheduling;
+
+      if (scheduling.mode === 'datetime' && scheduling.date && scheduling.time) {
+        scheduledTime = new Date(`${scheduling.date}T${scheduling.time}:00`);
+      } else if (scheduling.mode === 'daily' && scheduling.time) {
+        const [h, m] = scheduling.time.split(':').map(Number);
+        scheduledTime = new Date();
+        scheduledTime.setHours(h, m, 0, 0);
+        if (scheduledTime < now) {
+          scheduledTime.setDate(scheduledTime.getDate() + 1);
+        }
+      } else if (scheduling.mode === 'days_after') {
+        const link = await this.prisma.groupWorkflowLink.findFirst({
+          where: { groupJid: contactPhone, isActive: true },
+        });
+        if (link) {
+          const [h, m] = (scheduling.time || '09:00').split(':').map(Number);
+          scheduledTime = new Date(link.activatedAt);
+          scheduledTime.setDate(scheduledTime.getDate() + (parseInt(scheduling.day || '0', 10)));
+          scheduledTime.setHours(h, m, 0, 0);
+
+          if (scheduledTime < now) {
+            console.log('[GRUPO_MEDIA] Scheduled days_after time already past, executing immediately.');
+            scheduledTime = null;
+          }
+        }
+      }
+
+      if (scheduledTime) {
+        const delayMs = scheduledTime.getTime() - now.getTime();
+        if (delayMs > 0) {
+          console.log(`[GRUPO_MEDIA] Delaying execution until ${scheduledTime.toISOString()} (${Math.round(delayMs / 1000)}s)`);
+
+          // Mark as resuming for the next run
+          context.variables._resumingGrupoMedia = true;
+
+          return {
+            nextNodeId: node.id, // Re-execute this same node on resume
+            shouldWait: true,
+            waitTimeoutSeconds: Math.ceil(delayMs / 1000),
+          };
+        }
+      }
+    }
+
+    // Clear the resume flag as we are now doing the actual work
+    delete context.variables._resumingGrupoMedia;
+
+    // JID validation (Warning only as per original implementation, but stricter for groups)
+    if (!contactPhone.includes('@g.us')) {
+      console.warn(`[GRUPO_MEDIA] contactPhone "${contactPhone}" is NOT a group JID. Node is exclusive for groups.`);
+    }
+
+    // ── Build message ────────────────────────────────────────────────────
+    const mediaUrl = this.contextService.interpolate(config.mediaUrl || '', context);
+    const caption = config.caption ? this.contextService.interpolate(config.caption, context) : undefined;
+    const isPTT = config.mediaType === 'ptt';
+    const maxAttempts = (parseInt(config.retryCount ?? '3', 10) || 0) + 1;
+
+    // ── Mentions (with optional cooldown) ────────────────────────────────
+    let mentions: string[] = [];
+    if (config.mentionAll && contactPhone.includes('@g.us')) {
+      try {
+        const cooldownMinutes = parseInt(config.mentionCooldown ?? '60', 10) || 60;
+        const cooldownAgo = new Date(Date.now() - cooldownMinutes * 60 * 1000);
+
+        const recentMention = await this.prisma.groupMentionLog.findFirst({
+          where: { groupJid: contactPhone, mentionedAt: { gte: cooldownAgo } },
+        });
+
+        if (!recentMention && tenantId) {
+          const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId, contactPhone);
+          mentions = (metadata.participants || []).map((p: any) => p.id);
+
+          if (mentions.length > 0) {
+            await this.prisma.groupMentionLog.create({
+              data: { groupJid: contactPhone, tenantId, mentionedAt: new Date() },
+            });
+          }
+        } else if (recentMention) {
+          console.warn(`[GRUPO_MEDIA] Mention cooldown (${cooldownMinutes}m) active for ${contactPhone}. Skipping @mentions.`);
+        }
+      } catch (mentionErr) {
+        console.error('[GRUPO_MEDIA] Failed to fetch group metadata for mentions:', mentionErr);
+      }
+    }
+
+    // ── Send with retry ──────────────────────────────────────────────────
+    const sendPayload = {
+      type: isPTT ? 'audio' : (config.mediaType || 'image'),
+      url: mediaUrl,
+      caption: isPTT ? undefined : caption,
+      mimetype: isPTT ? 'audio/ogg; codecs=opus' : undefined,
+      ptt: isPTT ? true : undefined,
+      sendAudioAsVoice: isPTT ? true : undefined,
+      mentions: mentions.length > 0 ? mentions : undefined,
+    };
+
+    let attempts = 0;
+    let lastError: any = null;
+
+    while (attempts < maxAttempts) {
+      try {
+        attempts++;
+        console.log(`[GRUPO_MEDIA] Attempt ${attempts}/${maxAttempts}: sending ${config.mediaType} to ${contactPhone}`);
+
+        await this.whatsappSender.sendMedia(sessionId, contactPhone, sendPayload.type as any, sendPayload.url, {
+          caption: sendPayload.caption,
+          mimetype: sendPayload.mimetype,
+          ptt: sendPayload.ptt,
+          sendAudioAsVoice: sendPayload.sendAudioAsVoice,
+          mentions: sendPayload.mentions,
+        });
+
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err;
+        console.error(`[GRUPO_MEDIA] Attempt ${attempts} failed:`, err);
+        if (attempts < maxAttempts) {
+          // Wait 30 seconds before next attempt
+          await new Promise((res) => setTimeout(res, 30_000));
+        }
+      }
+    }
+
+    if (lastError) {
+      console.error(`[GRUPO_MEDIA] All ${maxAttempts} attempts failed. Last error:`, lastError);
+      this.contextService.setOutput(context, {
+        error: String(lastError),
+        mediaType: config.mediaType,
+        contactPhone,
+        success: false,
+      });
+    } else {
+      if (config.logSend !== false) {
+        console.log(`[GRUPO_MEDIA] Send successful – type=${config.mediaType}, group=${contactPhone}, mentions=${mentions.length}`);
+      }
+      this.contextService.setOutput(context, {
+        success: true,
+        mediaType: config.mediaType,
+        contactPhone,
+        mentionsSent: mentions.length,
+      });
+    }
+
+    return {
+      nextNodeId,
+      shouldWait: false,
+    };
+  }
 }
+
 

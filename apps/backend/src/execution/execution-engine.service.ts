@@ -773,7 +773,7 @@ export class ExecutionEngineService implements OnModuleInit {
         execution.status = ExecutionStatus.WAITING;
 
         // Check if it's a WAIT node (automatic resume) or WAIT_REPLY (manual resume)
-        const isWaitNode = currentNode.type === WorkflowNodeType.WAIT;
+        const isWaitNode = currentNode.type === WorkflowNodeType.WAIT || currentNode.type === WorkflowNodeType.GRUPO_MEDIA;
 
         if (isWaitNode) {
           // Store the expected resume time in context for restart recovery

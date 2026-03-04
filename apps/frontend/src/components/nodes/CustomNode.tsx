@@ -262,6 +262,14 @@ const nodeConfig: Record<string, any> = {
     iconBg: 'bg-gradient-to-br from-[#ffe600] to-[#ffcc00]',
     iconColor: 'text-black',
   },
+  'GRUPO_MEDIA': {
+    label: 'Mídia para Grupo',
+    subtitle: 'GRUPO',
+    icon: '📲',
+    bgColor: 'bg-[#1e1b4b]',
+    borderColor: 'border-[#6366f1]',
+    iconBg: 'bg-gradient-to-br from-indigo-500 to-indigo-600',
+  },
 }
 
 
@@ -536,6 +544,11 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
     }
     if (data.type === 'PROMO_ML_API') {
       return '🛒 Busca em tempo real (API)'
+    }
+    if (data.type === 'GRUPO_MEDIA') {
+      const types: Record<string, string> = { image: '🖼️ Imagem', audio: '🎵 Áudio', ptt: '🎤 Áudio Voz', video: '🎬 Vídeo' }
+      const label = types[data.config.mediaType] || '📲 Mídia'
+      return data.config.scheduling?.enabled ? `${label} ⏰ Agendado` : label
     }
     return null
   }
