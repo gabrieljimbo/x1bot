@@ -24,5 +24,3 @@ oteException
    rorId : NativeComm  
   andError
  
-src/execution/execution.service.ts(201,7): error TS2353: Object literal may only specify known properties, and 'createdAt' does not exist in type 'WorkflowExecution'.
-src/whatsapp/whatsapp.controller.ts(39,37): error TS2339: Property 'syncGroups' does not exist on type 'WhatsappService'.

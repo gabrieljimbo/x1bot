@@ -1176,11 +1176,39 @@ export class ExecutionEngineService implements OnModuleInit {
         selectableCount: number;
       };
       mentions?: string[];
+      simulateTyping?: boolean;
+      typingDuration?: number;
+      simulateRecording?: boolean;
+      recordingDuration?: number;
     },
     maxRetries = 3,
   ): Promise<void> {
-    const { sessionId, contactPhone, message, media, pixConfig, poll, mentions } = messageToSend;
+    const {
+      sessionId,
+      contactPhone,
+      message,
+      media,
+      pixConfig,
+      poll,
+      mentions,
+      simulateTyping,
+      typingDuration,
+      simulateRecording,
+      recordingDuration
+    } = messageToSend;
+
     const retryDelays = [2000, 4000, 8000]; // Exponential backoff
+
+    // Handling Presence Simulation
+    if (simulateTyping) {
+      await this.whatsappSender.sendPresence(sessionId, contactPhone, 'composing');
+      await new Promise(r => setTimeout(r, (typingDuration || 3) * 1000));
+      await this.whatsappSender.sendPresence(sessionId, contactPhone, 'paused');
+    } else if (simulateRecording) {
+      await this.whatsappSender.sendPresence(sessionId, contactPhone, 'recording');
+      await new Promise(r => setTimeout(r, (recordingDuration || 3) * 1000));
+      await this.whatsappSender.sendPresence(sessionId, contactPhone, 'paused');
+    }
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {

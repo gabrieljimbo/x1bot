@@ -33,6 +33,7 @@ import {
   PromoMLApiConfig,
   GrupoWaitConfig,
   RandomizerConfig,
+  GroupMessageConfig,
   ExecutionStatus,
 } from '@n9n/shared';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -2481,17 +2482,37 @@ ${config.footerText || ''}`;
       }
     });
 
-    const interpolatedMessage = this.contextService.interpolate(config.mensagem, context);
+    // Handle string or GroupMessageConfig
+    const msgConfig = typeof config.mensagem === 'string'
+      ? { type: 'text', text: config.mensagem } as GroupMessageConfig
+      : config.mensagem;
+
+    const messageToSend: any = {
+      sessionId,
+      contactPhone,
+      mentions
+    };
+
+    if (msgConfig.type === 'text') {
+      messageToSend.message = this.contextService.interpolate(msgConfig.text || '', context);
+      messageToSend.simulateTyping = msgConfig.simulateTyping;
+      messageToSend.typingDuration = msgConfig.typingDuration;
+    } else {
+      messageToSend.media = {
+        type: msgConfig.type,
+        url: this.contextService.interpolate(msgConfig.mediaUrl || '', context),
+        caption: msgConfig.caption ? this.contextService.interpolate(msgConfig.caption, context) : undefined,
+        sendAudioAsVoice: msgConfig.sendAudioAsVoice
+      };
+      messageToSend.simulateTyping = msgConfig.simulateTyping;
+      messageToSend.simulateRecording = msgConfig.simulateRecording;
+      messageToSend.recordingDuration = msgConfig.recordingDuration;
+    }
 
     return {
       nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
       shouldWait: false,
-      messageToSend: {
-        sessionId,
-        contactPhone,
-        message: interpolatedMessage,
-        mentions
-      }
+      messageToSend
     };
   }
 
@@ -2526,30 +2547,49 @@ ${config.footerText || ''}`;
     const diffTime = Math.abs(new Date().getTime() - link.activatedAt.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-    const diaConfig = config.sequencia.find(s => s.dia === diffDays);
+    let targetDay: any;
+    for (let i = 0; i < config.sequencia.length; i++) {
+      const item = config.sequencia[i];
+      if (item.dia === diffDays) {
+        targetDay = item;
+        break;
+      }
+    }
 
-    if (!diaConfig) {
+    if (!targetDay) {
       const nextEdge = edges.find((e) => e.source === node.id);
       return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
     }
 
-    let mentions: string[] = [];
-    if (diaConfig.mencionarTodos && contactPhone.includes('@g.us')) {
-      const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId, contactPhone);
-      mentions = (metadata.participants || []).map((p: any) => p.id);
-    }
-
     if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for AQUECIMENTO');
+
+    const msgConfig = targetDay.mensagem;
+    const messageToSend: any = {
+      sessionId,
+      contactPhone,
+      mentions: targetDay.mencionarTodos ? ['@all'] : undefined
+    };
+
+    if (msgConfig.type === 'text') {
+      messageToSend.message = this.contextService.interpolate(msgConfig.text || '', context);
+      messageToSend.simulateTyping = msgConfig.simulateTyping;
+      messageToSend.typingDuration = msgConfig.typingDuration;
+    } else {
+      messageToSend.media = {
+        type: msgConfig.type,
+        url: this.contextService.interpolate(msgConfig.mediaUrl || '', context),
+        caption: msgConfig.caption ? this.contextService.interpolate(msgConfig.caption, context) : undefined,
+        sendAudioAsVoice: msgConfig.sendAudioAsVoice
+      };
+      messageToSend.simulateTyping = msgConfig.simulateTyping;
+      messageToSend.simulateRecording = msgConfig.simulateRecording;
+      messageToSend.recordingDuration = msgConfig.recordingDuration;
+    }
 
     return {
       nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
       shouldWait: false,
-      messageToSend: {
-        sessionId,
-        contactPhone,
-        message: this.contextService.interpolate(diaConfig.mensagem, context),
-        mentions: mentions.length > 0 ? mentions : undefined
-      }
+      messageToSend
     };
   }
 
@@ -2581,30 +2621,42 @@ ${config.footerText || ''}`;
     await this.prisma.groupOffer.create({
       data: {
         groupJid: contactPhone!,
-        message: config.mensagemEncerramento,
+        message: JSON.stringify(config.mensagemEncerramento),
         expiresAt,
         tenantId: tenantId!,
         status: 'active'
       }
     });
 
-    let mentions: string[] = [];
-    if (config.mencionarAoAbrir && contactPhone?.includes('@g.us')) {
-      const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId!, contactPhone);
-      mentions = (metadata.participants || []).map((p: any) => p.id);
-    }
-
     if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for OFERTA_RELAMPAGO');
+
+    const msgConfig = config.mensagemOferta;
+    const messageToSend: any = {
+      sessionId,
+      contactPhone,
+      mentions: config.mencionarAoAbrir ? ['@all'] : undefined
+    };
+
+    if (msgConfig.type === 'text') {
+      messageToSend.message = this.contextService.interpolate(msgConfig.text || '', context);
+      messageToSend.simulateTyping = msgConfig.simulateTyping;
+      messageToSend.typingDuration = msgConfig.typingDuration;
+    } else {
+      messageToSend.media = {
+        type: msgConfig.type,
+        url: this.contextService.interpolate(msgConfig.mediaUrl || '', context),
+        caption: msgConfig.caption ? this.contextService.interpolate(msgConfig.caption, context) : undefined,
+        sendAudioAsVoice: msgConfig.sendAudioAsVoice
+      };
+      messageToSend.simulateTyping = msgConfig.simulateTyping;
+      messageToSend.simulateRecording = msgConfig.simulateRecording;
+      messageToSend.recordingDuration = msgConfig.recordingDuration;
+    }
 
     return {
       nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
       shouldWait: false,
-      messageToSend: {
-        sessionId,
-        contactPhone,
-        message: this.contextService.interpolate(config.mensagemOferta, context),
-        mentions: mentions.length > 0 ? mentions : undefined
-      }
+      messageToSend
     };
   }
 
@@ -2622,23 +2674,35 @@ ${config.footerText || ''}`;
     const sessionId = config.sessionId || defaultSessionId;
     const contactPhone = defaultContactPhone;
 
-    let mentions: string[] = [];
-    if (config.mencionarTodos && contactPhone?.includes('@g.us')) {
-      const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId!, contactPhone);
-      mentions = (metadata.participants || []).map((p: any) => p.id);
-    }
-
     if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for LEMBRETE_RECORRENTE');
+
+    const msgConfig = config.mensagem;
+    const messageToSend: any = {
+      sessionId,
+      contactPhone,
+      mentions: config.mencionarTodos ? ['@all'] : undefined
+    };
+
+    if (msgConfig.type === 'text') {
+      messageToSend.message = this.contextService.interpolate(msgConfig.text || '', context);
+      messageToSend.simulateTyping = msgConfig.simulateTyping;
+      messageToSend.typingDuration = msgConfig.typingDuration;
+    } else {
+      messageToSend.media = {
+        type: msgConfig.type,
+        url: this.contextService.interpolate(msgConfig.mediaUrl || '', context),
+        caption: msgConfig.caption ? this.contextService.interpolate(msgConfig.caption, context) : undefined,
+        sendAudioAsVoice: msgConfig.sendAudioAsVoice
+      };
+      messageToSend.simulateTyping = msgConfig.simulateTyping;
+      messageToSend.simulateRecording = msgConfig.simulateRecording;
+      messageToSend.recordingDuration = msgConfig.recordingDuration;
+    }
 
     return {
       nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
       shouldWait: false,
-      messageToSend: {
-        sessionId,
-        contactPhone,
-        message: this.contextService.interpolate(config.mensagem, context),
-        mentions: mentions.length > 0 ? mentions : undefined
-      }
+      messageToSend
     };
   }
 
@@ -2723,23 +2787,35 @@ ${config.footerText || ''}`;
       return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
     }
 
-    let mentions: string[] = [];
-    if (fase.mencionarTodos && contactPhone?.includes('@g.us')) {
-      const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId!, contactPhone);
-      mentions = (metadata.participants || []).map((p: any) => p.id);
-    }
-
     if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for SEQUENCIA_LANCAMENTO');
+
+    const msgConfig = fase.mensagem;
+    const messageToSend: any = {
+      sessionId,
+      contactPhone,
+      mentions: fase.mencionarTodos ? ['@all'] : undefined
+    };
+
+    if (msgConfig.type === 'text') {
+      messageToSend.message = this.contextService.interpolate(msgConfig.text || '', context);
+      messageToSend.simulateTyping = msgConfig.simulateTyping;
+      messageToSend.typingDuration = msgConfig.typingDuration;
+    } else {
+      messageToSend.media = {
+        type: msgConfig.type,
+        url: this.contextService.interpolate(msgConfig.mediaUrl || '', context),
+        caption: msgConfig.caption ? this.contextService.interpolate(msgConfig.caption, context) : undefined,
+        sendAudioAsVoice: msgConfig.sendAudioAsVoice
+      };
+      messageToSend.simulateTyping = msgConfig.simulateTyping;
+      messageToSend.simulateRecording = msgConfig.simulateRecording;
+      messageToSend.recordingDuration = msgConfig.recordingDuration;
+    }
 
     return {
       nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
       shouldWait: false,
-      messageToSend: {
-        sessionId,
-        contactPhone,
-        message: this.contextService.interpolate(fase.mensagem, context),
-        mentions: mentions.length > 0 ? mentions : undefined
-      }
+      messageToSend
     };
   }
 

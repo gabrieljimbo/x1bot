@@ -463,6 +463,159 @@ function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node
   )
 }
 
+function MessageComposer({ value, onChange, placeholder }: { value: any, onChange: (val: any) => void, placeholder?: string }) {
+  const [activeTab, setActiveTab] = useState<'text' | 'image' | 'video' | 'audio'>(
+    typeof value === 'object' ? value?.type || 'text' : 'text'
+  );
+
+  // Initialize with current value if it's already an object, or wrap if it's a string
+  const config = typeof value === 'object' ? (value || { type: 'text', text: '' }) : { type: 'text', text: value || '' };
+
+  const update = (fields: any) => {
+    onChange({ ...config, ...fields });
+  };
+
+  const tabs = [
+    { id: 'text', label: '💬 Texto', icon: '💬' },
+    { id: 'image', label: '🖼️ Imagem', icon: '🖼️' },
+    { id: 'video', label: '🎬 Vídeo', icon: '🎬' },
+    { id: 'audio', label: '🎤 Áudio', icon: '🎤' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex bg-[#0d0d0d] p-1 rounded-lg border border-gray-800">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              setActiveTab(tab.id as any);
+              update({ type: tab.id });
+            }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[10px] font-bold uppercase tracking-wider transition-all rounded-md ${activeTab === tab.id
+              ? 'bg-gray-800 text-white shadow-sm'
+              : 'text-gray-500 hover:text-gray-300'
+              }`}
+          >
+            <span>{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-4 bg-[#151515] p-4 border border-gray-700 rounded-xl">
+        {activeTab === 'text' && (
+          <div className="space-y-3">
+            <textarea
+              value={config.text || ''}
+              onChange={(e) => update({ text: e.target.value })}
+              placeholder={placeholder || 'Digite sua mensagem...'}
+              className="w-full px-4 py-2.5 bg-[#0d0d0d] border border-gray-700 rounded focus:outline-none focus:border-primary text-white min-h-[100px] text-sm"
+            />
+            <div className="flex items-center justify-between p-2 bg-black/20 rounded-lg">
+              <span className="text-[10px] text-gray-400">✍️ Simular digitando</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={config.typingDuration || 3}
+                  onChange={(e) => update({ typingDuration: parseInt(e.target.value) })}
+                  className="w-12 bg-[#0d0d0d] border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-white text-center"
+                />
+                <button
+                  onClick={() => update({ simulateTyping: !config.simulateTyping })}
+                  className={`w-8 h-4 rounded-full relative transition-colors ${config.simulateTyping ? 'bg-primary' : 'bg-gray-700'}`}
+                >
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.simulateTyping ? 'left-4.5' : 'left-0.5'}`} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {(activeTab === 'image' || activeTab === 'video') && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">URL da Mídia</label>
+              <input
+                type="text"
+                value={config.mediaUrl || ''}
+                onChange={(e) => update({ mediaUrl: e.target.value })}
+                placeholder="https://exemplo.com/media.jpg"
+                className="w-full px-3 py-2 bg-[#0d0d0d] border border-gray-700 rounded text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">💬 Legenda</label>
+              <textarea
+                value={config.caption || ''}
+                onChange={(e) => update({ caption: e.target.value })}
+                placeholder="Legenda opcional..."
+                className="w-full px-3 py-2 bg-[#0d0d0d] border border-gray-700 rounded text-xs text-white min-h-[60px]"
+              />
+            </div>
+            <div className="flex items-center justify-between p-2 bg-black/20 rounded-lg">
+              <span className="text-[10px] text-gray-400">✍️ Simular digitando antes</span>
+              <button
+                onClick={() => update({ simulateTyping: !config.simulateTyping })}
+                className={`w-8 h-4 rounded-full relative transition-colors ${config.simulateTyping ? 'bg-primary' : 'bg-gray-700'}`}
+              >
+                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.simulateTyping ? 'left-4.5' : 'left-0.5'}`} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'audio' && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">URL do Áudio</label>
+              <input
+                type="text"
+                value={config.mediaUrl || ''}
+                onChange={(e) => update({ mediaUrl: e.target.value })}
+                placeholder="https://exemplo.com/audio.mp3"
+                className="w-full px-3 py-2 bg-[#0d0d0d] border border-gray-700 rounded text-xs text-white"
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-2 bg-black/40 rounded-lg border border-primary/20">
+              <span className="text-[10px] text-primary font-bold">🎤 Enviar como PTT (Gravado na hora)</span>
+              <button
+                onClick={() => update({ sendAudioAsVoice: !config.sendAudioAsVoice })}
+                className={`w-8 h-4 rounded-full relative transition-colors ${config.sendAudioAsVoice ? 'bg-primary' : 'bg-gray-700'}`}
+              >
+                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.sendAudioAsVoice ? 'left-4.5' : 'left-0.5'}`} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-2 bg-black/20 rounded-lg">
+              <span className="text-[10px] text-gray-400">🎙️ Simular gravando antes</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="15"
+                  value={config.recordingDuration || 3}
+                  onChange={(e) => update({ recordingDuration: parseInt(e.target.value) })}
+                  className="w-12 bg-[#0d0d0d] border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-white text-center"
+                />
+                <button
+                  onClick={() => update({ simulateRecording: !config.simulateRecording })}
+                  className={`w-8 h-4 rounded-full relative transition-colors ${config.simulateRecording ? 'bg-primary' : 'bg-gray-700'}`}
+                >
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.simulateRecording ? 'left-4.5' : 'left-0.5'}`} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function GrupoWaitConfig({ config, setConfig }: any) {
   const [activeTab, setActiveTab] = useState<'params' | 'config'>('params');
 
@@ -1476,11 +1629,10 @@ function MencionarTodosConfig({ config, setConfig }: any) {
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium mb-1.5 text-gray-200">💬 Mensagem</label>
-        <textarea
-          value={config.mensagem || ''}
-          onChange={(e) => setConfig({ ...config, mensagem: e.target.value })}
+        <MessageComposer
+          value={config.mensagem}
+          onChange={(val) => setConfig({ ...config, mensagem: val })}
           placeholder="Ex: Pessoal, olhem essa oferta imperdível!"
-          className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white min-h-[100px]"
         />
         <p className="text-[10px] text-gray-500 mt-1">A mensagem será enviada mencionando todos os membros.</p>
       </div>
@@ -1581,6 +1733,7 @@ function EnqueteGrupoConfig({ config, setConfig }: any) {
     </div>
   );
 }
+
 
 function PromoMLApiConfig({ config, setConfig }: any) {
   const [activeTab, setActiveTab] = useState<'params' | 'filters' | 'message'>('params');
@@ -1816,11 +1969,9 @@ function SequenciaLancamentoConfig({ config, setConfig }: any) {
 
             <div>
               <label className="block text-[10px] text-gray-400 uppercase mb-1">Mensagem Base</label>
-              <textarea
+              <MessageComposer
                 value={fase.mensagem}
-                onChange={(e) => updateFase(i, 'mensagem', e.target.value)}
-                placeholder="Qual a mensagem principal desta fase?"
-                className="w-full bg-[#0d0d0d] border border-gray-700 rounded-lg p-3 text-xs h-24 resize-none focus:ring-1 focus:ring-red-500 outline-none"
+                onChange={(val: any) => updateFase(i, 'mensagem', val)}
               />
             </div>
 
@@ -2238,10 +2389,9 @@ function OfertaRelampagoConfig({ config, setConfig }: any) {
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium mb-1.5 text-gray-200">🚀 Mensagem da Oferta</label>
-        <textarea
-          value={config.mensagemOferta || ''}
-          onChange={(e) => setConfig({ ...config, mensagemOferta: e.target.value })}
-          className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white h-24"
+        <MessageComposer
+          value={config.mensagemOferta}
+          onChange={(val: any) => setConfig({ ...config, mensagemOferta: val })}
           placeholder="Aproveite agora! Oferta válida por tempo limitado..."
         />
       </div>
@@ -2292,10 +2442,9 @@ function OfertaRelampagoConfig({ config, setConfig }: any) {
 
       <div>
         <label className="block text-sm font-medium mb-1.5 text-gray-200">🏁 Mensagem de Encerramento (Automática)</label>
-        <textarea
-          value={config.mensagemEncerramento || ''}
-          onChange={(e) => setConfig({ ...config, mensagemEncerramento: e.target.value })}
-          className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white h-20"
+        <MessageComposer
+          value={config.mensagemEncerramento}
+          onChange={(val: any) => setConfig({ ...config, mensagemEncerramento: val })}
           placeholder="A oferta acabou! Em breve traremos novas promoções."
         />
       </div>
@@ -2386,11 +2535,10 @@ function AquecimentoConfig({ config, setConfig }: any) {
 
             <div>
               <label className="block text-[10px] text-gray-400 uppercase mb-1">Mensagem do Dia</label>
-              <textarea
+              <MessageComposer
                 value={s.mensagem}
-                onChange={(e) => updateDia(i, 'mensagem', e.target.value)}
+                onChange={(val: any) => updateDia(i, 'mensagem', val)}
                 placeholder={`O que enviar no dia ${s.dia}?`}
-                className="w-full bg-[#0d0d0d] border border-gray-700 rounded-lg p-3 text-xs h-24 resize-none focus:ring-1 focus:ring-orange-500 outline-none"
               />
             </div>
 

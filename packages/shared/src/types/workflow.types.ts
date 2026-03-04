@@ -121,6 +121,18 @@ export interface WhatsappSession {
   updatedAt: Date;
 }
 
+export interface GroupMessageConfig {
+  type: 'text' | 'image' | 'video' | 'audio';
+  text?: string;
+  mediaUrl?: string;
+  caption?: string;
+  simulateTyping?: boolean;
+  typingDuration?: number;
+  simulateRecording?: boolean;
+  recordingDuration?: number;
+  sendAudioAsVoice?: boolean;
+}
+
 // Node Configurations
 
 export interface TriggerMessageConfig {
@@ -402,7 +414,7 @@ export interface PromoMLConfig {
 }
 
 export interface MencionarTodosConfig {
-  mensagem: string;
+  mensagem: string | GroupMessageConfig;
   mencionarMembros: boolean;
   incluirAdmins: boolean;
   sessionId?: string;
@@ -411,7 +423,7 @@ export interface MencionarTodosConfig {
 export interface AquecimentoDia {
   dia: number;
   horario: string;
-  mensagem: string;
+  mensagem: GroupMessageConfig;
   mencionarTodos: boolean;
 }
 
@@ -423,21 +435,21 @@ export interface AquecimentoConfig {
 }
 
 export interface OfertaRelampagoConfig {
-  mensagemOferta: string;
+  mensagemOferta: GroupMessageConfig;
   duracao: {
     tipo: 'tempo' | 'hora_fixa';
     horas?: number;
     minutos?: number;
     horaFixa?: string;
   };
-  mensagemEncerramento: string;
+  mensagemEncerramento: GroupMessageConfig;
   mencionarAoAbrir: boolean;
   mencionarAoEncerrar: boolean;
   sessionId?: string;
 }
 
 export interface LembreteRecorrenteConfig {
-  mensagem: string;
+  mensagem: GroupMessageConfig;
   recorrencia: {
     tipo: 'diario' | 'semanal' | 'intervalo';
     horario?: string;
@@ -462,7 +474,7 @@ export interface SequenciaLancamentoFase {
   diaInicio: number;
   diaFim: number;
   horario: string;
-  mensagem: string;
+  mensagem: GroupMessageConfig;
   mencionarTodos: boolean;
 }
 

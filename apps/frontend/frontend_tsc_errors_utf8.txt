@@ -1,0 +1,32 @@
+﻿node.exe : npm warn 
+Unknown project config 
+"always-auth". This 
+will stop working in 
+the next major version 
+of npm.
+No linha:1 caractere:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (npm warn Unkn   
+ ow...version of np    
+m.:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+src/components/NodeConfigModal.tsx(1479,10): error TS2552: Cannot find name 'MessageComposer'. Did you mean 'MessagePort'?
+src/components/NodeConfigModal.tsx(1481,22): error TS7006: Parameter 'val' implicitly has an 'any' type.
+src/components/NodeConfigModal.tsx(1819,16): error TS2552: Cannot find name 'MessageComposer'. Did you mean 'MessagePort'?
+src/components/NodeConfigModal.tsx(2239,10): error TS2552: Cannot find name 'MessageComposer'. Did you mean 'MessagePort'?
+src/components/NodeConfigModal.tsx(2292,10): error TS2552: Cannot find name 'MessageComposer'. Did you mean 'MessagePort'?
+src/components/NodeConfigModal.tsx(2385,16): error TS2552: Cannot find name 'MessageComposer'. Did you mean 'MessagePort'?
