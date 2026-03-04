@@ -76,6 +76,7 @@ export default function WorkflowCanvas({
   // Track the last initialNodes reference to detect real prop changes
   const lastInitialNodesRef = useRef<WorkflowNode[]>(initialNodes)
   const lastInitialEdgesRef = useRef<WorkflowEdge[]>(initialEdges)
+  const clipboard = useRef<{ nodes: Node[], edges: Edge[] } | null>(null)
 
   const onRemoveNode = useCallback((nodeId: string) => {
     if (readonly) return
