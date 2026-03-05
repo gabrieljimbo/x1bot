@@ -422,5 +422,29 @@ export const apiClient = {
     const { data } = await client.get('/api/inbox/stats')
     return data
   },
+
+  // Generic
+  get: async (url: string, params?: any) => {
+    const { data } = await client.get(url.startsWith('/api') ? url : `/api${url}`, { params })
+    return data
+  },
+  post: async (url: string, body?: any, params?: any) => {
+    const { data } = await client.post(url.startsWith('/api') ? url : `/api${url}`, body, { params })
+    return data
+  },
+
+  // Leads
+  getLeadOrigins: async (period?: string) => {
+    const { data } = await client.get('/api/leads/origins', { params: { period } })
+    return data
+  },
+  getPixelConfig: async () => {
+    const { data } = await client.get('/api/leads/pixel-config')
+    return data
+  },
+  updatePixelConfig: async (config: any) => {
+    const { data } = await client.post('/api/leads/pixel-config', config)
+    return data
+  },
 }
 

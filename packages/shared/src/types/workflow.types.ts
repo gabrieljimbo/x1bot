@@ -34,6 +34,7 @@ export enum WorkflowNodeType {
   GRUPO_MEDIA = 'GRUPO_MEDIA',
   GRUPO_WAIT = 'GRUPO_WAIT',
   RANDOMIZER = 'RANDOMIZER',
+  PIXEL_EVENT = 'PIXEL_EVENT',
   END = 'END',
 }
 
@@ -524,4 +525,38 @@ export interface RandomizerConfig {
   resetPeriod?: 'never' | 'daily' | 'weekly' | 'monthly';
   saveAs?: string; // Default 'randomizerSaida'
   enableAnalytics?: boolean;
+}
+
+export interface PixelEventConfig {
+  // Pixel credentials
+  pixelId: string;
+  accessToken: string;
+  testEventCode?: string;
+
+  // Event configuration
+  eventType: 'Lead' | 'QualifiedLead' | 'DisqualifiedLead' | 'Contact' | 'InitiateCheckout' | 'Purchase' | 'CompleteRegistration' | 'ViewContent' | 'AddToCart' | 'Subscribe' | 'CustomEvent';
+  customEventName?: string;
+
+  // Value data
+  includeValue?: boolean;
+  value?: string; // supports {{variables.valor}}
+  currency?: string; // default: BRL
+
+  // Product data
+  includeProduct?: boolean;
+  productName?: string;
+  productId?: string;
+
+  // Lead status
+  includeLeadStatus?: boolean;
+  leadStatus?: string; // e.g. "Sem budget", "Comprou"
+
+  // User data toggles
+  includePhone?: boolean; // default: true
+  includeState?: boolean; // default: true
+  includeName?: boolean;  // default: true
+  includeCtwaClid?: boolean; // default: true
+
+  // Deduplication
+  eventId?: string; // supports {{variables.orderId}}
 }

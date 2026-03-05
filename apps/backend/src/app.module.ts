@@ -14,6 +14,7 @@ import { TenantModule } from './tenant/tenant.module';
 import { UserModule } from './user/user.module';
 import { StorageModule } from './storage/storage.module';
 import { InboxModule } from './inbox/inbox.module';
+import { LeadsModule } from './leads/leads.module';
 import { BullModule } from '@nestjs/bullmq';
 
 @Module({
@@ -35,6 +36,7 @@ import { BullModule } from '@nestjs/bullmq';
     UserModule,
     StorageModule,
     InboxModule,
+    LeadsModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

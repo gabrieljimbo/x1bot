@@ -1,5 +1,6 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'crypto';
 import {
   WorkflowNode,
   WorkflowNodeType,
@@ -250,6 +251,9 @@ export class NodeExecutorService {
 
       case WorkflowNodeType.RANDOMIZER:
         return this.executeRandomizer(node, context, edges, workflowId, executionId);
+
+      case WorkflowNodeType.PIXEL_EVENT:
+        return this.executePixelEvent(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
@@ -3312,6 +3316,211 @@ ${config.footerText || ''}`;
       nextNodeId,
       shouldWait: false,
     };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PIXEL_EVENT — Meta Conversions API
+  // ─────────────────────────────────────────────────────────────────────────
+
+  private hashSHA256(value: string): string {
+    return createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
+  }
+
+  private resolvePixelEventName(eventType: string, customName?: string): string {
+    const map: Record<string, string> = {
+      Lead: 'Lead',
+      QualifiedLead: 'Lead',
+      DisqualifiedLead: 'Lead',
+      Contact: 'Contact',
+      InitiateCheckout: 'InitiateCheckout',
+      Purchase: 'Purchase',
+      CompleteRegistration: 'CompleteRegistration',
+      ViewContent: 'ViewContent',
+      AddToCart: 'AddToCart',
+      Subscribe: 'Subscribe',
+      CustomEvent: customName || 'CustomEvent',
+    };
+    return map[eventType] || eventType;
+  }
+
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  private async executePixelEvent(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    sessionId?: string,
+    contactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as any; // PixelEventConfig
+    const variables = context.variables || {};
+
+    // Resolve variables in config values
+    const resolvedPixelId = this.contextService.interpolate(config.pixelId || '', context);
+    const resolvedAccessToken = this.contextService.interpolate(config.accessToken || '', context);
+    const resolvedTestEventCode = config.testEventCode
+      ? this.contextService.interpolate(config.testEventCode, context)
+      : undefined;
+
+    if (!resolvedPixelId || !resolvedAccessToken) {
+      const nextNodeId = edges.find((e) => e.source === node.id)?.target || null;
+      this.contextService.setVariable(context, 'pixelEventResult', {
+        success: false,
+        error: 'Missing Pixel ID or Access Token',
+        eventType: config.eventType,
+      });
+      return { nextNodeId, shouldWait: false };
+    }
+
+    const eventId = config.eventId
+      ? this.contextService.interpolate(config.eventId, context)
+      : this.generateUUID();
+
+    const resolvedEventName = this.resolvePixelEventName(config.eventType, config.customEventName);
+
+    // Build user_data
+    const userData: Record<string, any> = {
+      country: [this.hashSHA256('br')],
+    };
+
+    const rawPhone = (contactPhone || variables.contactPhone || '').replace(/\D/g, '');
+    if (config.includePhone !== false && rawPhone) {
+      userData.ph = [this.hashSHA256(rawPhone)];
+    }
+
+    const contactName = variables.contactName as string | undefined;
+    if (config.includeName !== false && contactName) {
+      const nameParts = contactName.trim().split(/\s+/);
+      userData.fn = [this.hashSHA256(nameParts[0])];
+      if (nameParts.length > 1) {
+        userData.ln = [this.hashSHA256(nameParts.slice(1).join(' '))];
+      }
+    }
+
+    if (config.includeState !== false && variables.contactState) {
+      userData.st = [this.hashSHA256(String(variables.contactState).toLowerCase())];
+    }
+
+    if (config.includeCtwaClid !== false && variables.adCtwaClid) {
+      userData.ctwa_clid = variables.adCtwaClid;
+    }
+
+    // Build custom_data
+    const customData: Record<string, any> = {
+      currency: config.currency || 'BRL',
+    };
+
+    if (config.includeValue && config.value) {
+      const resolvedValue = this.contextService.interpolate(config.value, context);
+      const parsed = parseFloat(resolvedValue.replace(',', '.'));
+      if (!isNaN(parsed)) customData.value = parsed;
+    }
+
+    if (config.includeProduct) {
+      if (config.productName) {
+        customData.content_name = this.contextService.interpolate(config.productName, context);
+      }
+      if (config.productId) {
+        customData.content_ids = [this.contextService.interpolate(config.productId, context)];
+      }
+    }
+
+    if (config.eventType === 'QualifiedLead') {
+      customData.lead_event_source = 'qualified';
+    } else if (config.eventType === 'DisqualifiedLead') {
+      customData.lead_event_source = 'disqualified';
+    }
+
+    if (config.includeLeadStatus && config.leadStatus) {
+      customData.status = this.contextService.interpolate(config.leadStatus, context);
+    }
+
+    const pixelPayload: Record<string, any> = {
+      data: [{
+        event_name: resolvedEventName,
+        event_time: Math.floor(Date.now() / 1000),
+        event_id: eventId,
+        action_source: 'system_generated',
+        user_data: userData,
+        custom_data: customData,
+      }],
+      access_token: resolvedAccessToken,
+    };
+
+    if (resolvedTestEventCode) {
+      pixelPayload.test_event_code = resolvedTestEventCode;
+    }
+
+    let success = false;
+    let fbtraceId: string | undefined;
+    let errorMsg: string | undefined;
+
+    try {
+      const url = `https://graph.facebook.com/v18.0/${resolvedPixelId}/events`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pixelPayload),
+      });
+
+      const responseData: any = await response.json();
+      fbtraceId = responseData.fbtrace_id;
+
+      if (response.ok && !responseData.error) {
+        success = true;
+        console.log(`[PIXEL_EVENT] Event ${resolvedEventName} sent successfully (fbtrace_id: ${fbtraceId})`);
+      } else {
+        errorMsg = responseData.error?.message || `HTTP ${response.status}`;
+        console.error(`[PIXEL_EVENT] Meta API error: ${errorMsg}`);
+      }
+    } catch (err: any) {
+      errorMsg = err.message;
+      console.error(`[PIXEL_EVENT] Network error sending event:`, err.message);
+    }
+
+    const result = {
+      success,
+      eventId,
+      fbtrace_id: fbtraceId,
+      eventType: config.eventType,
+      matchQuality: success ? 'high' : 'low',
+      error: errorMsg,
+    };
+
+    this.contextService.setVariable(context, 'pixelEventResult', result);
+
+    // Log to execution_logs
+    try {
+      await (this.prisma as any).executionLog.create({
+        data: {
+          tenantId: context.globals?.tenantId || '',
+          executionId: context.executionId || '',
+          nodeId: node.id,
+          eventType: 'PIXEL_EVENT',
+          data: {
+            eventName: resolvedEventName,
+            eventId,
+            contactPhone: rawPhone ? `${rawPhone.substring(0, 4)}****` : null,
+            contactState: variables.contactState || null,
+            ctwaClid: variables.adCtwaClid || null,
+            success,
+            fbtrace_id: fbtraceId,
+            error: errorMsg,
+          },
+        },
+      });
+    } catch (logErr) {
+      console.error('[PIXEL_EVENT] Failed to log execution:', logErr);
+    }
+
+    const nextNodeId = edges.find((e) => e.source === node.id)?.target || null;
+    return { nextNodeId, shouldWait: false, output: result };
   }
 }
 

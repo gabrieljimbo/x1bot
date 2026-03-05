@@ -2092,6 +2092,273 @@ function PromoMLApiConfig({ config, setConfig }: any) {
 }
 
 
+function PixelEventConfig({ config, setConfig }: any) {
+  const eventTypes = [
+    { value: 'Lead', label: 'Lead' },
+    { value: 'QualifiedLead', label: 'Lead Qualificado' },
+    { value: 'DisqualifiedLead', label: 'Lead Desqualificado' },
+    { value: 'Contact', label: 'Contato' },
+    { value: 'InitiateCheckout', label: 'Início de Checkout' },
+    { value: 'Purchase', label: 'Compra' },
+    { value: 'CompleteRegistration', label: 'Cadastro Completo' },
+    { value: 'ViewContent', label: 'Visualização de Conteúdo' },
+    { value: 'AddToCart', label: 'Adição ao Carrinho' },
+    { value: 'Subscribe', label: 'Inscrição/Assinatura' },
+    { value: 'CustomEvent', label: 'Evento Personalizado' },
+  ]
+
+  const [pixelConfigs, setPixelConfigs] = useState<any>(null)
+
+  useEffect(() => {
+    const loadPixelConfigs = async () => {
+      try {
+        const data = await apiClient.get('/leads/pixel-config')
+        setPixelConfigs(data)
+        // Auto-fill if empty
+        if (!config.pixelId && data.pixelId) {
+          setConfig((prev: any) => ({ ...prev, pixelId: data.pixelId, accessToken: data.accessToken }))
+        }
+      } catch (e) {
+        console.error('Error loading pixel configs:', e)
+      }
+    }
+    loadPixelConfigs()
+  }, [])
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 flex gap-3">
+        <span className="text-xl">📊</span>
+        <div>
+          <h4 className="text-sm font-semibold text-blue-300">Meta Pixel Conversions API</h4>
+          <p className="text-xs text-blue-200/70 mt-1">
+            Envia eventos diretamente para o servidor da Meta. Aumenta a precisão do rastreamento e atribuição de anúncios.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-2 text-gray-200 font-mono text-[10px] uppercase tracking-wider">
+            Pixel ID
+          </label>
+          <input
+            type="text"
+            value={config.pixelId || ''}
+            onChange={(e) => setConfig({ ...config, pixelId: e.target.value })}
+            placeholder="Ex: 1234567890"
+            className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:border-primary text-white text-sm"
+          />
+          {pixelConfigs?.pixelId && config.pixelId !== pixelConfigs.pixelId && (
+            <button
+              onClick={() => setConfig({ ...config, pixelId: pixelConfigs.pixelId, accessToken: pixelConfigs.accessToken })}
+              className="text-[10px] text-primary mt-1 hover:underline text-left block"
+            >
+              Usar config global
+            </button>
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-2 text-gray-200 font-mono text-[10px] uppercase tracking-wider">
+            Access Token (CAPI)
+          </label>
+          <input
+            type="password"
+            value={config.accessToken || ''}
+            onChange={(e) => setConfig({ ...config, accessToken: e.target.value })}
+            placeholder="EAAB..."
+            className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:border-primary text-white text-sm"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-2 text-gray-200 font-mono text-[10px] uppercase tracking-wider">
+            Tipo de Evento
+          </label>
+          <select
+            value={config.eventType || 'Lead'}
+            onChange={(e) => setConfig({ ...config, eventType: e.target.value })}
+            className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:border-primary text-white text-sm"
+          >
+            {eventTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        </div>
+        {config.eventType === 'CustomEvent' && (
+          <div>
+            <label className="block text-sm font-medium mb-2 text-gray-200 font-mono text-[10px] uppercase tracking-wider">
+              Nome do Evento
+            </label>
+            <input
+              type="text"
+              value={config.customEventName || ''}
+              onChange={(e) => setConfig({ ...config, customEventName: e.target.value })}
+              placeholder="Ex: MyCustomAction"
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:border-primary text-white text-sm"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-2">Dados do Evento</h4>
+
+        <div className="flex items-center justify-between p-3 bg-[#0d0d0d] border border-gray-800 rounded-lg">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">💰</span>
+            <div>
+              <p className="text-xs font-medium text-white">Incluir Valor</p>
+              <p className="text-[10px] text-gray-500">Manda valor e moeda (atribuição de ROAS)</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setConfig({ ...config, includeValue: !config.includeValue })}
+            className={`w-10 h-5 rounded-full relative transition-colors ${config.includeValue ? 'bg-primary' : 'bg-gray-700'}`}
+          >
+            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${config.includeValue ? 'left-5.5' : 'left-0.5'}`} />
+          </button>
+        </div>
+
+        {config.includeValue && (
+          <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-1 duration-200">
+            <div>
+              <label className="block text-[10px] text-gray-500 uppercase mb-1">Valor</label>
+              <input
+                type="text"
+                value={config.value || ''}
+                onChange={(e) => setConfig({ ...config, value: e.target.value })}
+                placeholder="{{variables.valor}}"
+                className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-gray-500 uppercase mb-1">Moeda</label>
+              <input
+                type="text"
+                value={config.currency || 'BRL'}
+                onChange={(e) => setConfig({ ...config, currency: e.target.value })}
+                className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-xs text-white"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between p-3 bg-[#0d0d0d] border border-gray-800 rounded-lg">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📦</span>
+            <div>
+              <p className="text-xs font-medium text-white">Dados do Produto</p>
+              <p className="text-[10px] text-gray-500">Nome e ID do item</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setConfig({ ...config, includeProduct: !config.includeProduct })}
+            className={`w-10 h-5 rounded-full relative transition-colors ${config.includeProduct ? 'bg-primary' : 'bg-gray-700'}`}
+          >
+            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${config.includeProduct ? 'left-5.5' : 'left-0.5'}`} />
+          </button>
+        </div>
+
+        {config.includeProduct && (
+          <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-1 duration-200">
+            <div>
+              <label className="block text-[10px] text-gray-500 uppercase mb-1">Nome do Produto</label>
+              <input
+                type="text"
+                value={config.productName || ''}
+                onChange={(e) => setConfig({ ...config, productName: e.target.value })}
+                className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-gray-500 uppercase mb-1">ID do Produto (SKU)</label>
+              <input
+                type="text"
+                value={config.productId || ''}
+                onChange={(e) => setConfig({ ...config, productId: e.target.value })}
+                className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-xs text-white"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-2">Matching (Usuário)</h4>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex items-center gap-2 p-2 bg-[#0d0d0d] border border-gray-800 rounded-lg cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.includePhone !== false}
+              onChange={e => setConfig({ ...config, includePhone: e.target.checked })}
+              className="rounded border-gray-700 bg-black text-primary transition-all"
+            />
+            <span className="text-xs text-gray-300">Telefone (Hash)</span>
+          </label>
+          <label className="flex items-center gap-2 p-2 bg-[#0d0d0d] border border-gray-800 rounded-lg cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.includeName !== false}
+              onChange={e => setConfig({ ...config, includeName: e.target.checked })}
+              className="rounded border-gray-700 bg-black text-primary transition-all"
+            />
+            <span className="text-xs text-gray-300">Nome (Hash)</span>
+          </label>
+          <label className="flex items-center gap-2 p-2 bg-[#0d0d0d] border border-gray-800 rounded-lg cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.includeState !== false}
+              onChange={e => setConfig({ ...config, includeState: e.target.checked })}
+              className="rounded border-gray-700 bg-black text-primary transition-all"
+            />
+            <span className="text-xs text-gray-300">Estado (Hash)</span>
+          </label>
+          <label className="flex items-center gap-2 p-2 bg-[#0d0d0d] border border-gray-800 rounded-lg cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.includeCtwaClid !== false}
+              onChange={e => setConfig({ ...config, includeCtwaClid: e.target.checked })}
+              className="rounded border-gray-700 bg-black text-primary transition-all"
+            />
+            <span className="text-xs text-gray-300">CTWA Clid (Ads)</span>
+          </label>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-2">Deduplicação e Teste</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[10px] text-gray-500 uppercase mb-1">
+              External Event ID (Opcional)
+            </label>
+            <input
+              type="text"
+              value={config.eventId || ''}
+              onChange={(e) => setConfig({ ...config, eventId: e.target.value })}
+              placeholder="Ex: {{variables.orderId}}"
+              className="w-full px-4 py-2 bg-[#151515] border border-gray-700 rounded text-white text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-gray-500 uppercase mb-1 text-green-500">
+              Test Event Code
+            </label>
+            <input
+              type="text"
+              value={config.testEventCode || ''}
+              onChange={(e) => setConfig({ ...config, testEventCode: e.target.value })}
+              placeholder="TEST1234..."
+              className="w-full px-4 py-2 bg-[#151515] border border-gray-700 rounded text-white text-xs"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SequenciaLancamentoConfig({ config, setConfig, tenantId, node }: any) {
   useEffect(() => {
     if (!config.fases || config.fases.length === 0) {
@@ -3102,6 +3369,9 @@ export default function NodeConfigModal({
 
   const renderConfigFields = () => {
     switch (node.type) {
+      case WorkflowNodeType.PIXEL_EVENT:
+        return <PixelEventConfig config={config} setConfig={setConfig} />
+
       case WorkflowNodeType.PROMO_ML:
         return <PromoMLConfig config={config} setConfig={setConfig} />
 

@@ -27,6 +27,55 @@ import { promisify } from 'util';
 import * as os from 'os';
 import { useDatabaseAuthState } from './database-auth-state';
 import { MessageQueueService } from './message-queue.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+/**
+ * Map of DDDs to Brazilian states
+ */
+const DDD_STATE_MAP: Record<string, string> = {
+  '11': 'SP', '12': 'SP', '13': 'SP', '14': 'SP', '15': 'SP',
+  '16': 'SP', '17': 'SP', '18': 'SP', '19': 'SP',
+  '21': 'RJ', '22': 'RJ', '24': 'RJ',
+  '27': 'ES', '28': 'ES',
+  '31': 'MG', '32': 'MG', '33': 'MG', '34': 'MG',
+  '35': 'MG', '37': 'MG', '38': 'MG',
+  '41': 'PR', '42': 'PR', '43': 'PR', '44': 'PR', '45': 'PR', '46': 'PR',
+  '47': 'SC', '48': 'SC', '49': 'SC',
+  '51': 'RS', '53': 'RS', '54': 'RS', '55': 'RS',
+  '61': 'DF',
+  '62': 'GO', '64': 'GO',
+  '63': 'TO',
+  '65': 'MT', '66': 'MT',
+  '67': 'MS',
+  '68': 'AC',
+  '69': 'RO',
+  '71': 'BA', '73': 'BA', '74': 'BA', '75': 'BA', '77': 'BA',
+  '79': 'SE',
+  '81': 'PE', '87': 'PE',
+  '82': 'AL',
+  '83': 'PB',
+  '84': 'RN',
+  '85': 'CE', '88': 'CE',
+  '86': 'PI', '89': 'PI',
+  '91': 'PA', '93': 'PA', '94': 'PA',
+  '92': 'AM', '97': 'AM',
+  '95': 'RR',
+  '96': 'AP',
+  '98': 'MA', '99': 'MA',
+};
+
+function extractDDD(phone: string): string | null {
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.startsWith('55') && cleaned.length >= 4) {
+    return cleaned.substring(2, 4);
+  }
+  return null;
+}
+
+function getStateFromPhone(phone: string): string | null {
+  const ddd = extractDDD(phone);
+  return ddd ? (DDD_STATE_MAP[ddd] || null) : null;
+}
 
 interface SessionClient {
   socket: WASocket;
@@ -54,6 +103,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     private whatsappSender: WhatsappSenderService,
     private storageService: StorageService,
     private messageQueue: MessageQueueService,
+    private prisma: PrismaService,
   ) {
     this.readyPromise = new Promise((resolve) => {
       this.resolveReady = resolve;
@@ -873,7 +923,46 @@ Após o pagamento, envie o comprovante aqui. ✅
     const messageId = msg.key.id!;
 
     try {
+      // --- Meta Ads Detection ---
+      this.detectAndSaveAdOrigin(tenantId, sessionId, msg, contactPhone).catch(
+        (e) => console.error('[AD_ORIGIN] Error saving lead origin:', e)
+      );
+      // --- End Meta Ads Detection ---
+
       const payload = await this.processMessage(msg, tenantId, sessionId);
+
+      // Attach ad data to payload for execution context
+      const m = msg.message;
+      if (m) {
+        const contextInfo = (m as any).extendedTextMessage?.contextInfo ||
+          (m as any).interactiveMessage?.contextInfo ||
+          (m as any).templateMessage?.hydratedTemplate?.contextInfo ||
+          (m as any).imageMessage?.contextInfo ||
+          (m as any).videoMessage?.contextInfo ||
+          (m as any).audioMessage?.contextInfo ||
+          null;
+        const externalAdReply = contextInfo?.externalAdReply;
+        const ctwaClid = contextInfo?.ctwaClid;
+        if (externalAdReply || ctwaClid) {
+          const ddd = extractDDD(contactPhone);
+          const state = getStateFromPhone(contactPhone);
+          (payload as any).adData = {
+            isFromAd: true,
+            adTitle: externalAdReply?.title || null,
+            adBody: externalAdReply?.body || null,
+            adSourceUrl: externalAdReply?.sourceUrl || null,
+            adMediaUrl: externalAdReply?.mediaUrl || null,
+            adSourceId: externalAdReply?.sourceId || null,
+            adCtwaClid: ctwaClid || null,
+            contactPhone,
+            contactName: msg.pushName || null,
+            contactState: state,
+            contactDDD: ddd,
+            receivedAt: new Date().toISOString(),
+            sessionId,
+          };
+        }
+      }
 
       if (!skipTrigger) {
         await this.eventBus.emit({
@@ -890,6 +979,57 @@ Após o pagamento, envie o comprovante aqui. ✅
     } catch (error) {
       console.error('[BAILEYS] Error processing incoming message:', error);
     }
+  }
+
+  /**
+   * Detect Meta Ads origin and save to lead_origins table
+   */
+  private async detectAndSaveAdOrigin(
+    tenantId: string,
+    sessionId: string,
+    msg: WAMessage,
+    contactPhone: string,
+  ): Promise<void> {
+    const m = msg.message;
+    if (!m) return;
+
+    // Extract contextInfo from any message type
+    const contextInfo =
+      (m as any).extendedTextMessage?.contextInfo ||
+      (m as any).interactiveMessage?.contextInfo ||
+      (m as any).templateMessage?.hydratedTemplate?.contextInfo ||
+      (m as any).imageMessage?.contextInfo ||
+      (m as any).videoMessage?.contextInfo ||
+      (m as any).audioMessage?.contextInfo ||
+      null;
+
+    const externalAdReply = contextInfo?.externalAdReply;
+    const ctwaClid = contextInfo?.ctwaClid;
+
+    if (!externalAdReply && !ctwaClid) return;
+
+    const ddd = extractDDD(contactPhone);
+    const state = getStateFromPhone(contactPhone);
+
+    await (this.prisma as any).leadOrigin.create({
+      data: {
+        tenantId,
+        sessionId,
+        contactPhone,
+        isFromAd: true,
+        adSourceId: externalAdReply?.sourceId || null,
+        adCtwaClid: ctwaClid || null,
+        adTitle: externalAdReply?.title || null,
+        adBody: externalAdReply?.body || null,
+        adSourceUrl: externalAdReply?.sourceUrl || null,
+        adMediaUrl: externalAdReply?.mediaUrl || null,
+        contactState: state,
+        contactDDD: ddd,
+        contactName: msg.pushName || null,
+      },
+    });
+
+    console.log(`[AD_ORIGIN] Lead from Meta Ad detected: ${contactPhone} (${state || ddd || 'unknown'}) ctwaClid=${ctwaClid}`);
   }
 
   /**

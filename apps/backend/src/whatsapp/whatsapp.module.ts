@@ -10,11 +10,13 @@ import { NodeExecutorService } from '../execution/node-executor.service';
 import { MessageQueueService } from './message-queue.service';
 import { WhatsappController } from './whatsapp.controller';
 import { InboxModule } from '../inbox/inbox.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [
     ExecutionModule,
     StorageModule,
+    PrismaModule,
     forwardRef(() => InboxModule)
   ],
   controllers: [WhatsappController],

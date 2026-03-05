@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { LogOut, User, ShieldCheck, Star, MessageSquare, Menu, X, Building2, Shield, Users } from 'lucide-react'
+import { LogOut, User, ShieldCheck, Star, MessageSquare, Menu, X, Building2, Shield, Users, BarChart3, Target } from 'lucide-react'
 import { isSuperAdmin, UserRole } from '@/lib/permissions'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
@@ -70,11 +70,27 @@ export default function AppHeader() {
             </Link>
 
             <Link
+              href="/analytics"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
+            >
+              <BarChart3 size={16} />
+              Analytics
+            </Link>
+
+            <Link
               href="/workflows/groups"
               className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
             >
               <Users size={16} />
               Fluxos de Grupo
+            </Link>
+
+            <Link
+              href="/settings/pixel"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
+            >
+              <Target size={16} />
+              Config de Pixel
             </Link>
 
             {isSuperAdmin(user?.role) && (
@@ -175,6 +191,14 @@ export default function AppHeader() {
               <span className="font-medium">Overview</span>
             </Link>
             <Link
+              href="/analytics"
+              onClick={() => setIsMenuOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-[#00ff88] hover:bg-white/5 rounded-xl transition"
+            >
+              <BarChart3 size={18} />
+              <span className="font-medium">Analytics</span>
+            </Link>
+            <Link
               href="/inbox"
               onClick={() => setIsMenuOpen(false)}
               className="flex items-center justify-between px-4 py-3 text-gray-300 hover:text-[#00ff88] hover:bg-white/5 rounded-xl transition"
@@ -201,6 +225,14 @@ export default function AppHeader() {
               >
                 <Building2 size={18} />
                 <span className="font-medium">Workspaces</span>
+              </Link>
+              <Link
+                href="/settings/pixel"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition"
+              >
+                <Target size={18} />
+                <span className="font-medium">Config de Pixel</span>
               </Link>
               <Link
                 href="/settings/whatsapp"
