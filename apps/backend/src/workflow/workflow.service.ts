@@ -360,6 +360,7 @@ export class WorkflowService {
         triggerType: WorkflowNodeType.TRIGGER_GRUPO,
         initialContext: {
           variables: {
+            _tenantId: tenantId,
             groupJid,
             groupName,
             contact: {

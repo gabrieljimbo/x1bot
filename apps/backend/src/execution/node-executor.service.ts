@@ -2455,11 +2455,17 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as MencionarTodosConfig;
     const sessionId = config.sessionId || defaultSessionId;
+
+    // Resolve tenantId from variables or globals
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
 
-    const contactPhone = config.groupJid
-      || (context.variables as any)?.groupJid
-      || defaultContactPhone;
+    // Determine groupJid - priority: config > variables.groupJid > defaultContactPhone
+    let contactPhone = config.groupJid || (context.variables as any)?.groupJid;
+
+    // Fallback if the defaultContactPhone is a group and we don't have one yet
+    if (!contactPhone && defaultContactPhone?.includes('@g.us')) {
+      contactPhone = defaultContactPhone;
+    }
 
     if (!sessionId || !contactPhone || !contactPhone.includes('@g.us')) {
       throw new Error('MENCIONAR_TODOS only works within a connected WhatsApp group');
