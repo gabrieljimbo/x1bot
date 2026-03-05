@@ -430,9 +430,6 @@ model RandomizerStat {
   id          String   @id @default(cuid())
   nodeId      String
   workflowId  String
-  executionId String?
-  contactId   String?
-  saidaId     String
   saidaNome   String
   tenantId    String
   createdAt   DateTime @default(now())
@@ -444,9 +441,9 @@ model RandomizerStat {
 
 model LeadOrigin {
   id            String   @id @default(cuid())
+  contactPhone  String
   tenantId      String
   sessionId     String
-  contactPhone  String
   isFromAd      Boolean  @default(false)
   adSourceId    String?
   adCtwaClid    String?
@@ -456,7 +453,6 @@ model LeadOrigin {
   adMediaUrl    String?
   contactState  String?
   contactDDD    String?
-  contactName   String?
   workflowId    String?
   receivedAt    DateTime @default(now())
 
@@ -470,7 +466,7 @@ model LeadOrigin {
 model TenantPixelConfig {
   id              String   @id @default(cuid())
   tenantId        String
-  name            String   @default("Pixel")
+  name            String   @default("Pixel Padrão")
   pixelId         String
   accessToken     String
   testEventCode   String?
