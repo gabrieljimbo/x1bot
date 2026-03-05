@@ -483,3 +483,16 @@ model TenantPixelConfig {
   @@unique([tenantId, pixelId])
   @@map("tenant_pixel_configs")
 }
+
+model ExternalWebhook {
+  id        String   @id @default(cuid())
+  tenantId  String
+  url       String
+  method    String   @default("POST")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("external_webhooks")
+}
