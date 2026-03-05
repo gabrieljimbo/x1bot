@@ -78,15 +78,26 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
             (now.getTime() - new Date(link.activatedAt).getTime()) / (1000 * 60 * 60 * 24),
           );
 
+          const isDaily = triggerNode.config.mode === 'daily' || triggerNode.config.repeatSequence === true;
+
           for (const exec of triggerNode.config.executions) {
             let shouldFire = false;
 
             if (exec.type === 'days_after') {
               const execDay = parseInt(exec.day ?? '0');
-              if (daysSinceActivation !== execDay) continue;
               const [execHour, execMinute] = (exec.time || '09:00').split(':').map(Number);
-              if (execHour !== currentHour || execMinute !== currentMinute) continue;
-              shouldFire = true;
+
+              if (isDaily) {
+                // Daily mode: fire every day at the configured time, ignore daysSinceActivation
+                if (execHour === currentHour && execMinute === currentMinute) {
+                  shouldFire = true;
+                }
+              } else {
+                // Campaign mode: fire only on the specific day after activation
+                if (daysSinceActivation !== execDay) continue;
+                if (execHour !== currentHour || execMinute !== currentMinute) continue;
+                shouldFire = true;
+              }
             } else if (exec.type === 'fixed_date' && exec.date) {
               const execDate = new Date(`${exec.date}T${exec.time || '09:00'}:00`);
               if (
@@ -152,30 +163,9 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
             }
             groupName = groupName || link.groupJid;
 
-            await this.executionEngine.startExecution(
-              link.tenantId,
-              link.workflowId,
-              session.id,
-              link.groupJid,
-              undefined,
-              undefined,
-              {
-                triggerType: 'TRIGGER_GRUPO',
-                initialContext: {
-                  variables: {
-                    groupJid: link.groupJid,
-                    groupName: groupName,
-                    contact: {
-                      name: groupName,
-                      phoneNumber: link.groupJid,
-                      groupJid: link.groupJid,
-                      isGroup: true
-                    }
-                  }
-                }
-              }
-            );
-
+            // *** CRITICAL: Save execution record BEFORE firing ***
+            // If we save after, an exception in startExecution means the record
+            // never gets created and the scheduler fires again next tick (infinite loop).
             await this.prisma.groupTriggerExecution.create({
               data: {
                 groupJid: link.groupJid,
@@ -186,6 +176,36 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
                 tenantId: link.tenantId,
               },
             });
+
+            try {
+              await this.executionEngine.startExecution(
+                link.tenantId,
+                link.workflowId,
+                session.id,
+                link.groupJid,
+                undefined,
+                undefined,
+                {
+                  triggerType: 'TRIGGER_GRUPO',
+                  initialContext: {
+                    variables: {
+                      groupJid: link.groupJid,
+                      groupName: groupName,
+                      contact: {
+                        name: groupName,
+                        phoneNumber: link.groupJid,
+                        groupJid: link.groupJid,
+                        isGroup: true
+                      }
+                    }
+                  }
+                }
+              );
+              console.log(`[GROUP TRIGGER] startExecution completed for workflow ${link.workflowId} group ${link.groupJid}`);
+            } catch (execErr) {
+              console.error(`[GROUP TRIGGER] startExecution failed for workflow ${link.workflowId} group ${link.groupJid}:`, execErr);
+              // Execution record was already saved; do not re-throw to avoid masking other links
+            }
           }
         } catch (err) {
           console.error(`[GROUP TRIGGER] Error processing link ${link.id}:`, err);

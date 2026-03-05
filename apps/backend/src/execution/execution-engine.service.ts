@@ -198,7 +198,27 @@ export class ExecutionEngineService implements OnModuleInit {
       if (options?.triggerNodeId) {
         triggerNode = workflow.nodes.find(n => n.id === options.triggerNodeId);
       } else if (options?.triggerType) {
+        // Find the node matching the requested type
         triggerNode = workflow.nodes.find(n => n.type === options.triggerType);
+
+        // Special fallback for TRIGGER_GRUPO: most workflows built on the canvas
+        // only have TRIGGER_MANUAL connected to the graph. If TRIGGER_GRUPO doesn't
+        // exist as a node OR has no outgoing edges, fall back to TRIGGER_MANUAL so
+        // the correct execution path is followed.
+        if (options.triggerType === WorkflowNodeType.TRIGGER_GRUPO || options.triggerType === 'TRIGGER_GRUPO') {
+          if (!triggerNode) {
+            // Node doesn't exist at all — fall back immediately
+            console.log(`[EXECUTION] TRIGGER_GRUPO node not found in workflow ${workflowId}. Falling back to TRIGGER_MANUAL.`);
+            triggerNode = workflow.nodes.find(n => n.type === WorkflowNodeType.TRIGGER_MANUAL);
+          } else {
+            // Node exists but check if it has any outgoing edges
+            const hasEdges = (workflow.edges as any[]).some(e => e.source === triggerNode!.id);
+            if (!hasEdges) {
+              console.log(`[EXECUTION] TRIGGER_GRUPO node exists but has no edges in workflow ${workflowId}. Falling back to TRIGGER_MANUAL.`);
+              triggerNode = workflow.nodes.find(n => n.type === WorkflowNodeType.TRIGGER_MANUAL);
+            }
+          }
+        }
       } else {
         // Fallback: finding the first valid trigger node
         triggerNode = workflow.nodes.find(
