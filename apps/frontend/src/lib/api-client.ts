@@ -438,13 +438,37 @@ export const apiClient = {
     const { data } = await client.get('/api/leads/origins', { params: { period } })
     return data
   },
-  getPixelConfig: async () => {
-    const { data } = await client.get('/api/leads/pixel-config')
-    return data
+  getPixels: async () => {
+    const { data } = await client.get('/api/leads/pixels');
+    return data;
   },
+
+  createPixel: async (data: any) => {
+    const { data: responseData } = await client.post('/api/leads/pixels', data);
+    return responseData;
+  },
+
+  updatePixel: async (id: string, data: any) => {
+    const { data: responseData } = await client.put(`/api/leads/pixels/${id}`, data);
+    return responseData;
+  },
+
+  deletePixel: async (id: string) => {
+    await client.delete(`/api/leads/pixels/${id}`);
+  },
+
+  setPixelDefault: async (id: string) => {
+    const { data } = await client.patch(`/api/leads/pixels/${id}/default`, {});
+    return data;
+  },
+
+  getPixelConfig: async () => {
+    const { data } = await client.get('/api/leads/pixel-config');
+    return data;
+  },
+
   updatePixelConfig: async (config: any) => {
-    const { data } = await client.post('/api/leads/pixel-config', config)
-    return data
+    const { data } = await client.patch('/api/leads/pixel-config', config);
+    return data;
   },
 }
-

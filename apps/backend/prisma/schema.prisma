@@ -469,14 +469,17 @@ model LeadOrigin {
 
 model TenantPixelConfig {
   id              String   @id @default(cuid())
-  tenantId        String   @unique
-  pixelId         String?
-  accessToken     String?
+  tenantId        String
+  name            String   @default("Pixel")
+  pixelId         String
+  accessToken     String
   testEventCode   String?
   autoSendLead    Boolean  @default(false)
   includeState    Boolean  @default(true)
+  isDefault       Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@unique([tenantId, pixelId])
   @@map("tenant_pixel_configs")
 }

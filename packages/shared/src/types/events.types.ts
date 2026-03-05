@@ -21,6 +21,9 @@ export enum EventType {
   // Inbox events
   INBOX_CONVERSATION_UPDATED = 'inbox:conversation-updated',
   INBOX_MESSAGE_RECEIVED = 'inbox:message-received',
+
+  // Marketing events
+  PIXEL_EVENT = 'marketing.pixel_event',
 }
 
 export interface BaseEvent {
@@ -97,6 +100,18 @@ export interface WhatsappSessionDisconnectedEvent extends BaseEvent {
   reason?: string;
 }
 
+export interface PixelEvent extends BaseEvent {
+  type: EventType.PIXEL_EVENT;
+  sessionId: string;
+  contactPhone: string;
+  eventType: string;
+  pixelId: string;
+  accessToken: string;
+  testEventCode?: string;
+  metadata?: Record<string, any>;
+  data?: Record<string, any>;
+}
+
 export interface WhatsappQrCodeEvent extends BaseEvent {
   type: EventType.WHATSAPP_QR_CODE;
   sessionId: string;
@@ -114,7 +129,8 @@ export type WorkflowEvent =
   | WhatsappMessageReceivedEvent
   | WhatsappSessionConnectedEvent
   | WhatsappSessionDisconnectedEvent
-  | WhatsappQrCodeEvent;
+  | WhatsappQrCodeEvent
+  | PixelEvent;
 
 
 

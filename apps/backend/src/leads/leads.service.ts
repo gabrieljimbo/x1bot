@@ -106,24 +106,86 @@ export class LeadsService {
         };
     }
 
-    async getPixelConfig(tenantId: string) {
-        const config = await (this.prisma as any).tenantPixelConfig.findUnique({
+    async findAllPixels(tenantId: string) {
+        return (this.prisma as any).tenantPixelConfig.findMany({
             where: { tenantId },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                name: true,
+                pixelId: true,
+                isDefault: true,
+                autoSendLead: true,
+                includeState: true,
+                testEventCode: true,
+                createdAt: true,
+                updatedAt: true,
+            },
         });
-        return config || { tenantId, pixelId: null, accessToken: null, testEventCode: null, autoSendLead: false, includeState: true };
     }
 
-    async updatePixelConfig(tenantId: string, dto: {
-        pixelId?: string;
-        accessToken?: string;
-        testEventCode?: string;
-        autoSendLead?: boolean;
-        includeState?: boolean;
-    }) {
-        return (this.prisma as any).tenantPixelConfig.upsert({
+    async getPixelConfig(tenantId: string, id: string) {
+        return (this.prisma as any).tenantPixelConfig.findFirst({
+            where: { id, tenantId },
+        });
+    }
+
+    async createPixel(tenantId: string, dto: any) {
+        if (dto.isDefault) {
+            await (this.prisma as any).tenantPixelConfig.updateMany({
+                where: { tenantId },
+                data: { isDefault: false },
+            });
+        }
+
+        // If it's the first pixel, make it default
+        const count = await (this.prisma as any).tenantPixelConfig.count({ where: { tenantId } });
+        const isDefault = count === 0 ? true : !!dto.isDefault;
+
+        return (this.prisma as any).tenantPixelConfig.create({
+            data: {
+                ...dto,
+                tenantId,
+                isDefault,
+            },
+        });
+    }
+
+    async updatePixel(tenantId: string, id: string, dto: any) {
+        if (dto.isDefault) {
+            await (this.prisma as any).tenantPixelConfig.updateMany({
+                where: { tenantId, id: { not: id } },
+                data: { isDefault: false },
+            });
+        }
+
+        return (this.prisma as any).tenantPixelConfig.update({
+            where: { id, tenantId },
+            data: dto,
+        });
+    }
+
+    async deletePixel(tenantId: string, id: string) {
+        return (this.prisma as any).tenantPixelConfig.delete({
+            where: { id, tenantId },
+        });
+    }
+
+    async setDefaultPixel(tenantId: string, id: string) {
+        await (this.prisma as any).tenantPixelConfig.updateMany({
             where: { tenantId },
-            create: { tenantId, ...dto },
-            update: dto,
+            data: { isDefault: false },
+        });
+
+        return (this.prisma as any).tenantPixelConfig.update({
+            where: { id, tenantId },
+            data: { isDefault: true },
+        });
+    }
+
+    async getDefaultPixel(tenantId: string) {
+        return (this.prisma as any).tenantPixelConfig.findFirst({
+            where: { tenantId, isDefault: true },
         });
     }
 }

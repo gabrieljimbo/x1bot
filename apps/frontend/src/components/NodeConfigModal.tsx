@@ -1,6 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import {
+  Search,
+  Check,
+  Target,
+  ExternalLink,
+  Database,
+  CheckCircle2
+} from 'lucide-react';
 import { WorkflowNode, WorkflowNodeType } from '@n9n/shared'
 import { apiClient } from '@/lib/api-client'
 import Editor from '@monaco-editor/react'
@@ -70,9 +78,9 @@ function SetTagsConfig({ config, setConfig, tenantId: _tenantId }: any) {
         </select>
         <p className="text-xs text-gray-500 mt-1.5">
           {config.action === 'add' && 'Adiciona novas tags sem remover as existentes'}
-          {config.action === 'remove' && 'Remove apenas as tags especificadas'}
+          {config.action === 'remove' && 'Remover apenas as tags especificadas'}
           {config.action === 'set' && 'Substitui todas as tags pelas especificadas'}
-          {config.action === 'clear' && 'Remove todas as tags do contato'}
+          {config.action === 'clear' && 'Remover todas as tags do contato'}
         </p>
       </div>
 
@@ -840,7 +848,7 @@ function GrupoWaitConfig({ config, setConfig }: any) {
       // Reset mode-specific fields
       daysAfter: mode === 'days_after' ? (config.daysAfter || 0) : config.daysAfter,
       time: (mode === 'days_after' || mode === 'fixed_time' || mode === 'datetime') ? (config.time || '09:00') : config.time,
-      date: mode === 'datetime' ? (config.date || new Date().toISOString().split('T')[0]) : config.date,
+      date: (mode === 'datetime' && !config.date) ? new Date().toISOString().split('T')[0] : config.date,
       intervalAmount: mode === 'interval' ? (config.intervalAmount || 1) : config.intervalAmount,
       intervalUnit: mode === 'interval' ? (config.intervalUnit || 'hours') : config.intervalUnit
     });
@@ -2107,69 +2115,123 @@ function PixelEventConfig({ config, setConfig }: any) {
     { value: 'CustomEvent', label: 'Evento Personalizado' },
   ]
 
-  const [pixelConfigs, setPixelConfigs] = useState<any>(null)
+  const [pixels, setPixels] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadPixelConfigs = async () => {
+    const loadPixels = async () => {
       try {
-        const data = await apiClient.get('/leads/pixel-config')
-        setPixelConfigs(data)
-        // Auto-fill if empty
-        if (!config.pixelId && data.pixelId) {
-          setConfig((prev: any) => ({ ...prev, pixelId: data.pixelId, accessToken: data.accessToken }))
+        setLoading(true)
+        const data = await apiClient.getPixels()
+        setPixels(data || [])
+
+        // If config has no pixelConfigId but has pixelId, it might be an old node
+        // We'll leave it as 'manual'
+        if (!config.pixelConfigId && !config.pixelId) {
+          const defaultPixel = data.find((p: any) => p.isDefault);
+          if (defaultPixel) {
+            setConfig((prev: any) => ({ ...prev, pixelConfigId: defaultPixel.id }));
+          } else {
+            setConfig((prev: any) => ({ ...prev, pixelConfigId: 'manual' }));
+          }
         }
       } catch (e) {
-        console.error('Error loading pixel configs:', e)
+        console.error('Error loading pixels:', e)
+      } finally {
+        setLoading(false)
       }
     }
-    loadPixelConfigs()
+    loadPixels()
   }, [])
 
+  const selectedPixel = pixels.find(p => p.id === config.pixelConfigId);
+
   return (
-    <div className="space-y-6">
-      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 flex gap-3">
-        <span className="text-xl">📊</span>
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex gap-3">
+        <div className="bg-blue-500/20 p-2 rounded-lg h-fit">
+          <Target className="text-blue-400" size={20} />
+        </div>
         <div>
-          <h4 className="text-sm font-semibold text-blue-300">Meta Pixel Conversions API</h4>
-          <p className="text-xs text-blue-200/70 mt-1">
-            Envia eventos diretamente para o servidor da Meta. Aumenta a precisão do rastreamento e atribuição de anúncios.
+          <h4 className="text-sm font-bold text-blue-300">Meta Pixel Conversions API</h4>
+          <p className="text-[11px] text-blue-200/60 mt-0.5 leading-relaxed">
+            Aumente a precisão do rastreamento enviando eventos diretamente do servidor (CAPI), ignorando bloqueadores de anúncios e restrições de iOS.
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-2 text-gray-200 font-mono text-[10px] uppercase tracking-wider">
-            Pixel ID
-          </label>
-          <input
-            type="text"
-            value={config.pixelId || ''}
-            onChange={(e) => setConfig({ ...config, pixelId: e.target.value })}
-            placeholder="Ex: 1234567890"
-            className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:border-primary text-white text-sm"
-          />
-          {pixelConfigs?.pixelId && config.pixelId !== pixelConfigs.pixelId && (
-            <button
-              onClick={() => setConfig({ ...config, pixelId: pixelConfigs.pixelId, accessToken: pixelConfigs.accessToken })}
-              className="text-[10px] text-primary mt-1 hover:underline text-left block"
-            >
-              Usar config global
-            </button>
+          <div className="flex justify-between items-center mb-2">
+            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">
+              Selecionar Pixel
+            </label>
+            <a href="/settings/pixel" target="_blank" className="text-[10px] text-primary font-bold hover:underline flex items-center gap-1">
+              Gerenciar Pixels <ExternalLink size={10} />
+            </a>
+          </div>
+          <select
+            value={config.pixelConfigId || 'manual'}
+            onChange={(e) => setConfig({ ...config, pixelConfigId: e.target.value })}
+            className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded-xl focus:border-primary text-white text-sm outline-none transition-all"
+          >
+            <option value="manual">➕ Inserir Manualmente / Automático</option>
+            {pixels.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name} {p.isDefault ? '(Padrão)' : ''} — {p.pixelId.substring(0, 4)}****{p.pixelId.slice(-3)}
+              </option>
+            ))}
+          </select>
+          {!config.pixelConfigId || config.pixelConfigId === 'manual' ? (
+            <p className="mt-1.5 text-[10px] text-gray-600 px-1">
+              Se deixado em manual e vazio, usará o Pixel definido como <b>padrão</b> na Workspace.
+            </p>
+          ) : (
+            <p className="mt-1.5 text-[10px] text-primary/70 px-1 font-medium">
+              Usando credenciais seguras do banco. O token de acesso não é exibido aqui.
+            </p>
           )}
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-2 text-gray-200 font-mono text-[10px] uppercase tracking-wider">
-            Access Token (CAPI)
-          </label>
-          <input
-            type="password"
-            value={config.accessToken || ''}
-            onChange={(e) => setConfig({ ...config, accessToken: e.target.value })}
-            placeholder="EAAB..."
-            className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:border-primary text-white text-sm"
-          />
-        </div>
+
+        {(config.pixelConfigId === 'manual' || !config.pixelConfigId) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-200">
+            <div>
+              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 px-1">
+                Pixel ID Manual
+              </label>
+              <input
+                type="text"
+                value={config.pixelId || ''}
+                onChange={(e) => setConfig({ ...config, pixelId: e.target.value })}
+                placeholder="Ex: 1234567890"
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded-xl focus:border-primary text-white text-sm outline-none transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 px-1">
+                Access Token Manual
+              </label>
+              <input
+                type="password"
+                value={config.accessToken || ''}
+                onChange={(e) => setConfig({ ...config, accessToken: e.target.value })}
+                placeholder="EAAB..."
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded-xl focus:border-primary text-white text-sm outline-none transition-all"
+              />
+            </div>
+          </div>
+        )}
+
+        {selectedPixel && (
+          <div className="p-3 bg-white/5 border border-gray-800 rounded-xl flex items-center justify-between animate-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center gap-2">
+              <Database size={14} className="text-gray-500" />
+              <span className="text-xs font-bold text-gray-400">ID Vinculado:</span>
+              <span className="text-xs font-mono text-gray-200">{selectedPixel.pixelId}</span>
+            </div>
+            <CheckCircle2 size={16} className="text-primary" />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3170,12 +3232,6 @@ function CodeEditor({ value, onChange, language = 'javascript' }: any) {
           showFields: false,
           showMethods: false,
           showProperties: false,
-          showEvents: false,
-          showOperators: false,
-          showUnits: false,
-          showValues: false,
-          showColors: false,
-          showFiles: false,
           showReferences: false,
           showFolders: false,
           showTypeParameters: false,

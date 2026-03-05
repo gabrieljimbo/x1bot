@@ -1011,6 +1011,7 @@ Após o pagamento, envie o comprovante aqui. ✅
     const ddd = extractDDD(contactPhone);
     const state = getStateFromPhone(contactPhone);
 
+    // 4. Save to lead_origins table for internal tracking
     await (this.prisma as any).leadOrigin.create({
       data: {
         tenantId,
@@ -1029,7 +1030,33 @@ Após o pagamento, envie o comprovante aqui. ✅
       },
     });
 
-    console.log(`[AD_ORIGIN] Lead from Meta Ad detected: ${contactPhone} (${state || ddd || 'unknown'}) ctwaClid=${ctwaClid}`);
+    // 5. Automatic Lead Send to all pixels with autoSendLead=true
+    const autoSendPixels = await (this.prisma as any).tenantPixelConfig.findMany({
+      where: { tenantId, autoSendLead: true },
+    });
+
+    for (const pixel of autoSendPixels) {
+      this.eventBus.emit({
+        type: EventType.PIXEL_EVENT,
+        tenantId,
+        sessionId,
+        contactPhone,
+        eventType: 'Lead',
+        pixelId: pixel.pixelId,
+        accessToken: pixel.accessToken,
+        testEventCode: pixel.testEventCode,
+        metadata: {
+          adSourceId: externalAdReply?.sourceId || null,
+          adCtwaClid: ctwaClid || null,
+          adTitle: externalAdReply?.title || null,
+          contactState: state,
+          contactDDD: ddd,
+        },
+        timestamp: new Date(),
+      } as any).catch(e => console.error(`[PIXEL_AUTO_SEND] Error sending to pixel ${pixel.pixelId}:`, e));
+    }
+
+    console.log(`[AD_ORIGIN] Lead from Meta Ad detected: ${contactPhone} (${state || ddd || 'unknown'}). Auto-sent to ${autoSendPixels.length} pixels.`);
   }
 
   /**

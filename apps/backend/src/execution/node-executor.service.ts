@@ -3360,13 +3360,50 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as any; // PixelEventConfig
     const variables = context.variables || {};
+    const tenantId = variables._tenantId as string;
 
-    // Resolve variables in config values
-    const resolvedPixelId = this.contextService.interpolate(config.pixelId || '', context);
-    const resolvedAccessToken = this.contextService.interpolate(config.accessToken || '', context);
-    const resolvedTestEventCode = config.testEventCode
+    let resolvedPixelId = '';
+    let resolvedAccessToken = '';
+    let resolvedTestEventCode = config.testEventCode
       ? this.contextService.interpolate(config.testEventCode, context)
       : undefined;
+
+    // 1. Check if a specific Pixel Config ID is selected
+    if (config.pixelConfigId && config.pixelConfigId !== 'manual') {
+      const pixelConfig = await (this.prisma as any).tenantPixelConfig.findFirst({
+        where: { id: config.pixelConfigId, tenantId },
+      });
+
+      if (pixelConfig) {
+        resolvedPixelId = pixelConfig.pixelId;
+        resolvedAccessToken = pixelConfig.accessToken;
+        // If the node doesn't have a manual test code, use the one from pixel config
+        if (!resolvedTestEventCode) {
+          resolvedTestEventCode = pixelConfig.testEventCode;
+        }
+      }
+    }
+
+    // 2. Fallback to manual config or default pixel if still empty
+    if (!resolvedPixelId || !resolvedAccessToken) {
+      if (config.pixelId && config.accessToken) {
+        resolvedPixelId = this.contextService.interpolate(config.pixelId, context);
+        resolvedAccessToken = this.contextService.interpolate(config.accessToken, context);
+      } else {
+        // Find default pixel for tenant
+        const defaultPixel = await (this.prisma as any).tenantPixelConfig.findFirst({
+          where: { tenantId, isDefault: true },
+        });
+
+        if (defaultPixel) {
+          resolvedPixelId = defaultPixel.pixelId;
+          resolvedAccessToken = defaultPixel.accessToken;
+          if (!resolvedTestEventCode) {
+            resolvedTestEventCode = defaultPixel.testEventCode;
+          }
+        }
+      }
+    }
 
     if (!resolvedPixelId || !resolvedAccessToken) {
       const nextNodeId = edges.find((e) => e.source === node.id)?.target || null;
