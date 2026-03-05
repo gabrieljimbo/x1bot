@@ -486,12 +486,13 @@ model TenantPixelConfig {
 
 model ExternalWebhook {
   id        String   @id @default(cuid())
+  sessionId String
   tenantId  String
   url       String
-  method    String   @default("POST")
+  events    String[]
+  secret    String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@map("external_webhooks")

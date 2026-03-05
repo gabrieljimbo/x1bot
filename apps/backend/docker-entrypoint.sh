@@ -13,6 +13,8 @@ fi
 cd /app/apps/backend
 
 echo "📦 Running database migrations..."
+# Resolver migration falhada se existir
+npx prisma migrate resolve --rolled-back 20260304222000_multi_pixel_support 2>/dev/null || true
 npx prisma migrate deploy --schema prisma/schema.prisma
 
 echo "✅ Marking exhaustive migration as applied manually..."
