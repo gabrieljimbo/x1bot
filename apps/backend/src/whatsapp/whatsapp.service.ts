@@ -104,6 +104,8 @@ export class WhatsappService {
   }
 
   /**
+   * Update a group configuration
+   */
   async updateGroupConfig(
     configId: string,
     data: Partial<{
@@ -177,6 +179,7 @@ export class WhatsappService {
 
     return updated;
   }
+  /**
    * Upsert many group configurations (for sync)
    */
   async upsertGroupConfigs(sessionId: string, groups: { groupId: string; name: string }[]) {
