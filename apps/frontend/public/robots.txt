@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Allow: /documentacao
+Disallow: /api/
+Sitemap: https://x1bot.cloud/sitemap.xml

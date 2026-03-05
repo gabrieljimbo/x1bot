@@ -48,10 +48,7 @@ export default function AppHeader() {
             href="/"
             className="text-2xl font-bold text-white hover:text-[#00ff88] transition flex items-center gap-2"
           >
-            <div className="w-8 h-8 bg-[#00ff88]/10 rounded-lg flex items-center justify-center border border-[#00ff88]/20">
-              <span className="text-[#00ff88]">X</span>
-            </div>
-            N9N
+            <img src="/logo-escrita.png" alt="X1Bot" className="h-8 w-auto" />
           </Link>
 
           {/* Desktop Navigation */}

@@ -33,8 +33,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="bg-surface border border-border rounded-lg p-8">
           <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold mb-2">N9N</h1>
-            <p className="text-gray-400">Conversation Workflow Engine</p>
+            <img src="/logo-escrita.png" alt="X1Bot" className="h-10 w-auto mx-auto" />
+            <p className="text-gray-400 mt-2">Automação de WhatsApp com IA</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
