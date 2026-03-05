@@ -313,7 +313,7 @@ export default function GroupWorkflowsPage() {
                                     ) : (
                                         <div className="grid grid-cols-1 gap-4">
                                             {workflows.map(wf => {
-                                                const linkedLinks = links.filter(l => l.workflowId === wf.id)
+                                                const linkedLinks = links.filter(l => l.workflowId === wf.id && l.isActive)
                                                 return (
                                                     <div key={wf.id} className="bg-[#151515] border border-gray-800 rounded-xl p-5 flex items-center justify-between hover:border-primary/50 transition group">
                                                         <div>
@@ -356,7 +356,7 @@ export default function GroupWorkflowsPage() {
                                         </div>
                                     )}
                                 </section>
-                            </div>
+                            </div >
 
                             <aside className="space-y-6">
                                 <div className="bg-gradient-to-br from-primary/20 to-indigo-500/10 border border-primary/30 p-6 rounded-2xl">
@@ -380,86 +380,151 @@ export default function GroupWorkflowsPage() {
                                     </ul>
                                 </div>
                             </aside>
-                        </div>
-                    )}
+                        </div >
+                    )
+                    }
 
-                    {activeTab === 'manage' && (
-                        <section className="space-y-6">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <select
-                                        value={selectedSessionId}
-                                        onChange={(e) => setSelectedSessionId(e.target.value)}
-                                        className="bg-[#151515] border border-gray-800 rounded-lg px-4 py-2 text-sm text-white outline-none focus:border-primary"
-                                    >
-                                        <option value="">Selecionar Sessão</option>
-                                        {sessions.map(s => (
-                                            <option key={s.id} value={s.id}>{s.name} ({s.phoneNumber})</option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        onClick={handleSync}
-                                        disabled={syncing || !selectedSessionId}
-                                        className="flex items-center gap-2 bg-primary text-black px-4 py-2 rounded-lg font-bold hover:bg-primary/80 disabled:opacity-50 transition"
-                                    >
-                                        <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-                                        {syncing ? 'Sincronizando...' : 'Sincronizar Grupos'}
-                                    </button>
+                    {
+                        activeTab === 'manage' && (
+                            <section className="space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <select
+                                            value={selectedSessionId}
+                                            onChange={(e) => setSelectedSessionId(e.target.value)}
+                                            className="bg-[#151515] border border-gray-800 rounded-lg px-4 py-2 text-sm text-white outline-none focus:border-primary"
+                                        >
+                                            <option value="">Selecionar Sessão</option>
+                                            {sessions.map(s => (
+                                                <option key={s.id} value={s.id}>{s.name} ({s.phoneNumber})</option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            onClick={handleSync}
+                                            disabled={syncing || !selectedSessionId}
+                                            className="flex items-center gap-2 bg-primary text-black px-4 py-2 rounded-lg font-bold hover:bg-primary/80 disabled:opacity-50 transition"
+                                        >
+                                            <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
+                                            {syncing ? 'Sincronizando...' : 'Sincronizar Grupos'}
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div className="bg-[#151515] border border-gray-800 rounded-xl overflow-hidden">
+                                <div className="bg-[#151515] border border-gray-800 rounded-xl overflow-hidden">
+                                    <table className="w-full text-left">
+                                        <thead>
+                                            <tr className="bg-black/40 border-b border-gray-800">
+                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase">Grupo / JID</th>
+                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase">Bot Ativo</th>
+                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase">Fluxos Vinculados</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {groupConfigs.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={3} className="p-12 text-center text-gray-500">
+                                                        {selectedSessionId ? 'Nenhum grupo encontrado nesta sessão. Clique em Sincronizar.' : 'Selecione uma sessão conectada acima.'}
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                groupConfigs.map(config => (
+                                                    <tr key={config.id} className="border-b border-gray-800 hover:bg-white/5 transition">
+                                                        <td className="p-4">
+                                                            <div className="font-bold text-gray-200">{config.name}</div>
+                                                            <div className="text-[10px] text-gray-500 font-mono">{config.groupId}</div>
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="sr-only peer"
+                                                                    checked={config.enabled}
+                                                                    onChange={() => handleToggleEnable(config)}
+                                                                />
+                                                                <div className="w-10 h-5 bg-gray-700 rounded-full peer peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+                                                                <span className="ml-2 text-xs font-bold text-gray-400">{config.enabled ? 'ATIVADO' : 'DESLIGADO'}</span>
+                                                            </label>
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <div className="flex flex-wrap gap-3">
+                                                                {workflows.length === 0 ? (
+                                                                    <span className="text-xs text-gray-600 italic">Crie fluxos de grupo primeiro</span>
+                                                                ) : (
+                                                                    workflows.map(wf => (
+                                                                        <label key={wf.id} className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white cursor-pointer select-none">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                className="rounded border-gray-700 bg-black text-primary"
+                                                                                checked={config.workflowIds?.includes(wf.id)}
+                                                                                onChange={(e) => handleWorkflowChange(config.id, wf.id, e.target.checked)}
+                                                                            />
+                                                                            {wf.name}
+                                                                        </label>
+                                                                    ))
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+                        )
+                    }
+
+                    {
+                        activeTab === 'links' && (
+                            <section className="bg-[#151515] border border-gray-800 rounded-xl overflow-hidden">
                                 <table className="w-full text-left">
-                                    <thead>
-                                        <tr className="bg-black/40 border-b border-gray-800">
-                                            <th className="p-4 text-xs font-bold text-gray-400 uppercase">Grupo / JID</th>
-                                            <th className="p-4 text-xs font-bold text-gray-400 uppercase">Bot Ativo</th>
-                                            <th className="p-4 text-xs font-bold text-gray-400 uppercase">Fluxos Vinculados</th>
+                                    <thead className="bg-black/40 border-b border-gray-800">
+                                        <tr>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase">Grupo</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase">Workflow</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase text-center">Status</th>
+                                            <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase text-right">Ações</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        {groupConfigs.length === 0 ? (
+                                    <tbody className="divide-y divide-gray-800">
+                                        {links.length === 0 ? (
                                             <tr>
-                                                <td colSpan={3} className="p-12 text-center text-gray-500">
-                                                    {selectedSessionId ? 'Nenhum grupo encontrado nesta sessão. Clique em Sincronizar.' : 'Selecione uma sessão conectada acima.'}
-                                                </td>
+                                                <td colSpan={4} className="p-12 text-center text-gray-500">Nenhum vínculo ativo ainda.</td>
                                             </tr>
                                         ) : (
-                                            groupConfigs.map(config => (
-                                                <tr key={config.id} className="border-b border-gray-800 hover:bg-white/5 transition">
-                                                    <td className="p-4">
-                                                        <div className="font-bold text-gray-200">{config.name}</div>
-                                                        <div className="text-[10px] text-gray-500 font-mono">{config.groupId}</div>
+                                            links.map((link) => (
+                                                <tr key={link.id} className="hover:bg-white/5 transition-colors">
+                                                    <td className="px-6 py-4">
+                                                        <div className="text-sm font-bold text-gray-200">{link.groupName || link.groupJid}</div>
+                                                        <div className="font-mono text-[10px] text-gray-500">{link.groupJid}</div>
                                                     </td>
-                                                    <td className="p-4">
-                                                        <label className="relative inline-flex items-center cursor-pointer">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="sr-only peer"
-                                                                checked={config.enabled}
-                                                                onChange={() => handleToggleEnable(config)}
-                                                            />
-                                                            <div className="w-10 h-5 bg-gray-700 rounded-full peer peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
-                                                            <span className="ml-2 text-xs font-bold text-gray-400">{config.enabled ? 'ATIVADO' : 'DESLIGADO'}</span>
-                                                        </label>
+                                                    <td className="px-6 py-4">
+                                                        <Link href={`/workflows/${link.workflowId}`} className="text-sm font-medium hover:text-primary transition flex items-center gap-1">
+                                                            {getWorkflowName(link.workflowId)} <ExternalLink size={12} />
+                                                        </Link>
                                                     </td>
-                                                    <td className="p-4">
-                                                        <div className="flex flex-wrap gap-3">
-                                                            {workflows.length === 0 ? (
-                                                                <span className="text-xs text-gray-600 italic">Crie fluxos de grupo primeiro</span>
-                                                            ) : (
-                                                                workflows.map(wf => (
-                                                                    <label key={wf.id} className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white cursor-pointer select-none">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            className="rounded border-gray-700 bg-black text-primary"
-                                                                            checked={config.workflowIds?.includes(wf.id)}
-                                                                            onChange={(e) => handleWorkflowChange(config.id, wf.id, e.target.checked)}
-                                                                        />
-                                                                        {wf.name}
-                                                                    </label>
-                                                                ))
-                                                            )}
+                                                    <td className="px-6 py-4 text-center">
+                                                        {link.isActive ? (
+                                                            <span className="px-2 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded text-[10px] font-bold">ATIVO</span>
+                                                        ) : (
+                                                            <span className="px-2 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded text-[10px] font-bold">INATIVO</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <button
+                                                                onClick={() => handleTestNow(link)}
+                                                                className="p-2 bg-indigo-500/10 text-indigo-400 rounded hover:bg-indigo-500/20 transition"
+                                                                title="Testar Agora"
+                                                            >
+                                                                <Play size={14} fill="currentColor" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteLink(link.id)}
+                                                                className="p-2 text-red-500 hover:bg-red-500/10 rounded transition"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -467,110 +532,52 @@ export default function GroupWorkflowsPage() {
                                         )}
                                     </tbody>
                                 </table>
-                            </div>
-                        </section>
-                    )}
-
-                    {activeTab === 'links' && (
-                        <section className="bg-[#151515] border border-gray-800 rounded-xl overflow-hidden">
-                            <table className="w-full text-left">
-                                <thead className="bg-black/40 border-b border-gray-800">
-                                    <tr>
-                                        <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase">Grupo</th>
-                                        <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase">Workflow</th>
-                                        <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase text-center">Status</th>
-                                        <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase text-right">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-800">
-                                    {links.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={4} className="p-12 text-center text-gray-500">Nenhum vínculo ativo ainda.</td>
-                                        </tr>
-                                    ) : (
-                                        links.map((link) => (
-                                            <tr key={link.id} className="hover:bg-white/5 transition-colors">
-                                                <td className="px-6 py-4">
-                                                    <div className="text-sm font-bold text-gray-200">{link.groupName || link.groupJid}</div>
-                                                    <div className="font-mono text-[10px] text-gray-500">{link.groupJid}</div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <Link href={`/workflows/${link.workflowId}`} className="text-sm font-medium hover:text-primary transition flex items-center gap-1">
-                                                        {getWorkflowName(link.workflowId)} <ExternalLink size={12} />
-                                                    </Link>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    {link.isActive ? (
-                                                        <span className="px-2 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded text-[10px] font-bold">ATIVO</span>
-                                                    ) : (
-                                                        <span className="px-2 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded text-[10px] font-bold">INATIVO</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <button
-                                                            onClick={() => handleTestNow(link)}
-                                                            className="p-2 bg-indigo-500/10 text-indigo-400 rounded hover:bg-indigo-500/20 transition"
-                                                            title="Testar Agora"
-                                                        >
-                                                            <Play size={14} fill="currentColor" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteLink(link.id)}
-                                                            className="p-2 text-red-500 hover:bg-red-500/10 rounded transition"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </section>
-                    )}
-                </main>
+                            </section>
+                        )
+                    }
+                </main >
 
                 {/* Test Now Modal */}
-                {executingWorkflow && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                        <div className="bg-[#151515] border border-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-                            <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-black/20">
-                                <div>
-                                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                        <Play className="text-primary fill-primary" size={20} />
-                                        Testar Agora
-                                    </h2>
-                                    <p className="text-xs text-gray-500 mt-1">Disparar fluxo: <span className="text-indigo-400 font-bold">{executingWorkflow.name}</span></p>
-                                </div>
-                                <button onClick={() => setExecutingWorkflow(null)} className="p-2 hover:bg-white/5 rounded-full transition text-gray-500 hover:text-white">
-                                    <X size={20} />
-                                </button>
-                            </div>
-                            <div className="p-6 max-h-[60vh] overflow-y-auto space-y-3">
-                                <p className="text-sm text-gray-400 mb-2">Selecione para qual grupo deseja disparar:</p>
-                                {executingWorkflow.linkedGroups.map((link: any) => (
-                                    <button
-                                        key={link.id}
-                                        onClick={() => handleTestNow(link)}
-                                        className="w-full text-left p-4 bg-black border border-gray-800 rounded-xl hover:border-primary/50 hover:bg-primary/5 transition group flex items-center justify-between"
-                                    >
-                                        <div>
-                                            <div className="font-bold text-sm text-white group-hover:text-primary transition-colors">{link.groupName || link.groupJid}</div>
-                                            <div className="text-[10px] text-gray-500 font-mono">{link.groupJid}</div>
-                                        </div>
-                                        <Play size={16} className="text-gray-700 group-hover:text-primary transition-colors" />
+                {
+                    executingWorkflow && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                            <div className="bg-[#151515] border border-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+                                <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-black/20">
+                                    <div>
+                                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                            <Play className="text-primary fill-primary" size={20} />
+                                            Testar Agora
+                                        </h2>
+                                        <p className="text-xs text-gray-500 mt-1">Disparar fluxo: <span className="text-indigo-400 font-bold">{executingWorkflow.name}</span></p>
+                                    </div>
+                                    <button onClick={() => setExecutingWorkflow(null)} className="p-2 hover:bg-white/5 rounded-full transition text-gray-500 hover:text-white">
+                                        <X size={20} />
                                     </button>
-                                ))}
-                            </div>
-                            <div className="p-4 bg-black/40 text-center text-[10px] text-gray-600 italic">
-                                * Disparos manuais também são registrados nos logs de execução.
+                                </div>
+                                <div className="p-6 max-h-[60vh] overflow-y-auto space-y-3">
+                                    <p className="text-sm text-gray-400 mb-2">Selecione para qual grupo deseja disparar:</p>
+                                    {executingWorkflow.linkedGroups.map((link: any) => (
+                                        <button
+                                            key={link.id}
+                                            onClick={() => handleTestNow(link)}
+                                            className="w-full text-left p-4 bg-black border border-gray-800 rounded-xl hover:border-primary/50 hover:bg-primary/5 transition group flex items-center justify-between"
+                                        >
+                                            <div>
+                                                <div className="font-bold text-sm text-white group-hover:text-primary transition-colors">{link.groupName || link.groupJid}</div>
+                                                <div className="text-[10px] text-gray-500 font-mono">{link.groupJid}</div>
+                                            </div>
+                                            <Play size={16} className="text-gray-700 group-hover:text-primary transition-colors" />
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="p-4 bg-black/40 text-center text-[10px] text-gray-600 italic">
+                                    * Disparos manuais também são registrados nos logs de execução.
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-            </div>
-        </AuthGuard>
+                    )
+                }
+            </div >
+        </AuthGuard >
     )
 }

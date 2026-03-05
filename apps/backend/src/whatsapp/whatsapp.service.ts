@@ -104,8 +104,6 @@ export class WhatsappService {
   }
 
   /**
-   * Update a group configuration
-   */
   async updateGroupConfig(
     configId: string,
     data: Partial<{
@@ -113,13 +111,72 @@ export class WhatsappService {
       workflowIds: string[];
     }>,
   ) {
-    return this.prisma.whatsappGroupConfig.update({
+    // 1. Get current config to know which group and tenant we are talking about
+    const currentConfig = await this.prisma.whatsappGroupConfig.findUnique({
+      where: { id: configId },
+      include: { whatsappSession: true },
+    });
+
+    if (!currentConfig) {
+      throw new Error('Group config not found');
+    }
+
+    const groupJid = currentConfig.groupId;
+    const groupName = currentConfig.name;
+    const tenantId = currentConfig.whatsappSession.tenantId;
+
+    // 2. Perform the update on WhatsappGroupConfig
+    const updated = await this.prisma.whatsappGroupConfig.update({
       where: { id: configId },
       data,
     });
-  }
 
-  /**
+    // 3. Sync GroupWorkflowLink if workflowIds changed
+    if (data.workflowIds) {
+      const oldIds = currentConfig.workflowIds || [];
+      const newIds = data.workflowIds;
+
+      const added = newIds.filter((id) => !oldIds.includes(id));
+      const removed = oldIds.filter((id) => !newIds.includes(id));
+
+      // Handle added workflows -> Create or Activate link
+      for (const workflowId of added) {
+        const linkId = `link_${groupJid}_${workflowId}`;
+        await this.prisma.groupWorkflowLink.upsert({
+          where: { id: linkId },
+          update: {
+            isActive: true,
+            activatedAt: new Date(),
+            groupName: groupName,
+          },
+          create: {
+            id: linkId,
+            groupJid,
+            workflowId,
+            tenantId,
+            isActive: true,
+            groupName: groupName,
+          },
+        });
+      }
+
+      // Handle removed workflows -> Deactivate link
+      for (const workflowId of removed) {
+        await this.prisma.groupWorkflowLink.updateMany({
+          where: {
+            groupJid,
+            workflowId,
+            tenantId,
+          },
+          data: {
+            isActive: false,
+          },
+        });
+      }
+    }
+
+    return updated;
+  }
    * Upsert many group configurations (for sync)
    */
   async upsertGroupConfigs(sessionId: string, groups: { groupId: string; name: string }[]) {
