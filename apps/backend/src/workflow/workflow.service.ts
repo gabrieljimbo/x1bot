@@ -316,6 +316,70 @@ export class WorkflowService {
     return { executionId: execution.id };
   }
 
+  /**
+   * Execute a group workflow immediately (Test Now)
+   */
+  async executeGroupTest(
+    tenantId: string,
+    workflowId: string,
+    body: { groupJid: string, groupName?: string }
+  ): Promise<{ executionId: string; status: string }> {
+    const { groupJid, groupName = groupJid } = body;
+
+    // Get the workflow to ensure it exists
+    const workflow = await this.getWorkflow(tenantId, workflowId);
+    if (!workflow) {
+      throw new Error(`Workflow ${workflowId} not found`);
+    }
+
+    // Ensure it has a TRIGGER_GRUPO node
+    const triggerNode = workflow.nodes.find((n) => n.type === WorkflowNodeType.TRIGGER_GRUPO);
+    if (!triggerNode) {
+      throw new Error(`Workflow must have a TRIGGER_GRUPO node to be tested as a group flow`);
+    }
+
+    // Find the first connected session
+    const session = await this.prisma.whatsappSession.findFirst({
+      where: { tenantId, status: 'CONNECTED' },
+    });
+
+    if (!session) {
+      throw new Error('No connected WhatsApp session found to execute the test');
+    }
+
+    console.log(`[TEST NOW] Firing test execution for workflow ${workflowId} to group ${groupJid}`);
+
+    const execution = await this.executionEngine.startExecution(
+      tenantId,
+      workflowId,
+      session.id,
+      groupJid,
+      undefined,
+      undefined,
+      {
+        triggerType: WorkflowNodeType.TRIGGER_GRUPO,
+        initialContext: {
+          variables: {
+            groupJid,
+            groupName,
+            contact: {
+              name: groupName,
+              phoneNumber: groupJid,
+              groupJid,
+              isGroup: true
+            }
+          }
+        },
+        force: true
+      }
+    );
+
+    return {
+      executionId: execution.id,
+      status: 'started'
+    };
+  }
+
 
   /**
    * Test a node from the current execution context

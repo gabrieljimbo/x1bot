@@ -373,13 +373,15 @@ model PromoMLSent {
 }
 
 model GroupWorkflowLink {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   groupJid    String
   workflowId  String
   tenantId    String
-  isActive    Boolean  @default(true)
-  activatedAt DateTime @default(now())
-  createdAt   DateTime @default(now())
+  isActive    Boolean   @default(true)
+  pausedAt    DateTime?
+  groupName   String?
+  activatedAt DateTime  @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([groupJid])
   @@index([workflowId])
@@ -417,6 +419,8 @@ model GroupTriggerExecution {
   groupJid     String
   workflowId   String
   executionDay Int?
+  type         String?
+  status       String   @default("COMPLETED")
   executedAt   DateTime @default(now())
   tenantId     String
 

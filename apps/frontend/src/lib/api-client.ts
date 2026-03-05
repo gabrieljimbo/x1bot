@@ -253,6 +253,14 @@ export const apiClient = {
     return data
   },
 
+  async executeGroupTest(workflowId: string, groupJid: string, groupName?: string) {
+    const { data } = await client.post(`/api/workflows/${workflowId}/execute-group-test`, {
+      groupJid,
+      groupName
+    })
+    return data
+  },
+
   async testNode(workflowId: string, nodeId: string, executionId?: string) {
     const { data } = await client.post(`/api/workflows/${workflowId}/test-node`, {
       nodeId,

@@ -1,0 +1,7 @@
+ALTER TABLE "group_workflow_links"
+  ADD COLUMN IF NOT EXISTS "pausedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "groupName" TEXT;
+
+ALTER TABLE "group_trigger_executions"
+  ADD COLUMN IF NOT EXISTS "type" TEXT,
+  ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'COMPLETED';

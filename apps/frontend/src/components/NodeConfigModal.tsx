@@ -2772,15 +2772,16 @@ function ScheduleTriggerConfig({ config, setConfig, sessions, loading }: any) {
 }
 
 function GroupTriggerConfig({ config, setConfig }: any) {
-  // Inicializar com padrões se vazio
+  const mode = config.mode || 'days_after';
+
+  // Inicializar com padrões
   useEffect(() => {
-    if (!config.executions || config.executions.length === 0) {
+    if (!config.mode) {
       setConfig({
         ...config,
+        mode: 'days_after',
         executions: [
-          { id: crypto.randomUUID(), type: 'days_after', day: 1, time: '09:00' },
-          { id: crypto.randomUUID(), type: 'days_after', day: 2, time: '09:00' },
-          { id: crypto.randomUUID(), type: 'days_after', day: 7, time: '09:00' }
+          { id: crypto.randomUUID(), type: 'days_after', day: 1, time: '09:00' }
         ],
         repeatSequence: false,
         ignoreIfOffline: false
@@ -2788,12 +2789,39 @@ function GroupTriggerConfig({ config, setConfig }: any) {
     }
   }, []);
 
+  const handleModeChange = (newMode: string) => {
+    let newExecutions: any[] = [];
+    let repeatSequence = false;
+
+    if (newMode === 'days_after') {
+      newExecutions = [{ id: crypto.randomUUID(), type: 'days_after', day: 1, time: '09:00' }];
+    } else if (newMode === 'fixed_date') {
+      newExecutions = [{ id: crypto.randomUUID(), type: 'fixed_date', date: '', time: '09:00' }];
+    } else if (newMode === 'daily') {
+      newExecutions = [{ id: crypto.randomUUID(), type: 'days_after', day: 1, time: '09:00' }];
+      repeatSequence = true;
+    } else if (newMode === 'manual') {
+      newExecutions = [];
+    }
+
+    setConfig({
+      ...config,
+      mode: newMode,
+      executions: newExecutions,
+      repeatSequence
+    });
+  };
+
   const executions = config.executions || [];
 
   const addExecution = () => {
+    const defaultExec = mode === 'fixed_date'
+      ? { id: crypto.randomUUID(), type: 'fixed_date', date: '', time: '10:00' }
+      : { id: crypto.randomUUID(), type: 'days_after', day: executions.length + 1, time: '09:00' };
+
     setConfig({
       ...config,
-      executions: [...executions, { id: crypto.randomUUID(), type: 'days_after', day: 1, time: '09:00' }]
+      executions: [...executions, defaultExec]
     });
   };
 
@@ -2811,49 +2839,75 @@ function GroupTriggerConfig({ config, setConfig }: any) {
     });
   };
 
+  const updateOnlyExecutionFields = (field: string, value: any) => {
+    if (executions.length > 0) {
+      updateExecution(executions[0].id, field, value);
+    }
+  };
+
   return (
     <div className="space-y-6">
 
-      {/* Container Principal */}
       <div className="bg-[#111] border border-gray-800 rounded-lg p-4 space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-gray-800">
-          <h3 className="text-sm font-semibold text-gray-200">📅 Agenda de Execução</h3>
-          <button
-            onClick={addExecution}
-            className="text-xs bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 font-medium px-3 py-1.5 rounded transition-colors flex items-center gap-1.5"
-          >
-            + Adicionar Execução
-          </button>
-        </div>
+        <label className="block text-sm font-semibold text-gray-200 mb-2">
+          Modo de Agendamento
+        </label>
+        <select
+          value={mode}
+          onChange={(e) => handleModeChange(e.target.value)}
+          className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+        >
+          <option value="days_after">Campanha (Dias após ativação)</option>
+          <option value="fixed_date">Lançamento (Data e Hora Fixas)</option>
+          <option value="daily">Rotina Diária (Mesmo horário sempre)</option>
+          <option value="manual">Manual (Apenas via botão Testar)</option>
+        </select>
 
-        <div className="space-y-3">
-          {executions.map((exec: any, index: number) => (
-            <div key={exec.id} className="bg-[#1a1a1a] p-3 rounded border border-gray-700 relative group">
+        {mode !== 'manual' && (
+          <div className="pt-4 border-t border-gray-800 space-y-3">
+            <div className="flex items-center justify-between pb-2">
+              <h3 className="text-sm font-medium text-gray-300">
+                {mode === 'daily' ? 'Horário de Execução' : 'Cronograma'}
+              </h3>
+              {(mode === 'days_after' || mode === 'fixed_date') && (
+                <button
+                  onClick={addExecution}
+                  className="text-xs bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 font-medium px-3 py-1.5 rounded transition-colors"
+                >
+                  + Adicionar Disparo
+                </button>
+              )}
+            </div>
 
-              <button
-                onClick={() => removeExecution(exec.id)}
-                className="absolute -top-2 -right-2 w-6 h-6 bg-red-500/20 hover:bg-red-500/40 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Remover execução"
-              >
-                ✕
-              </button>
+            {mode === 'daily' && executions.length > 0 && (
+              <div className="bg-[#1a1a1a] p-3 rounded border border-gray-700">
+                <label className="block text-xs text-gray-400 mb-1">Horário (Diário)</label>
+                <input
+                  type="time"
+                  value={executions[0].time || '09:00'}
+                  onChange={(e) => updateOnlyExecutionFields('time', e.target.value)}
+                  className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1.5 text-sm text-white w-full"
+                />
+              </div>
+            )}
 
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-gray-500 bg-black/40 px-2 py-0.5 rounded">#{index + 1}</span>
-                  <select
-                    value={exec.type || 'days_after'}
-                    onChange={(e) => updateExecution(exec.id, 'type', e.target.value)}
-                    className="flex-1 bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-xs text-white"
+            {(mode === 'days_after' || mode === 'fixed_date') && executions.map((exec: any, index: number) => (
+              <div key={exec.id} className="bg-[#1a1a1a] p-3 rounded border border-gray-700 relative group flex gap-3 items-center">
+                {executions.length > 1 && (
+                  <button
+                    onClick={() => removeExecution(exec.id)}
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500/20 hover:bg-red-500/40 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                    title="Remover"
                   >
-                    <option value="days_after">Dias após início (Relativo)</option>
-                    <option value="fixed_date">Data e hora fixas (Absoluto)</option>
-                  </select>
-                </div>
+                    ✕
+                  </button>
+                )}
 
-                {exec.type === 'days_after' ? (
-                  <div className="grid grid-cols-[1fr,100px] gap-2 items-center">
-                    <div className="flex items-center gap-2 bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 relative">
+                <span className="text-xs font-bold text-gray-500 bg-black/40 px-2 py-1 rounded">#{index + 1}</span>
+
+                {mode === 'days_after' ? (
+                  <>
+                    <div className="flex items-center gap-2 bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 relative flex-1">
                       <span className="text-xs text-gray-400 select-none ml-1">Dia</span>
                       <input
                         type="number"
@@ -2867,75 +2921,65 @@ function GroupTriggerConfig({ config, setConfig }: any) {
                       type="time"
                       value={exec.time || '09:00'}
                       onChange={(e) => updateExecution(exec.id, 'time', e.target.value)}
-                      className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-sm text-white w-full"
+                      className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-sm text-white w-[100px]"
                     />
-                  </div>
+                  </>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2">
+                  <>
                     <input
                       type="date"
                       value={exec.date || ''}
                       onChange={(e) => updateExecution(exec.id, 'date', e.target.value)}
-                      className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-sm text-white w-full"
+                      className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-sm text-white flex-1"
                     />
                     <input
                       type="time"
                       value={exec.time || '09:00'}
                       onChange={(e) => updateExecution(exec.id, 'time', e.target.value)}
-                      className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-sm text-white w-full"
+                      className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-sm text-white w-[100px]"
                     />
-                  </div>
+                  </>
                 )}
-
-                <p className="text-[10px] text-gray-500 leading-tight">
-                  {exec.type === 'days_after'
-                    ? `Executará no ${exec.day}º dia após o fluxo ser ativado no grupo, às ${exec.time}.`
-                    : `Executará exatamente no dia ${exec.date ? new Date(exec.date).toLocaleDateString('pt-BR') : '...'} às ${exec.time} (independente da data de ativação).`}
-                </p>
               </div>
-            </div>
-          ))}
-
-          {executions.length === 0 && (
-            <div className="text-center py-6 text-gray-500 text-sm border border-dashed border-gray-700 rounded">
-              Nenhuma execução configurada.<br />Clique em &quot;+ Adicionar Execução&quot;.
-            </div>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="space-y-4 pt-2">
-        <div className="flex items-center justify-between p-3 bg-[#151515] border border-gray-800 rounded-lg">
-          <div>
-            <span className="text-sm text-gray-200 block">🔄 Repetir sequência</span>
-            <span className="text-[10px] text-gray-500">Após completar todas as execuções, reiniciar do dia 1</span>
+        {mode === 'days_after' && (
+          <div className="flex items-center justify-between p-3 bg-[#151515] border border-gray-800 rounded-lg cursor-pointer select-none"
+            onClick={() => setConfig({ ...config, repeatSequence: !config.repeatSequence })}>
+            <div>
+              <span className="text-sm font-medium text-gray-200 block">🔄 Ciclo Contínuo</span>
+              <span className="text-[10px] text-gray-500">Ao final da sequência, reiniciar a contagem no grupo</span>
+            </div>
+            <div className={`w-10 h-6 rounded-full relative transition-colors ${config.repeatSequence ? 'bg-indigo-500' : 'bg-gray-700'}`}>
+              <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${config.repeatSequence ? 'left-5' : 'left-1'}`} />
+            </div>
           </div>
-          <button
-            onClick={() => setConfig({ ...config, repeatSequence: !config.repeatSequence })}
-            className={`w-10 h-6 rounded-full relative transition-colors ${config.repeatSequence ? 'bg-indigo-500' : 'bg-gray-700'}`}
-          >
-            <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${config.repeatSequence ? 'left-5' : 'left-1'}`} />
-          </button>
-        </div>
+        )}
 
-        <div className="flex items-center justify-between p-3 bg-[#151515] border border-gray-800 rounded-lg">
+        <div className="flex items-center justify-between p-3 bg-[#151515] border border-gray-800 rounded-lg cursor-pointer select-none"
+          onClick={() => setConfig({ ...config, ignoreIfOffline: !config.ignoreIfOffline })}>
           <div>
-            <span className="text-sm text-gray-200 block">🔕 Ignorar se grupo offline</span>
-            <span className="text-[10px] text-gray-500">Pular execução se o bot não estiver no grupo</span>
+            <span className="text-sm font-medium text-gray-200 block">🔕 Detecção de Offline</span>
+            <span className="text-[10px] text-gray-500">Pular fluxo caso o WhatsApp perca conexão</span>
           </div>
-          <button
-            onClick={() => setConfig({ ...config, ignoreIfOffline: !config.ignoreIfOffline })}
-            className={`w-10 h-6 rounded-full relative transition-colors ${config.ignoreIfOffline ? 'bg-indigo-500' : 'bg-gray-700'}`}
-          >
+          <div className={`w-10 h-6 rounded-full relative transition-colors ${config.ignoreIfOffline ? 'bg-indigo-500' : 'bg-gray-700'}`}>
             <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${config.ignoreIfOffline ? 'left-5' : 'left-1'}`} />
-          </button>
+          </div>
         </div>
       </div>
 
-      {/* Info Box */}
-      <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-3">
-        <p className="text-xs text-indigo-300 leading-relaxed">
-          💡 <strong>Como funciona:</strong> Este fluxo será iniciado automaticamente quando vinculado a um grupo na tela &quot;Group Management&quot;. O dia 0 é o momento da ativação.
+      <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+        <p className="text-xs text-primary leading-relaxed">
+          💡 <strong>Resumo:</strong> {
+            mode === 'days_after' ? "O grupo será engajado com uma sequência baseada em quantos dias possui desde sua ativação." :
+              mode === 'fixed_date' ? "O grupo receberá mensagens em datas exóticas, ideal para lançamentos." :
+                mode === 'daily' ? "O grupo receberá mensagens todos os dias rigorosamente no mesmo horário." :
+                  "O grupo não receberá mensagens automáticas. Apenas rodará se a aba Gerenciar Grupos for ativada pelo botão Testar Agora."
+          }
         </p>
       </div>
     </div>

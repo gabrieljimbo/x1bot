@@ -125,6 +125,8 @@ export class ExecutionEngineService implements OnModuleInit {
     options?: {
       initialContext?: any;
       force?: boolean;
+      triggerNodeId?: string;
+      triggerType?: string;
     }
   ): Promise<WorkflowExecution> {
     // Acquire lock to prevent duplicate executions
@@ -190,19 +192,28 @@ export class ExecutionEngineService implements OnModuleInit {
         edges: workflowData.edges as any,
       };
 
-      // Find trigger node (any valid trigger)
-      const triggerNode = workflow.nodes.find(
-        (n) =>
-          n.type === WorkflowNodeType.TRIGGER_MESSAGE ||
-          n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
-          n.type === WorkflowNodeType.TRIGGER_KEYWORD ||
-          n.type === WorkflowNodeType.TRIGGER_SCHEDULE ||
-          n.type === WorkflowNodeType.TRIGGER_MANUAL ||
-          n.type === WorkflowNodeType.TRIGGER_GRUPO,
-      );
+      // Find trigger node (any valid trigger, or specific one if provided)
+      let triggerNode;
+
+      if (options?.triggerNodeId) {
+        triggerNode = workflow.nodes.find(n => n.id === options.triggerNodeId);
+      } else if (options?.triggerType) {
+        triggerNode = workflow.nodes.find(n => n.type === options.triggerType);
+      } else {
+        // Fallback: finding the first valid trigger node
+        triggerNode = workflow.nodes.find(
+          (n) =>
+            n.type === WorkflowNodeType.TRIGGER_MESSAGE ||
+            n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
+            n.type === WorkflowNodeType.TRIGGER_KEYWORD ||
+            n.type === WorkflowNodeType.TRIGGER_SCHEDULE ||
+            n.type === WorkflowNodeType.TRIGGER_MANUAL ||
+            n.type === WorkflowNodeType.TRIGGER_GRUPO,
+        );
+      }
 
       if (!triggerNode) {
-        throw new Error('Workflow has no trigger node');
+        throw new Error('Workflow has no valid trigger node matching criteria');
       }
 
       // Load contact tags

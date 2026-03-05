@@ -1,0 +1,3 @@
+src/worker/schedule.worker.ts(143,15): error TS2322: Type 'string | undefined' is not assignable to type 'string | null'.
+  Type 'undefined' is not assignable to type 'string | null'.
+\nnpm warn Unknown project config "always-auth". This will stop working in the next major version of npm.

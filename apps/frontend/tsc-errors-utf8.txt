@@ -1,0 +1,3 @@
+src/components/NodeConfigModal.tsx(2793,9): error TS7034: Variable 'newExecutions' implicitly has type 'any[]' in some locations where its type cannot be determined.
+src/components/NodeConfigModal.tsx(2810,19): error TS7005: Variable 'newExecutions' implicitly has an 'any[]' type.
+\nnpm warn Unknown project config "always-auth". This will stop working in the next major version of npm.

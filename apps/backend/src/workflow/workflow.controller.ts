@@ -95,6 +95,19 @@ export class WorkflowController {
     );
   }
 
+  @Post('workflows/:id/execute-group-test')
+  async executeGroupTest(
+    @Tenant() tenantId: string,
+    @Param('id') workflowId: string,
+    @Body() body: { groupJid: string; groupName?: string },
+  ) {
+    return this.workflowService.executeGroupTest(
+      tenantId,
+      workflowId,
+      body,
+    );
+  }
+
   @Post('workflows/:id/test-node')
   async testNodeFromContext(
     @Tenant() tenantId: string,

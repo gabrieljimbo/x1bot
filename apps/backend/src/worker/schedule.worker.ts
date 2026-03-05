@@ -110,7 +110,8 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
               where: {
                 groupJid: link.groupJid,
                 workflowId: link.workflowId,
-                executionDay,
+                executionDay: exec.type === 'days_after' ? executionDay : undefined,
+                type: exec.type,
                 executedAt: { gte: today },
               },
             });
@@ -133,11 +134,23 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
 
             console.log(`[GROUP TRIGGER] Firing workflow ${link.workflowId} for group ${link.groupJid} (day ${executionDay})`);
 
-            // Fetch group name from config if available
-            const groupConfig = await this.prisma.whatsappGroupConfig.findFirst({
-              where: { sessionId: session.id, groupId: link.groupJid }
-            });
-            const groupName = groupConfig?.name || link.groupJid;
+            // Fetch group name from config if available or use the saved groupName
+            let groupName = link.groupName;
+            if (!groupName) {
+              const groupConfig = await this.prisma.whatsappGroupConfig.findFirst({
+                where: { sessionId: session.id, groupId: link.groupJid }
+              });
+              groupName = groupConfig?.name || null;
+
+              // Optionally update the link with the fetched name
+              if (groupName) {
+                await this.prisma.groupWorkflowLink.update({
+                  where: { id: link.id },
+                  data: { groupName: groupName || null }
+                }).catch(() => { });
+              }
+            }
+            groupName = groupName || link.groupJid;
 
             await this.executionEngine.startExecution(
               link.tenantId,
@@ -147,6 +160,7 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
               undefined,
               undefined,
               {
+                triggerType: 'TRIGGER_GRUPO',
                 initialContext: {
                   variables: {
                     groupJid: link.groupJid,
@@ -167,6 +181,8 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
                 groupJid: link.groupJid,
                 workflowId: link.workflowId,
                 executionDay,
+                type: exec.type,
+                status: 'COMPLETED',
                 tenantId: link.tenantId,
               },
             });

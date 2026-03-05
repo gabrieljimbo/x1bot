@@ -170,7 +170,10 @@ function WorkspaceDetailsPageContent() {
       // Load workflows if on workflows tab
       if (activeTab === 'workflows') {
         const workflowsData = await apiClient.getWorkflows(workspaceId)
-        setWorkflows(workflowsData)
+        const filteredWorkflows = workflowsData.filter((w: any) =>
+          !w.nodes?.some((n: any) => n.type === 'TRIGGER_GRUPO')
+        )
+        setWorkflows(filteredWorkflows)
       }
 
       // Load sessions if on sessions tab
