@@ -3286,11 +3286,8 @@ ${config.footerText || ''}`;
         await this.prisma.randomizerStat.create({
           data: {
             nodeId: node.id,
-            saidaId: selectedSaida.id,
             saidaNome: selectedSaida.nome,
             workflowId: workflowId || context.workflowId || 'unknown',
-            executionId: executionId || context.executionId || 'unknown',
-            contactId: context.contactId || 'unknown',
             tenantId,
           }
         });
