@@ -190,12 +190,15 @@ export class ExecutionEngineService implements OnModuleInit {
         edges: workflowData.edges as any,
       };
 
-      // Find trigger node (MESSAGE, SCHEDULE, or MANUAL)
+      // Find trigger node (any valid trigger)
       const triggerNode = workflow.nodes.find(
         (n) =>
           n.type === WorkflowNodeType.TRIGGER_MESSAGE ||
+          n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
+          n.type === WorkflowNodeType.TRIGGER_KEYWORD ||
           n.type === WorkflowNodeType.TRIGGER_SCHEDULE ||
-          n.type === WorkflowNodeType.TRIGGER_MANUAL,
+          n.type === WorkflowNodeType.TRIGGER_MANUAL ||
+          n.type === WorkflowNodeType.TRIGGER_GRUPO,
       );
 
       if (!triggerNode) {
@@ -272,6 +275,12 @@ export class ExecutionEngineService implements OnModuleInit {
 
         // Start execution loop
         await this.continueExecution(execution, workflow);
+      } else {
+        // No path after trigger, mark as completed
+        console.log(`[EXECUTION] No paths found after trigger node ${triggerNode.id}. Completing execution ${execution.id}.`);
+        await this.executionService.updateExecution(execution.id, {
+          status: ExecutionStatus.COMPLETED,
+        });
       }
 
       return execution;

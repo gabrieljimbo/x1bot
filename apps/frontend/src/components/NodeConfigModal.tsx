@@ -3471,12 +3471,15 @@ export default function NodeConfigModal({
       case WorkflowNodeType.TRIGGER_GRUPO:
         return <GroupTriggerConfig config={config} setConfig={setConfig} />
 
+      case WorkflowNodeType.TRIGGER_WHATSAPP:
+      case WorkflowNodeType.TRIGGER_KEYWORD:
       case 'TRIGGER_MESSAGE':
+        const isKeyword = node.type === WorkflowNodeType.TRIGGER_KEYWORD;
         return (
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium mb-2 text-gray-200">
-                WhatsApp Session
+                Sessão WhatsApp
               </label>
               <select
                 value={config.sessionId || ''}
@@ -3484,7 +3487,7 @@ export default function NodeConfigModal({
                 className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
                 disabled={loading}
               >
-                <option value="">All Sessions</option>
+                <option value="">Todas as Sessões</option>
                 {sessions.map((session) => (
                   <option key={session.id} value={session.id}>
                     {session.name} ({session.phoneNumber})
@@ -3492,29 +3495,33 @@ export default function NodeConfigModal({
                 ))}
               </select>
               <p className="text-xs text-gray-500 mt-1.5">
-                Leave empty to listen on all sessions
+                Deixe vazio para ouvir em todas as sessões
               </p>
             </div>
 
             <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3">Filtro de Mensagens</h3>
+              <h3 className="text-sm font-semibold text-gray-200 mb-3">
+                {isKeyword ? 'Configuração da Palavra-Chave' : 'Filtro de Mensagens'}
+              </h3>
 
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-2 text-gray-200">
-                    Padrão da Mensagem
+                    {isKeyword ? 'Palavra-Chave' : 'Padrão da Mensagem'}
                   </label>
                   <input
                     type="text"
                     value={config.pattern || ''}
                     onChange={(e) => setConfig({ ...config, pattern: e.target.value })}
-                    placeholder="Deixe vazio para aceitar todas as mensagens"
+                    placeholder={isKeyword ? "Ex: comprar, suporte, info" : "Deixe vazio para aceitar todas as mensagens"}
                     className="w-full px-4 py-2.5 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500 font-mono"
                   />
                   <p className="text-xs text-gray-400 mt-1.5 font-medium">
                     {config.pattern && config.pattern.trim() !== ''
                       ? `Filtro ativo: dispara quando mensagem for [${config.pattern}]`
-                      : '⚠️ Sem filtro: Este trigger aceitará TODAS as mensagens recebidas'}
+                      : isKeyword
+                        ? '⚠️ Defina uma palavra-chave para disparar este fluxo'
+                        : '⚠️ Sem filtro: Este trigger aceitará TODAS as mensagens recebidas'}
                   </p>
                 </div>
 
@@ -3524,7 +3531,7 @@ export default function NodeConfigModal({
                       Tipo de Correspondência
                     </label>
                     <select
-                      value={config.matchType || 'exact'}
+                      value={config.matchType || (isKeyword ? 'contains' : 'exact')}
                       onChange={(e) => setConfig({ ...config, matchType: e.target.value })}
                       className="w-full px-4 py-2.5 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
                     >
@@ -3539,11 +3546,11 @@ export default function NodeConfigModal({
             </div>
 
             {/* Help Text */}
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-              <p className="text-xs text-blue-300 leading-relaxed">
-                💡 <strong>Dica:</strong> Se você deixar o padrão vazio, este workflow será acionado para <strong>todas as mensagens</strong> recebidas.
-                Isso é útil para criar um chatbot que responde a qualquer mensagem.
-                Se você definir um padrão, apenas mensagens que correspondam serão processadas.
+            <div className={`border rounded-lg p-3 ${isKeyword ? 'bg-purple-500/10 border-purple-500/30' : 'bg-blue-500/10 border-blue-500/30'}`}>
+              <p className={`text-xs leading-relaxed ${isKeyword ? 'text-purple-300' : 'text-blue-300'}`}>
+                💡 <strong>Dica:</strong> {isKeyword
+                  ? 'Este trigger é otimizado para identificar palavras-chave em conversas individuais. Ele ignora mensagens de grupos automaticamente.'
+                  : 'Este trigger dispara em todas as mensagens individuais recebidas que correspondam ao padrão. Ele ignora grupos automaticamente.'}
               </p>
             </div>
           </div>

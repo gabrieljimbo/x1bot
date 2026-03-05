@@ -13,13 +13,31 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
   const nodeCategories = {
     TRIGGERS: [
       {
-        type: 'TRIGGER_MESSAGE' as WorkflowNodeType,
-        label: 'Nova Mensagem',
-        icon: '💬',
+        type: WorkflowNodeType.TRIGGER_WHATSAPP,
+        label: 'WhatsApp',
+        icon: '📱',
         color: 'from-blue-500 to-blue-600',
         bgColor: 'bg-[#1a2942]',
         borderColor: 'border-[#3b5998]',
-        description: 'Dispara quando uma mensagem é recebida'
+        description: 'Dispara em conversas individuais (NUNCA em grupos)'
+      },
+      {
+        type: WorkflowNodeType.TRIGGER_KEYWORD,
+        label: 'Palavra-Chave',
+        icon: '🔑',
+        color: 'from-blue-600 to-blue-700',
+        bgColor: 'bg-[#1a2942]',
+        borderColor: 'border-[#3b5998]',
+        description: 'Dispara quando uma palavra-chave é recebida no individual'
+      },
+      {
+        type: 'TRIGGER_MESSAGE' as WorkflowNodeType,
+        label: 'Nova Mensagem',
+        icon: '💬',
+        color: 'from-blue-400 to-blue-500',
+        bgColor: 'bg-[#1a2942]',
+        borderColor: 'border-[#3b5998]',
+        description: 'Gatilho genérico de mensagem (Individual)'
       },
       {
         type: 'TRIGGER_SCHEDULE' as WorkflowNodeType,

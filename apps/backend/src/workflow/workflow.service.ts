@@ -162,6 +162,8 @@ export class WorkflowService {
     const hasTrigger = nodes.some(
       (n) =>
         n.type === WorkflowNodeType.TRIGGER_MESSAGE ||
+        n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
+        n.type === WorkflowNodeType.TRIGGER_KEYWORD ||
         n.type === WorkflowNodeType.TRIGGER_SCHEDULE ||
         n.type === WorkflowNodeType.TRIGGER_GRUPO ||
         n.type === WorkflowNodeType.TRIGGER_MANUAL,

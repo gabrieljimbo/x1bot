@@ -195,17 +195,33 @@ export class WhatsappMessageHandler {
 
       // Find trigger node
       const triggerNode = workflow.nodes.find(
-        (n: any) => n.type === WorkflowNodeType.TRIGGER_MESSAGE,
+        (n: any) =>
+          n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
+          n.type === WorkflowNodeType.TRIGGER_KEYWORD ||
+          n.type === WorkflowNodeType.TRIGGER_MESSAGE, // Backward compatibility
       );
 
-      console.log('[TRIGGER] Trigger node found:', !!triggerNode);
+      console.log(`[TRIGGER] Trigger node found for ${workflow.name}:`, !!triggerNode);
 
       if (!triggerNode) {
         continue;
       }
 
+      // Rule: Incoming messages never trigger MANUAL, SCHEDULE or GRUPO
+      // (They are already excluded because we only find WHATSAPP, KEYWORD, MESSAGE nodes above)
+
+      // Rule: TRIGGER_WHATSAPP and TRIGGER_KEYWORD never fire in groups
+      if (isGroup) {
+        if (triggerNode.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
+          triggerNode.type === WorkflowNodeType.TRIGGER_KEYWORD ||
+          triggerNode.type === WorkflowNodeType.TRIGGER_MESSAGE) {
+          console.log(`[IGNORE] Session ${sessionId}: Individual-only trigger ${triggerNode.type} found in group ${contactPhone}`);
+          continue;
+        }
+      }
+
       const config = triggerNode.config;
-      console.log('[TRIGGER] Trigger config:', config);
+      console.log(`[TRIGGER] Trigger config for ${workflow.name}:`, config);
 
       // 4. Workflow Check for Groups (Start): If in a group, only trigger if workflow is whitelisted
       if (isGroup && !whitelistedWorkflows.includes(workflow.id)) {
