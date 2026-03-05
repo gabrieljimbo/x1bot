@@ -107,6 +107,8 @@ export class NodeExecutorService {
     contactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as PixConfig;
+    const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
+    const finalContactPhone = destination;
 
     // Interpolate config
     const interpolatedConfig: PixConfig = {
@@ -137,9 +139,9 @@ export class NodeExecutorService {
       shouldWait: true,
       waitTimeoutSeconds: timeoutSeconds,
       onTimeout: 'GOTO_NODE', // We'll handle routing in ExecutionEngine
-      messageToSend: sessionId && contactPhone ? {
+      messageToSend: sessionId && finalContactPhone ? {
         sessionId,
-        contactPhone,
+        contactPhone: finalContactPhone,
         pixConfig: interpolatedConfig,
       } : undefined,
     };
@@ -282,7 +284,8 @@ export class NodeExecutorService {
     const sessionId = config.sessionId || defaultSessionId;
 
     // Determine recipient (config overrides default)
-    let contactPhone = defaultcontactPhone;
+    const destination = (context.variables as any)?.groupJid || context.contactId || defaultcontactPhone;
+    let contactPhone = destination;
     if (config.to) {
       contactPhone = this.contextService.interpolate(config.to, context);
       // Ensure group JID is not transformed
@@ -335,7 +338,8 @@ export class NodeExecutorService {
     const sessionId = config.sessionId || defaultSessionId;
 
     // Determine recipient (config overrides default)
-    let contactPhone = defaultcontactPhone;
+    const destination = (context.variables as any)?.groupJid || context.contactId || defaultcontactPhone;
+    let contactPhone = destination;
     if (config.to) {
       contactPhone = this.contextService.interpolate(config.to, context);
       // Ensure group JID is not transformed
@@ -392,6 +396,8 @@ export class NodeExecutorService {
     contactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as SendButtonsConfig;
+    const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
+    const finalContactPhone = destination;
 
     // Interpolate message
     const message = this.contextService.interpolate(config.message, context);
@@ -428,9 +434,9 @@ export class NodeExecutorService {
       shouldWait: true,
       waitTimeoutSeconds: config.delay ? (config.delay / 1000) + 3600 : 3600, // Wait 1h
       output: { message, buttons, footer },
-      messageToSend: sessionId && contactPhone ? {
+      messageToSend: sessionId && finalContactPhone ? {
         sessionId,
-        contactPhone,
+        contactPhone: finalContactPhone,
         message: JSON.stringify({ type: 'buttons', message, buttons, footer }),
       } : undefined,
     };
@@ -447,6 +453,8 @@ export class NodeExecutorService {
     contactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as SendListConfig;
+    const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
+    const finalContactPhone = destination;
 
     // Interpolate message
     const message = this.contextService.interpolate(config.message, context);
@@ -490,9 +498,9 @@ export class NodeExecutorService {
       nextNodeId,
       shouldWait: false,
       output: { message, buttonText, sections, footer },
-      messageToSend: sessionId && contactPhone ? {
+      messageToSend: sessionId && finalContactPhone ? {
         sessionId,
-        contactPhone,
+        contactPhone: finalContactPhone,
         message: JSON.stringify({ type: 'list', message, buttonText, sections, footer }),
       } : undefined,
     };
@@ -1729,14 +1737,15 @@ export class NodeExecutorService {
     contactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as SetTagsConfig;
+    const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
 
-    if (!sessionId || !contactPhone) {
-      console.error('[SET_TAGS] Missing sessionId or contactPhone');
+    if (!sessionId || !destination) {
+      console.error('[SET_TAGS] Missing sessionId or destination');
       const nextEdge = edges.find((e) => e.source === node.id);
       return {
         nextNodeId: nextEdge?.target || null,
         shouldWait: false,
-        output: { error: 'Missing sessionId or contactPhone' },
+        output: { error: 'Missing sessionId or destination' },
       };
     }
 
@@ -1749,7 +1758,7 @@ export class NodeExecutorService {
           resultTags = await this.contactTagsService.addTags(
             tenantId,
             sessionId,
-            contactPhone,
+            destination,
             config.tags || [],
           );
           break;
@@ -1758,7 +1767,7 @@ export class NodeExecutorService {
           resultTags = await this.contactTagsService.removeTags(
             tenantId,
             sessionId,
-            contactPhone,
+            destination,
             config.tags || [],
           );
           break;
@@ -1767,13 +1776,13 @@ export class NodeExecutorService {
           resultTags = await this.contactTagsService.setTags(
             tenantId,
             sessionId,
-            contactPhone,
+            destination,
             config.tags || [],
           );
           break;
 
         case 'clear':
-          await this.contactTagsService.clearTags(tenantId, sessionId, contactPhone);
+          await this.contactTagsService.clearTags(tenantId, sessionId, destination);
           resultTags = [];
           break;
 
@@ -2243,6 +2252,8 @@ functions, etc.)
   ): Promise<NodeExecutionResult> {
     const config = node.config as PromoMLConfig;
     const tenantId = (context.variables as any)?._tenantId;
+    const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
+    const finalContactPhone = destination;
 
     // 1. Scraping logic
     const searchTerm = this.contextService.interpolate(config.searchTerm, context);
@@ -2373,7 +2384,7 @@ functions, etc.)
     filteredProducts = filteredProducts.slice(0, config.maxQuantity || 5);
 
     // 3. Send to WhatsApp
-    if (sessionId && contactPhone && this.whatsappSessionManager) {
+    if (sessionId && finalContactPhone && this.whatsappSessionManager) {
       for (const product of filteredProducts) {
         // Check if sent today
         if (config.ignoreAlreadySent && tenantId) {
@@ -2405,9 +2416,9 @@ ${config.footerText || ''}`;
 
         try {
           if (product.imageUrl) {
-            await this.whatsappSessionManager.sendMedia(sessionId, contactPhone, 'image', product.imageUrl, { caption });
+            await this.whatsappSessionManager.sendMedia(sessionId, finalContactPhone, 'image', product.imageUrl, { caption });
           } else {
-            await this.whatsappSessionManager.sendMessage(sessionId, contactPhone, caption);
+            await this.whatsappSessionManager.sendMessage(sessionId, finalContactPhone, caption);
           }
 
           // Track as sent
@@ -2459,17 +2470,15 @@ ${config.footerText || ''}`;
     // Resolve tenantId from variables or globals
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
 
-    // Determine groupJid - priority: config > variables.groupJid > defaultContactPhone
-    let contactPhone = config.groupJid || (context.variables as any)?.groupJid;
+    // Resolve groupJid priority: config > variables.groupJid > context.contactId > defaultContactPhone
+    const groupJid = config.groupJid || (context.variables as any)?.groupJid || context.contactId || defaultContactPhone;
+    const isGroup = groupJid?.endsWith('@g.us');
 
-    // Fallback if the defaultContactPhone is a group and we don't have one yet
-    if (!contactPhone && defaultContactPhone?.includes('@g.us')) {
-      contactPhone = defaultContactPhone;
-    }
-
-    if (!sessionId || !contactPhone || !contactPhone.includes('@g.us')) {
+    if (!sessionId || !isGroup) {
       throw new Error('MENCIONAR_TODOS only works within a connected WhatsApp group');
     }
+
+    const contactPhone = groupJid;
 
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const recentMention = await this.prisma.groupMentionLog.findFirst({
@@ -2552,9 +2561,8 @@ ${config.footerText || ''}`;
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
     const workflowId = (context.variables as any)?._workflowId;
 
-    const contactPhone = config.sessionId // Wait, config has no groupJid in type? I'll check.
-      || (context.variables as any)?.groupJid
-      || defaultContactPhone;
+    const destination = (context.variables as any)?.groupJid || context.contactId || defaultContactPhone;
+    const contactPhone = destination;
 
     if (!contactPhone?.includes('@g.us')) throw new Error('Cuidado: AQUECIMENTO recomendado apenas para grupos');
 
@@ -2631,8 +2639,8 @@ ${config.footerText || ''}`;
     const sessionId = config.sessionId || defaultSessionId;
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
 
-    const contactPhone = (context.variables as any)?.groupJid
-      || defaultContactPhone;
+    const destination = (context.variables as any)?.groupJid || context.contactId || defaultContactPhone;
+    const contactPhone = destination;
 
     const expiresAt = new Date();
     if (config.duracao.tipo === 'tempo') {
@@ -2698,8 +2706,8 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as LembreteRecorrenteConfig;
     const sessionId = config.sessionId || defaultSessionId;
-    const contactPhone = (context.variables as any)?.groupJid
-      || defaultContactPhone;
+    const destination = (context.variables as any)?.groupJid || context.contactId || defaultContactPhone;
+    const contactPhone = destination;
 
     if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for LEMBRETE_RECORRENTE');
 
@@ -2745,8 +2753,8 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as EnqueteGrupoConfig;
     const sessionId = config.sessionId || defaultSessionId;
-    const contactPhone = (context.variables as any)?.groupJid
-      || defaultContactPhone;
+    const destination = (context.variables as any)?.groupJid || context.contactId || defaultContactPhone;
+    const contactPhone = destination;
 
     if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for poll');
 
@@ -2860,7 +2868,9 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as PromoMLApiConfig;
     const sessionId = config.sessionId || defaultSessionId;
+    // Determine recipient - priority: variables.groupJid > context.contactId > defaultContactPhone
     const contactPhone = (context.variables as any)?.groupJid
+      || context.contactId
       || defaultContactPhone;
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
 
@@ -3078,9 +3088,11 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as any;
     const sessionId = config.sessionId || defaultSessionId;
-    const contactPhone = config.groupJid
+    const destination = config.groupJid
       || (context.variables as any)?.groupJid
+      || context.contactId
       || defaultContactPhone;
+    const contactPhone = destination;
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
 
     // Find designated next node (if any)
