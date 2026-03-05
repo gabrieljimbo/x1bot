@@ -3280,7 +3280,7 @@ ${config.footerText || ''}`;
       this.contextService.setVariable(context, config.saveAs, selectedSaida.nome);
     }
 
-    // 4. Record Analytics in Database
+    // 4. Record Analytics in Database (saidaNome fix)
     if (config.enableAnalytics && selectedSaida) {
       try {
         await this.prisma.randomizerStat.create({
