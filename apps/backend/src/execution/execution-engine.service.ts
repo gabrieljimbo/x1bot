@@ -195,33 +195,42 @@ export class ExecutionEngineService implements OnModuleInit {
       // Find trigger node (any valid trigger, or specific one if provided)
       let triggerNode;
 
+      const edges = workflow.edges as any[];
+
+      // Helper: checks if a node has at least one outgoing edge
+      const hasOutgoingEdges = (nodeId: string) => edges.some(e => e.source === nodeId);
+
       if (options?.triggerNodeId) {
         triggerNode = workflow.nodes.find(n => n.id === options.triggerNodeId);
       } else if (options?.triggerType) {
         // Find the node matching the requested type
-        triggerNode = workflow.nodes.find(n => n.type === options.triggerType);
+        const requestedNode = workflow.nodes.find(n => n.type === options.triggerType);
 
-        // Special fallback for TRIGGER_GRUPO: most workflows built on the canvas
-        // only have TRIGGER_MANUAL connected to the graph. If TRIGGER_GRUPO doesn't
-        // exist as a node OR has no outgoing edges, fall back to TRIGGER_MANUAL so
-        // the correct execution path is followed.
-        if (options.triggerType === WorkflowNodeType.TRIGGER_GRUPO || options.triggerType === 'TRIGGER_GRUPO') {
-          if (!triggerNode) {
-            // Node doesn't exist at all — fall back immediately
-            console.log(`[EXECUTION] TRIGGER_GRUPO node not found in workflow ${workflowId}. Falling back to TRIGGER_MANUAL.`);
-            triggerNode = workflow.nodes.find(n => n.type === WorkflowNodeType.TRIGGER_MANUAL);
+        if (requestedNode && hasOutgoingEdges(requestedNode.id)) {
+          // Perfect: found the right node AND it has edges
+          triggerNode = requestedNode;
+        } else {
+          // Generic fallback: the requested trigger is absent or disconnected.
+          // Find any trigger node that actually has outgoing edges so the workflow can run.
+          if (requestedNode) {
+            console.log(`[EXECUTION] Requested trigger '${options.triggerType}' (${requestedNode.id}) has no edges in workflow ${workflowId}. Looking for a connected trigger…`);
           } else {
-            // Node exists but check if it has any outgoing edges
-            const hasEdges = (workflow.edges as any[]).some(e => e.source === triggerNode!.id);
-            if (!hasEdges) {
-              console.log(`[EXECUTION] TRIGGER_GRUPO node exists but has no edges in workflow ${workflowId}. Falling back to TRIGGER_MANUAL.`);
-              triggerNode = workflow.nodes.find(n => n.type === WorkflowNodeType.TRIGGER_MANUAL);
-            }
+            console.log(`[EXECUTION] Requested trigger '${options.triggerType}' not found in workflow ${workflowId}. Looking for a connected trigger…`);
+          }
+
+          triggerNode = workflow.nodes.find(
+            n => n.type.startsWith('TRIGGER_') && hasOutgoingEdges(n.id)
+          );
+
+          if (triggerNode) {
+            console.log(`[EXECUTION] Falling back to connected trigger '${triggerNode.type}' (${triggerNode.id}).`);
           }
         }
       } else {
-        // Fallback: finding the first valid trigger node
+        // No specific trigger requested: find first connected trigger node
         triggerNode = workflow.nodes.find(
+          n => n.type.startsWith('TRIGGER_') && hasOutgoingEdges(n.id)
+        ) || workflow.nodes.find(
           (n) =>
             n.type === WorkflowNodeType.TRIGGER_MESSAGE ||
             n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||

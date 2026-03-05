@@ -42,7 +42,7 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy() {
     console.log('[SCHEDULE WORKER] Shutting down...');
-    for (const [key] of this.scheduledWorkflows.entries()) {
+    for (const [key] of this.scheduledWorkflows.keys()) {
       this.stopScheduledWorkflow(key);
     }
     if (this.checkIntervalId) clearInterval(this.checkIntervalId);
@@ -50,20 +50,79 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Process TRIGGER_GRUPO – fires workflows for active group links based on
-   * days elapsed since activatedAt, or on a specific fixed date.
+   * Process TRIGGER_GRUPO – fires workflows linked to groups.
+   * Source of truth: GroupWorkflowLink (unifying system as requested).
+   * Also keeps checking WhatsappGroupConfig.workflowIds for temporary backward compatibility.
    */
   private async processGroupTriggers(): Promise<void> {
     try {
       const now = new Date();
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
+      // --- Collect links from GroupWorkflowLink (New System) ---
       const activeLinks = await this.prisma.groupWorkflowLink.findMany({
         where: { isActive: true },
       });
 
-      for (const link of activeLinks) {
+      // --- Collect links from WhatsappGroupConfig (Legacy System) ---
+      const groupConfigs = await this.prisma.whatsappGroupConfig.findMany({
+        where: { enabled: true },
+      });
+
+      // Internal interface for unified processing
+      interface UnifiedLink {
+        id?: string;
+        groupJid: string;
+        groupName: string;
+        workflowId: string;
+        sessionId?: string;
+        tenantId: string;
+        activatedAt: Date;
+      }
+
+      const effectiveLinks: UnifiedLink[] = [];
+
+      // Add actual links
+      for (const al of activeLinks) {
+        effectiveLinks.push({
+          id: al.id,
+          groupJid: al.groupJid,
+          groupName: al.groupName || al.groupJid,
+          workflowId: al.workflowId,
+          tenantId: al.tenantId,
+          activatedAt: al.activatedAt || al.createdAt,
+        });
+      }
+
+      // Add legacy links if not already present
+      for (const gc of groupConfigs) {
+        const workflowIds = Array.isArray(gc.workflowIds) ? (gc.workflowIds as string[]) : [];
+        if (!workflowIds.length) continue;
+
+        const session = await this.prisma.whatsappSession.findUnique({
+          where: { id: gc.sessionId },
+        });
+        if (!session) continue;
+
+        for (const wfId of workflowIds) {
+          const alreadyAdded = effectiveLinks.some(l => l.groupJid === gc.groupId && l.workflowId === wfId);
+          if (!alreadyAdded) {
+            effectiveLinks.push({
+              groupJid: gc.groupId,
+              groupName: gc.name || gc.groupId,
+              workflowId: wfId,
+              sessionId: gc.sessionId,
+              tenantId: session.tenantId,
+              activatedAt: gc.createdAt,
+            });
+          }
+        }
+      }
+
+      for (const link of effectiveLinks) {
         try {
           const workflowData = await this.prisma.workflow.findUnique({
             where: { id: link.workflowId },
@@ -88,15 +147,13 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
               const [execHour, execMinute] = (exec.time || '09:00').split(':').map(Number);
 
               if (isDaily) {
-                // Daily mode: fire every day at the configured time, ignore daysSinceActivation
                 if (execHour === currentHour && execMinute === currentMinute) {
                   shouldFire = true;
                 }
               } else {
-                // Campaign mode: fire only on the specific day after activation
-                if (daysSinceActivation !== execDay) continue;
-                if (execHour !== currentHour || execMinute !== currentMinute) continue;
-                shouldFire = true;
+                if (daysSinceActivation === execDay && execHour === currentHour && execMinute === currentMinute) {
+                  shouldFire = true;
+                }
               }
             } else if (exec.type === 'fixed_date' && exec.date) {
               const execDate = new Date(`${exec.date}T${exec.time || '09:00'}:00`);
@@ -113,15 +170,14 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
 
             if (!shouldFire) continue;
 
-            const executionDay = exec.type === 'days_after' ? daysSinceActivation : null;
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+            const executionDay = exec.type === 'days_after' ? (isDaily ? null : daysSinceActivation) : null;
 
+            // Check if already fired
             const alreadyFired = await this.prisma.groupTriggerExecution.findFirst({
               where: {
                 groupJid: link.groupJid,
                 workflowId: link.workflowId,
-                executionDay: exec.type === 'days_after' ? executionDay : undefined,
+                executionDay: executionDay,
                 type: exec.type,
                 executedAt: { gte: today },
               },
@@ -132,8 +188,13 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
               continue;
             }
 
+            // Find a connected session
             const session = await this.prisma.whatsappSession.findFirst({
-              where: { tenantId: link.tenantId, status: 'CONNECTED' },
+              where: {
+                tenantId: link.tenantId,
+                status: 'CONNECTED',
+                ...(link.sessionId ? { id: link.sessionId } : {})
+              },
             });
 
             if (!session) {
@@ -145,27 +206,8 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
 
             console.log(`[GROUP TRIGGER] Firing workflow ${link.workflowId} for group ${link.groupJid} (day ${executionDay})`);
 
-            // Fetch group name from config if available or use the saved groupName
-            let groupName = link.groupName;
-            if (!groupName) {
-              const groupConfig = await this.prisma.whatsappGroupConfig.findFirst({
-                where: { sessionId: session.id, groupId: link.groupJid }
-              });
-              groupName = groupConfig?.name || null;
-
-              // Optionally update the link with the fetched name
-              if (groupName) {
-                await this.prisma.groupWorkflowLink.update({
-                  where: { id: link.id },
-                  data: { groupName: groupName || null }
-                }).catch(() => { });
-              }
-            }
-            groupName = groupName || link.groupJid;
-
             // *** CRITICAL: Save execution record BEFORE firing ***
-            // If we save after, an exception in startExecution means the record
-            // never gets created and the scheduler fires again next tick (infinite loop).
+            console.log(`[SCHEDULE WORKER] Saved execution record BEFORE dispatch (group=${link.groupJid}, workflow=${link.workflowId})`);
             await this.prisma.groupTriggerExecution.create({
               data: {
                 groupJid: link.groupJid,
@@ -190,9 +232,9 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
                   initialContext: {
                     variables: {
                       groupJid: link.groupJid,
-                      groupName: groupName,
+                      groupName: link.groupName,
                       contact: {
-                        name: groupName,
+                        name: link.groupName,
                         phoneNumber: link.groupJid,
                         groupJid: link.groupJid,
                         isGroup: true
@@ -203,12 +245,11 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
               );
               console.log(`[GROUP TRIGGER] startExecution completed for workflow ${link.workflowId} group ${link.groupJid}`);
             } catch (execErr) {
-              console.error(`[GROUP TRIGGER] startExecution failed for workflow ${link.workflowId} group ${link.groupJid}:`, execErr);
-              // Execution record was already saved; do not re-throw to avoid masking other links
+              console.error(`[GROUP TRIGGER] startExecution failed for workflow ${link.workflowId}:`, execErr);
             }
           }
         } catch (err) {
-          console.error(`[GROUP TRIGGER] Error processing link ${link.id}:`, err);
+          console.error(`[GROUP TRIGGER] Error processing link for group ${link.groupJid}:`, err);
         }
       }
     } catch (error) {
@@ -359,6 +400,10 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
         sessionId,
         contactPhone,
         undefined,
+        undefined,
+        {
+          triggerType: WorkflowNodeType.TRIGGER_SCHEDULE
+        }
       );
 
       console.log(`[SCHEDULE WORKER] Started execution for ${workflowId} with contactPhone: ${contactPhone}`);

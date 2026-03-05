@@ -2802,6 +2802,8 @@ function GroupTriggerConfig({ config, setConfig }: any) {
       repeatSequence = true;
     } else if (newMode === 'manual') {
       newExecutions = [];
+    } else if (newMode === 'immediate') {
+      newExecutions = [{ id: crypto.randomUUID(), type: 'days_after', day: 0, time: '00:00' }];
     }
 
     setConfig({
@@ -2857,10 +2859,11 @@ function GroupTriggerConfig({ config, setConfig }: any) {
           onChange={(e) => handleModeChange(e.target.value)}
           className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
         >
-          <option value="days_after">Campanha (Dias após ativação)</option>
-          <option value="fixed_date">Lançamento (Data e Hora Fixas)</option>
-          <option value="daily">Rotina Diária (Mesmo horário sempre)</option>
-          <option value="manual">Manual (Apenas via botão Testar)</option>
+          <option value="immediate">⚡ Imediato (ao vincular ao grupo)</option>
+          <option value="daily">🕐 Rotina Diária (Mesmo horário sempre)</option>
+          <option value="days_after">📅 Campanha (Dias após ativação)</option>
+          <option value="fixed_date">📆 Lançamento (Data e Hora Fixas)</option>
+          <option value="manual">🔘 Manual (Apenas via botão Testar)</option>
         </select>
 
         {mode !== 'manual' && (
