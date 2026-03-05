@@ -162,7 +162,9 @@ export class WorkflowService {
     const hasTrigger = nodes.some(
       (n) =>
         n.type === WorkflowNodeType.TRIGGER_MESSAGE ||
-        n.type === WorkflowNodeType.TRIGGER_SCHEDULE,
+        n.type === WorkflowNodeType.TRIGGER_SCHEDULE ||
+        n.type === WorkflowNodeType.TRIGGER_GRUPO ||
+        n.type === WorkflowNodeType.TRIGGER_MANUAL,
     );
 
     if (!hasTrigger) {
@@ -260,12 +262,15 @@ export class WorkflowService {
     }
 
     // Determine target contact/group
-    const isGroup = config.destinationType === 'group';
-    const contactPhone = isGroup ? config.groupJid : config.phoneNumber;
+    const isGroup = config.destinationType === 'group' || (config.groupJid && config.groupJid.endsWith('@g.us'));
+    const destinationPhone = config.phoneNumber;
+    const groupJid = config.groupJid;
 
-    if (!contactPhone) {
-      throw new Error(`Destination ${isGroup ? 'Group' : 'Phone'} is required for manual trigger`);
+    if (!destinationPhone && !groupJid) {
+      throw new Error(`Destination Phone or Group JID is required for manual trigger`);
     }
+
+    const contactPhone = groupJid || destinationPhone!;
 
     // Prepare initial context
     const initialContext = {
@@ -275,7 +280,9 @@ export class WorkflowService {
           phoneNumber: isGroup ? config.groupJid : config.phoneNumber,
           groupJid: isGroup ? config.groupJid : undefined,
           isGroup: isGroup
-        }
+        },
+        groupJid: isGroup ? config.groupJid : undefined,
+        groupName: isGroup ? config.groupName : undefined
       } as any
     };
 

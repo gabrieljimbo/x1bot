@@ -285,6 +285,10 @@ export class NodeExecutorService {
     let contactPhone = defaultcontactPhone;
     if (config.to) {
       contactPhone = this.contextService.interpolate(config.to, context);
+      // Ensure group JID is not transformed
+      if (contactPhone && !contactPhone.includes('@')) {
+        contactPhone = contactPhone.replace(/\D/g, '');
+      }
     }
 
     // Store message in output
@@ -334,6 +338,10 @@ export class NodeExecutorService {
     let contactPhone = defaultcontactPhone;
     if (config.to) {
       contactPhone = this.contextService.interpolate(config.to, context);
+      // Ensure group JID is not transformed
+      if (contactPhone && !contactPhone.includes('@')) {
+        contactPhone = contactPhone.replace(/\D/g, '');
+      }
     }
 
     // Store in output
@@ -2447,8 +2455,11 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as MencionarTodosConfig;
     const sessionId = config.sessionId || defaultSessionId;
-    const contactPhone = defaultContactPhone;
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
+
+    const contactPhone = config.groupJid
+      || (context.variables as any)?.groupJid
+      || defaultContactPhone;
 
     if (!sessionId || !contactPhone || !contactPhone.includes('@g.us')) {
       throw new Error('MENCIONAR_TODOS only works within a connected WhatsApp group');
@@ -2532,9 +2543,12 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as AquecimentoConfig;
     const sessionId = config.sessionId || defaultSessionId;
-    const contactPhone = defaultContactPhone;
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
     const workflowId = (context.variables as any)?._workflowId;
+
+    const contactPhone = config.sessionId // Wait, config has no groupJid in type? I'll check.
+      || (context.variables as any)?.groupJid
+      || defaultContactPhone;
 
     if (!contactPhone?.includes('@g.us')) throw new Error('Cuidado: AQUECIMENTO recomendado apenas para grupos');
 
@@ -2609,8 +2623,10 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as OfertaRelampagoConfig;
     const sessionId = config.sessionId || defaultSessionId;
-    const contactPhone = defaultContactPhone;
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
+
+    const contactPhone = (context.variables as any)?.groupJid
+      || defaultContactPhone;
 
     const expiresAt = new Date();
     if (config.duracao.tipo === 'tempo') {
@@ -2676,7 +2692,8 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as LembreteRecorrenteConfig;
     const sessionId = config.sessionId || defaultSessionId;
-    const contactPhone = defaultContactPhone;
+    const contactPhone = (context.variables as any)?.groupJid
+      || defaultContactPhone;
 
     if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for LEMBRETE_RECORRENTE');
 
@@ -2722,7 +2739,8 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as EnqueteGrupoConfig;
     const sessionId = config.sessionId || defaultSessionId;
-    const contactPhone = defaultContactPhone;
+    const contactPhone = (context.variables as any)?.groupJid
+      || defaultContactPhone;
 
     if (!sessionId || !contactPhone) throw new Error('Session and Contact are required for poll');
 
@@ -2767,7 +2785,8 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as SequenciaLancamentoConfig;
     const sessionId = config.sessionId || defaultSessionId;
-    const contactPhone = defaultContactPhone;
+    const contactPhone = (context.variables as any)?.groupJid
+      || defaultContactPhone;
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
     const workflowId = (context.variables as any)?._workflowId;
 
@@ -2835,7 +2854,8 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as PromoMLApiConfig;
     const sessionId = config.sessionId || defaultSessionId;
-    const contactPhone = defaultContactPhone;
+    const contactPhone = (context.variables as any)?.groupJid
+      || defaultContactPhone;
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
 
     const searchTerm = this.contextService.interpolate(config.searchTerm, context);
@@ -2927,7 +2947,8 @@ ${config.footerText || ''}`;
     defaultContactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as GrupoWaitConfig;
-    const contactPhone = defaultContactPhone;
+    const contactPhone = (context.variables as any)?.groupJid
+      || defaultContactPhone;
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
 
     // Check if we are resuming from a wait
@@ -3051,7 +3072,9 @@ ${config.footerText || ''}`;
   ): Promise<NodeExecutionResult> {
     const config = node.config as any;
     const sessionId = config.sessionId || defaultSessionId;
-    const contactPhone = defaultContactPhone;
+    const contactPhone = config.groupJid
+      || (context.variables as any)?.groupJid
+      || defaultContactPhone;
     const tenantId = (context.variables as any)?._tenantId || (context.globals as any)?.tenantId;
 
     // Find designated next node (if any)

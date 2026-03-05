@@ -419,6 +419,7 @@ export interface MencionarTodosConfig {
   mencionarMembros: boolean;
   incluirAdmins: boolean;
   sessionId?: string;
+  groupJid?: string;
 }
 
 export interface AquecimentoDia {
@@ -433,6 +434,7 @@ export interface AquecimentoConfig {
   sessionId?: string;
   contarAtivado?: boolean;
   pausarAposSequencia?: boolean;
+  groupJid?: string;
 }
 
 export interface OfertaRelampagoConfig {
@@ -447,6 +449,7 @@ export interface OfertaRelampagoConfig {
   mencionarAoAbrir: boolean;
   mencionarAoEncerrar: boolean;
   sessionId?: string;
+  groupJid?: string;
 }
 
 export interface LembreteRecorrenteConfig {
@@ -459,6 +462,7 @@ export interface LembreteRecorrenteConfig {
   };
   mencionarTodos: boolean;
   sessionId?: string;
+  groupJid?: string;
 }
 
 export interface EnqueteGrupoConfig {
@@ -467,6 +471,7 @@ export interface EnqueteGrupoConfig {
   multiplas: boolean;
   mencionarTodos: boolean;
   sessionId?: string;
+  groupJid?: string;
 }
 
 export interface SequenciaLancamentoFase {
@@ -484,6 +489,7 @@ export interface SequenciaLancamentoConfig {
   contarAtivado?: boolean;
   notificarAdmin?: boolean;
   sessionId?: string;
+  groupJid?: string;
 }
 
 export interface PromoMLApiConfig {
@@ -500,6 +506,7 @@ export interface PromoMLApiConfig {
   ignoreAlreadySent: boolean;
   saveResponseAs?: string;
   sessionId?: string;
+  groupJid?: string;
 }
 
 export interface GrupoWaitConfig {
@@ -511,6 +518,7 @@ export interface GrupoWaitConfig {
   intervalUnit?: 'hours' | 'days';
   cancelIfLeftGroup?: boolean;
   notifyOnResume?: boolean;
+  groupJid?: string;
 }
 
 export interface RandomizerOutput {

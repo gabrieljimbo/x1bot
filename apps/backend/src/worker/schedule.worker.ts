@@ -133,12 +133,33 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
 
             console.log(`[GROUP TRIGGER] Firing workflow ${link.workflowId} for group ${link.groupJid} (day ${executionDay})`);
 
+            // Fetch group name from config if available
+            const groupConfig = await this.prisma.whatsappGroupConfig.findFirst({
+              where: { sessionId: session.id, groupId: link.groupJid }
+            });
+            const groupName = groupConfig?.name || link.groupJid;
+
             await this.executionEngine.startExecution(
               link.tenantId,
               link.workflowId,
               session.id,
               link.groupJid,
               undefined,
+              undefined,
+              {
+                initialContext: {
+                  variables: {
+                    groupJid: link.groupJid,
+                    groupName: groupName,
+                    contact: {
+                      name: groupName,
+                      phoneNumber: link.groupJid,
+                      groupJid: link.groupJid,
+                      isGroup: true
+                    }
+                  }
+                }
+              }
             );
 
             await this.prisma.groupTriggerExecution.create({
