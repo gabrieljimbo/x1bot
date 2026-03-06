@@ -9,8 +9,8 @@ export class MlOffersController {
     @Public()
     @Post('refresh')
     async refresh() {
-        this.mlOffersService.refreshDailyOffers();
-        return { message: 'Scraping iniciado em background' };
+        await this.mlOffersService.refreshDailyOffers();
+        return { message: 'Scraping concluído' };
     }
 
     @Public()

@@ -128,14 +128,13 @@ export default async function ({ page }) {
         });
 
         if (cached.length === 0) {
-            this.logger.warn('[ML_OFFERS] Cache vazio, disparando scraping emergencial...');
-            await this.refreshDailyOffers();
-            return this.searchOffers(keywords, minDiscount, minRating, limit);
+            this.logger.warn('[ML_OFFERS] Cache vazio, retornando lista vazia. Aguarde o scraping das 2h ou dispare /api/ml-offers/refresh manualmente.');
+            return [];
         }
 
-        const filtered = cached.filter((p: any) =>
-            keywords.some(kw => p.title.toLowerCase().includes(kw.toLowerCase()))
-        );
+        const filtered = keywords.length > 0
+            ? cached.filter((p: any) => keywords.some(kw => p.title.toLowerCase().includes(kw.toLowerCase())))
+            : cached;
 
         return filtered.slice(0, limit);
     }
