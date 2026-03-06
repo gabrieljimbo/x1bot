@@ -497,3 +497,21 @@ model ExternalWebhook {
   @@index([tenantId])
   @@map("external_webhooks")
 }
+
+model MlDailyOffer {
+  id            String   @id @default(cuid())
+  title         String
+  price         Float
+  originalPrice Float
+  discount      Int
+  rating        Float
+  reviewCount   Int
+  imageUrl      String?
+  productUrl    String
+  seller        String
+  scrapedAt     DateTime @default(now())
+  expiresAt     DateTime
+
+  @@index([title])
+  @@index([expiresAt])
+}

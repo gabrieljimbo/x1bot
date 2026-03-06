@@ -10,6 +10,8 @@ import { OCRService } from './ocr.service';
 import { BullModule } from '@nestjs/bullmq';
 import { RmktProcessor } from './rmkt.processor';
 import { PrismaModule } from '../prisma/prisma.module';
+import { MlOffersService } from './ml-offers.service';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Global()
 @Module({
@@ -18,6 +20,7 @@ import { PrismaModule } from '../prisma/prisma.module';
       name: 'rmkt',
     }),
     PrismaModule,
+    ScheduleModule.forRoot(),
   ],
   providers: [
     ExecutionService,
@@ -29,6 +32,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     ScheduleWorker,
     OCRService,
     RmktProcessor,
+    MlOffersService,
   ],
   exports: [
     ExecutionService,
@@ -37,6 +41,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     WhatsappSenderService,
     ContactTagsService,
     OCRService,
+    MlOffersService,
   ],
 })
 export class ExecutionModule { }

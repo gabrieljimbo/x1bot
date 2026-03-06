@@ -48,6 +48,8 @@ import { PixParser } from './pix-parser.util';
 import { OCRService } from './ocr.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappSenderService } from './whatsapp-sender.service';
+import { WhatsappSessionManager } from '../whatsapp/whatsapp-session-manager.service';
+import { MlOffersService } from './ml-offers.service';
 
 export interface NodeExecutionResult {
   nextNodeId: string | null;
@@ -90,6 +92,7 @@ export class NodeExecutorService {
     @InjectQueue('rmkt') private rmktQueue: Queue,
     private prisma: PrismaService,
     private whatsappSender: WhatsappSenderService,
+    private mlOffersService: MlOffersService,
   ) { }
 
   setWhatsappSessionManager(manager: any) {
@@ -2255,134 +2258,19 @@ functions, etc.)
     const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
     const finalContactPhone = destination;
 
-    // 1. Scraping logic via Browserless
-    const searchTerm = this.contextService.interpolate(config.searchTerm, context);
-    const minDiscount = (config as any).descontoMinimo || config.minDiscount || 5;
-    const encodedTerm = encodeURIComponent(searchTerm);
+    // 1. Scraping logic via cache
+    const keywords = (config.searchTerm || '')
+      .split(',')
+      .map((k: string) => k.trim())
+      .filter(Boolean);
 
-    const categoria = (config as any).categoria;
-    const categoryPath = categoria && categoria !== 'todas' ? `${categoria}/` : '';
-    const searchUrl = searchTerm
-      ? `https://lista.mercadolivre.com.br/${categoryPath}${encodedTerm}_Discount_${minDiscount}-100_NoIndex_True?sb=all_mercadolibre`
-      : 'https://www.mercadolivre.com.br/offers';
+    const minDiscount = config.minDiscount || 0;
+    const minRating = config.minRating || 0;
+    const limit = config.maxQuantity || 5;
 
-    console.log(`[PROMO_ML] URL de busca: ${searchUrl}`);
+    let filteredProducts = await this.mlOffersService.searchOffers(keywords, minDiscount, minRating, limit);
 
-    const browserlessUrl = process.env.BROWSERLESS_URL || 'http://browserless:3000';
-    const browserlessToken = process.env.BROWSERLESS_TOKEN || 'x1bot_browserless_token';
-
-    let products: any[] = [];
-
-    try {
-      const fnCode = `
-export default async function ({ page }) {
-  await page.setExtraHTTPHeaders({ "Accept-Language": "pt-BR,pt;q=0.9" });
-  await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-  await page.setViewport({ width: 1366, height: 768 });
-
-  await page.goto("${searchUrl}", { waitUntil: "networkidle2", timeout: 30000 });
-  await page.waitForSelector('[class*="poly-card"]', { timeout: 10000 }).catch(() => null);
-
-  const results = await page.evaluate(() => {
-    const items = Array.from(document.querySelectorAll('[class*="ui-search-layout__item"]'));
-    return items.slice(0, 20).map(item => {
-      const titleEl = item.querySelector('[class*="poly-component__title"]');
-      const title = titleEl?.textContent?.trim();
-
-      const imgEl = item.querySelector('img');
-      const imageUrl = imgEl?.getAttribute('src') || imgEl?.getAttribute('data-src');
-
-      // Extrai ID do produto via parâmetro wid= no link
-      const rawLink = item.querySelector('a')?.href || '';
-      const mlbMatch = rawLink.match(/wid=(MLB\\d+)/);
-      const mlbId = mlbMatch ? mlbMatch[1].replace('MLB', 'MLB-') : null;
-      const productUrl = mlbId ? 'https://produto.mercadolivre.com.br/' + mlbId : rawLink;
-
-      // Preço atual
-      const fractions = item.querySelectorAll('[class*="andes-money-amount__fraction"]');
-      const price = fractions[0] ? parseFloat(fractions[0].textContent.replace(/\\D/g, '')) : 0;
-
-      // Preço original riscado
-      const oldPriceEl = item.querySelector('[class*="andes-money-amount--previous"] [class*="andes-money-amount__fraction"]');
-      const originalPrice = oldPriceEl ? parseFloat(oldPriceEl.textContent.replace(/\\D/g, '')) : price;
-
-      // Desconto calculado
-      const discount = originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
-
-      // Rating e reviews
-      const ratingEl = item.querySelector('[class*="poly-reviews__rating"], [class*="ui-search-reviews__rating"]');
-      const rating = ratingEl ? parseFloat(ratingEl.textContent.trim()) : 0;
-
-      const reviewsEl = item.querySelector('[class*="poly-reviews__total"], [class*="ui-search-reviews__amount"]');
-      const reviewCount = reviewsEl ? parseInt(reviewsEl.textContent.replace(/\\D/g, '')) : 0;
-
-      return {
-        title,
-        price,
-        originalPrice: originalPrice || price,
-        discount,
-        rating,
-        reviewCount,
-        imageUrl,
-        productUrl,
-        seller: 'Mercado Livre'
-      };
-    }).filter(p => p.title && p.productUrl && p.price > 0);
-  });
-
-  return { data: results, type: "application/json" };
-}
-`;
-
-      const response = await fetch(
-        `${browserlessUrl}/function?token=${browserlessToken}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/javascript' },
-          body: fnCode,
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Browserless error: ${response.statusText}`);
-      }
-
-      const result = await response.json() as any;
-      products = Array.isArray(result) ? result : (result.data || []);
-      console.log('[PROMO_ML] produtos via Browserless:', products.length);
-
-    } catch (e: any) {
-      console.error('[PROMO_ML] Browserless error:', e.message);
-    }
-
-    // 2. Filter products
-    let filteredProducts = products.filter(p => {
-      if (p.rating < (config.minRating || 0)) return false;
-      if (p.discount < (config.minDiscount || 0)) return false;
-      // Basic category filter by keyword in title if provided (simplified)
-      if (config.category && config.category !== 'Todos') {
-        const categoryKeywords: Record<string, string[]> = {
-          'Confeitaria/Alimentos': ['alimento', 'comida', 'confeitaria', 'doce', 'bolo'],
-          'Eletrônicos': ['eletronico', 'celular', 'tv', 'fone', 'gadget'],
-          'Casa e Jardim': ['casa', 'jardim', 'decoracao', 'moveis'],
-          'Moda': ['roupa', 'calcado', 'tenis', 'vestido', 'camisa'],
-          'Esportes': ['esporte', 'academia', 'bola', 'bike'],
-          'Beleza': ['beleza', 'maquiagem', 'creme', 'perfume'],
-          'Informática': ['notebook', 'computador', 'mouse', 'teclado', 'monitor'],
-          'Automotivo': ['carro', 'moto', 'pneu', 'oleo', 'acessorio']
-        };
-        const keywords = categoryKeywords[config.category] || [];
-        const hasKeyword = keywords.some(k => p.title.toLowerCase().includes(k.toLowerCase()));
-        if (!hasKeyword) return false;
-      }
-      return true;
-    });
-
-    if (config.bestValue) {
-      filteredProducts.sort((a, b) => a.price - b.price);
-    }
-
-    filteredProducts = filteredProducts.slice(0, config.maxQuantity || 5);
+    console.log(`[PROMO_ML] Encontrados ${filteredProducts.length} produtos para keywords: ${keywords.join(', ')}`);
 
     // 3. Send to WhatsApp
     if (sessionId && finalContactPhone && this.whatsappSessionManager) {

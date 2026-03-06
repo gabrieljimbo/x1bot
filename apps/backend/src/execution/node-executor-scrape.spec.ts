@@ -46,6 +46,8 @@ describe('NodeExecutorService - HTTP_SCRAPE', () => {
       sendPoll: jest.fn()
     } as any;
 
+    const mlOffersService = {} as any;
+
     service = new NodeExecutorService(
       contextService,
       configService,
@@ -54,6 +56,7 @@ describe('NodeExecutorService - HTTP_SCRAPE', () => {
       rmktQueue,
       prismaService,
       whatsappSenderService,
+      mlOffersService,
     );
 
     // Reset mocks
