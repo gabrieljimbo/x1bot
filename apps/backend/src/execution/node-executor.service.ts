@@ -2275,22 +2275,37 @@ functions, etc.)
 
     try {
       browser = await puppeteer.launch({
-        headless: true,
+        headless: 'new',
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--single-process',
-          '--no-zygote'
+          '--disable-blink-features=AutomationControlled',
+          '--disable-infobars',
+          '--window-size=1366,768',
         ],
+        ignoreDefaultArgs: ['--enable-automation'],
         timeout: 30000,
       });
       const page = await browser.newPage();
+
+      // Remove webdriver flag
+      await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      });
+
+      // UserAgent real de Chrome
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-      await page.setViewport({ width: 1280, height: 800 });
+      await page.setViewport({ width: 1366, height: 768 });
 
       await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+
+      // Wait for selector with timeout
+      await page.waitForSelector('[class*="ui-search-layout__item"]', { timeout: 10000 }).catch(() => null);
+
+      // Diagnostic logs
+      const html = await page.content();
+      console.log('[PROMO_ML] page title:', await page.title());
+      console.log('[PROMO_ML] html length:', html.length);
 
       // Scroll to load lazy images
       await page.evaluate(async () => {
@@ -2310,18 +2325,20 @@ functions, etc.)
       });
 
       products = await page.evaluate(() => {
-        const items = Array.from(document.querySelectorAll('.ui-search-results .ui-search-layout__item, [class*="ui-search-layout__item"], .promotion-item, .ui-search-result'));
+        const items = Array.from(document.querySelectorAll('[class*="ui-search-layout__item"]'));
+        console.log('[PROMO_ML] items found in evaluate:', items.length);
+
         return items.map(item => {
-          const title = item.querySelector('.ui-search-item__title, .promotion-item__title')?.textContent?.trim();
+          const title = item.querySelector('[class*="ui-search-item__title"]')?.textContent?.trim();
 
           // Price extraction
-          const priceElement = item.querySelector('.ui-search-price__second-line .andes-money-amount__fraction, .promotion-item__price .andes-money-amount__fraction');
+          const priceElement = item.querySelector('[class*="andes-money-amount__fraction"]');
           const priceStr = priceElement?.textContent?.replace(/\D/g, '');
 
           const oldPriceElement = item.querySelector('.ui-search-price__part--del .andes-money-amount__fraction, .promotion-item__old-price .andes-money-amount__fraction');
           const originalPriceStr = oldPriceElement?.textContent?.replace(/\D/g, '');
 
-          const discountElement = item.querySelector('.ui-search-price__discount, .promotion-item__discount-percentage');
+          const discountElement = item.querySelector('[class*="ui-search-price__discount"]');
           const discountStr = discountElement?.textContent?.replace(/\D/g, '');
 
           const ratingElement = item.querySelector('.ui-search-reviews__rating-number');
@@ -2330,10 +2347,10 @@ functions, etc.)
           const reviewsElement = item.querySelector('.ui-search-reviews__amount');
           const reviewsStr = reviewsElement?.textContent?.trim()?.replace(/\D/g, '');
 
-          const imgElement = item.querySelector('img.ui-search-result-image__element, img.promotion-item__img, .poly-component__picture img');
+          const imgElement = item.querySelector('img[class*="ui-search-result-image__element"]');
           const imageUrl = imgElement?.getAttribute('src') || imgElement?.getAttribute('data-src');
 
-          const linkElement = item.querySelector('a.ui-search-link, a.promotion-item__link-container, a');
+          const linkElement = item.querySelector('a[class*="ui-search-item__image-link"], a[class*="ui-search-link"]');
           const productUrl = linkElement?.getAttribute('href');
 
           const sellerElement = item.querySelector('.ui-search-item__group__element--seller, .poly-component__seller');

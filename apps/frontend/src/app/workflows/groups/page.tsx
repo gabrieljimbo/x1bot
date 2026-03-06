@@ -30,14 +30,13 @@ import Link from 'next/link'
 import WhatsAppConnect from '@/components/WhatsAppConnect'
 
 /*
-# Fluxos de Grupo - UX Improvements
-
-- [x] Melhorar UX da aba "Gerenciar Grupos" (Estado Vazio)
-    - [x] Criar componente reutilizável `WhatsAppConnect`
-    - [x] Refatorar `sessions/new/page.tsx` para usar o novo componente
-    - [x] Implementar estado vazio na aba "Gerenciar Grupos" com ícone e botão
-    - [x] Criar modal de conexão de WhatsApp na aba "Gerenciar Grupos"
-    - [x] Implementar lógica de auto-seleção e auto-sync após conexão
+- [x] Corrigir PROMO_ML (Anti-Bot)
+    - [x] Configurar Puppeteer (headless: 'new', anti-bot args)
+    - [x] Remover flag `webdriver` via `page.evaluateOnNewDocument`
+    - [x] Atualizar seletores CSS para o novo layout do ML
+    - [x] Adicionar logs de diagnóstico (HTML length, Title)
+    - [x] Validar extração via "Testar Agora"
+    - [x] Commit e Push com mensagem específica
 - [x] Correções Promo ML & Node Fixes (Previous Tasks)
     - [x] Corrigir erro "No paths found" no motor de execução (Generic Fallback)
     - [x] Estabilizar Scheduler (Pre-save e Prevenção de Loop)
