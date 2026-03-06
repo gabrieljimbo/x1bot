@@ -26,6 +26,7 @@ import {
   PixConfig,
   PixSimplesConfig,
   SendContactConfig,
+  PromoShopeeConfig,
   PromoMLConfig,
   MencionarTodosConfig,
   AquecimentoConfig,
@@ -322,6 +323,9 @@ export class NodeExecutorService {
 
       case WorkflowNodeType.SEND_CONTACT:
         return this.executeSendContact(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.PROMO_SHOPEE:
+        return this.executePromoShopee(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
@@ -2304,6 +2308,147 @@ functions, etc.)
       nextNodeId,
       shouldWait: false,
     };
+  }
+
+  /**
+   * Execute PROMO_SHOPEE node — calls Shopee Affiliate GraphQL API and sends product offers
+   */
+  private async executePromoShopee(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    sessionId?: string,
+    contactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as PromoShopeeConfig;
+    const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
+    const finalSessionId = config.sessionId || sessionId;
+
+    const searchTerm = this.contextService.interpolate(config.searchTerm || '', context);
+    const limit = config.maxQuantity || 5;
+    const sortType = config.sortType || 5; // default: commission desc
+
+    // Build GraphQL query
+    const payload = JSON.stringify({
+      query: `{
+  productOfferV2(keyword: ${JSON.stringify(searchTerm)}, sortType: ${sortType}, page: 1, limit: ${Math.min(limit * 3, 50)}) {
+    nodes {
+      itemId
+      productName
+      priceMin
+      priceMax
+      imageUrl
+      offerLink
+      commissionRate
+      ratingStar
+      priceDiscountRate
+      shopName
+      sales
+    }
+    pageInfo { hasNextPage }
+  }
+}`,
+    });
+
+    // Build SHA256 auth header: SHA256(AppId + Timestamp + Payload + Secret)
+    const appId = config.appId;
+    const secret = config.secret;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const { createHash } = await import('crypto');
+    const signatureFactor = `${appId}${timestamp}${payload}${secret}`;
+    const signature = createHash('sha256').update(signatureFactor).digest('hex');
+    const authHeader = `SHA256 Credential=${appId}, Timestamp=${timestamp}, Signature=${signature}`;
+
+    let products: any[] = [];
+    try {
+      const response = await fetch('https://open-api.affiliate.shopee.com.br/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader,
+        },
+        body: payload,
+      });
+
+      if (!response.ok) throw new Error(`Shopee API error: ${response.status} ${response.statusText}`);
+
+      const json = await response.json() as any;
+      if (json.errors?.length) throw new Error(`Shopee API: ${json.errors[0].message}`);
+
+      const nodes = json.data?.productOfferV2?.nodes || [];
+      products = nodes
+        .filter((p: any) => {
+          const discount = p.priceDiscountRate || 0;
+          const rating = parseFloat(p.ratingStar || '0');
+          if (config.minDiscount > 0 && discount < config.minDiscount) return false;
+          if (config.minRating > 0 && rating < config.minRating) return false;
+          return true;
+        })
+        .slice(0, limit);
+
+      console.log(`[PROMO_SHOPEE] Encontrados ${nodes.length} produtos, ${products.length} após filtros`);
+    } catch (err: any) {
+      console.error('[PROMO_SHOPEE] Erro na API:', err.message);
+    }
+
+    // Send to WhatsApp
+    if (finalSessionId && destination) {
+      if (products.length > 0) {
+        if (config.introText) {
+          await this.whatsappSessionManager.sendMessage(finalSessionId, destination, config.introText);
+          await new Promise(r => setTimeout(r, 1500));
+        }
+
+        for (const p of products) {
+          const priceMin = p.priceMin ? `R$ ${parseFloat(p.priceMin).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : null;
+          const priceMax = p.priceMax && p.priceMax !== p.priceMin ? ` ~ R$ ${parseFloat(p.priceMax).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
+          const commPercent = p.commissionRate ? `${(parseFloat(p.commissionRate) * 100).toFixed(1)}%` : null;
+          const discount = p.priceDiscountRate ? `${p.priceDiscountRate}% OFF` : null;
+          const rating = p.ratingStar ? `⭐ ${p.ratingStar}` : '';
+
+          const caption = [
+            `🛍️ *${p.productName}*`,
+            '',
+            priceMin ? `💰 *${priceMin}${priceMax}*` : '',
+            discount ? `🔥 *${discount}*` : '',
+            [rating, commPercent ? `💸 Comissão: ${commPercent}` : ''].filter(Boolean).join('  |  '),
+            p.shopName ? `🏪 _${p.shopName}_` : '',
+            '',
+            `👉 ${p.offerLink}`,
+          ].filter(line => line !== undefined && !(line === '')).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+          try {
+            if (p.imageUrl?.startsWith('https')) {
+              await this.whatsappSessionManager.sendMedia(finalSessionId, destination, 'image', p.imageUrl, { caption });
+            } else {
+              await this.whatsappSessionManager.sendMessage(finalSessionId, destination, caption);
+            }
+          } catch (err: any) {
+            console.error('[PROMO_SHOPEE] Send error:', err.message);
+          }
+
+          const interval = (config.messageInterval || 3) * 1000;
+          await new Promise(r => setTimeout(r, interval));
+        }
+
+        if (config.footerText) {
+          await this.whatsappSessionManager.sendMessage(finalSessionId, destination, config.footerText);
+        }
+      } else {
+        await this.whatsappSessionManager.sendMessage(
+          finalSessionId,
+          destination,
+          `🔍 Nenhuma oferta encontrada para *${searchTerm}* no momento.`,
+        );
+      }
+    }
+
+    const saveAs = config.saveResponseAs || 'shopeeProducts';
+    this.contextService.setVariable(context, saveAs, products);
+    this.contextService.setOutput(context, { [saveAs]: products });
+
+    const nextEdge = edges.find(e => e.source === node.id);
+    return { nextNodeId: nextEdge?.target ?? null, shouldWait: false };
   }
 
   /**

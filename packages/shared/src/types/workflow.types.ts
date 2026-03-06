@@ -39,6 +39,7 @@ export enum WorkflowNodeType {
   PIXEL_EVENT = 'PIXEL_EVENT',
   PIX_SIMPLES = 'PIX_SIMPLES',
   SEND_CONTACT = 'SEND_CONTACT',
+  PROMO_SHOPEE = 'PROMO_SHOPEE',
   END = 'END',
 }
 
@@ -408,6 +409,21 @@ export interface SendContactConfig {
   nome: string;
   telefone: string;
   empresa?: string;
+}
+
+export interface PromoShopeeConfig {
+  appId: string;
+  secret: string;
+  searchTerm: string;
+  sortType: number; // 1=latest, 2=commission_desc, 5=sold_desc (productOfferV2 sorts)
+  minDiscount: number;
+  minRating: number;
+  maxQuantity: number;
+  introText?: string;
+  footerText?: string;
+  messageInterval: number;
+  sessionId?: string;
+  saveResponseAs?: string;
 }
 
 export interface MarkStageConfig {

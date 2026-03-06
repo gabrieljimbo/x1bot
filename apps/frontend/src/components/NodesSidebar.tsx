@@ -105,6 +105,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         description: 'Envia chave PIX com botão copiar (sem aguardar)'
       },
       {
+        type: 'PROMO_SHOPEE' as WorkflowNodeType,
+        label: 'Ofertas Shopee',
+        icon: '🟠',
+        color: 'from-orange-500 to-orange-600',
+        bgColor: 'bg-[#2e1a0e]',
+        borderColor: 'border-[#8f4a1a]',
+        description: 'Busca e envia ofertas afiliadas da Shopee via API'
+      },
+      {
         type: 'SEND_CONTACT' as WorkflowNodeType,
         label: 'Enviar Contato',
         icon: '👤',

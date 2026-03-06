@@ -2111,6 +2111,176 @@ function PromoMLApiConfig({ config, setConfig }: any) {
 }
 
 
+function PromoShopeeConfig({ config, setConfig }: any) {
+  const [activeTab, setActiveTab] = useState<'auth' | 'busca' | 'filtros' | 'mensagem'>('auth');
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-[#2e1a0e] border border-orange-700/30 rounded-lg p-4 flex items-start gap-3">
+        <div className="text-3xl">🟠</div>
+        <div>
+          <h3 className="text-sm font-semibold text-white mb-1">Ofertas Shopee</h3>
+          <p className="text-xs text-gray-400">
+            Busca produtos com desconto via API Afiliados da Shopee e envia direto no WhatsApp com link de afiliado.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex border-b border-gray-700 overflow-x-auto no-scrollbar">
+        {[
+          { id: 'auth', label: 'API', icon: '🔑' },
+          { id: 'busca', label: 'Busca', icon: '🔍' },
+          { id: 'filtros', label: 'Filtros', icon: '⚙️' },
+          { id: 'mensagem', label: 'Mensagem', icon: '💬' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'text-orange-400 border-b-2 border-orange-400' : 'text-gray-400 hover:text-gray-200'}`}
+          >
+            <span>{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'auth' && (
+        <div className="space-y-4">
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 text-xs text-yellow-300">
+            Obtenha seu AppID e Secret em{' '}
+            <span className="font-mono text-yellow-200">affiliate.shopee.com.br/open_api</span>.
+            Nunca compartilhe o Secret — ele é equivalente a uma senha.
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">AppID</label>
+            <input
+              type="text"
+              value={config.appId || ''}
+              onChange={(e) => setConfig({ ...config, appId: e.target.value })}
+              placeholder="Ex: 123456"
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white placeholder-gray-500 font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">Secret</label>
+            <input
+              type="password"
+              value={config.secret || ''}
+              onChange={(e) => setConfig({ ...config, secret: e.target.value })}
+              placeholder="Seu secret da API"
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white placeholder-gray-500 font-mono"
+            />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'busca' && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">Termo de Busca</label>
+            <input
+              type="text"
+              value={config.searchTerm || ''}
+              onChange={(e) => setConfig({ ...config, searchTerm: e.target.value })}
+              placeholder="Ex: fone bluetooth, airfryer..."
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">Suporta variáveis: {`{{keyword}}`}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">Ordenar por</label>
+            <select
+              value={config.sortType || 5}
+              onChange={(e) => setConfig({ ...config, sortType: parseInt(e.target.value) })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+            >
+              <option value={5}>Maior Comissão</option>
+              <option value={2}>Mais Vendidos</option>
+              <option value={3}>Maior Preço</option>
+              <option value={4}>Menor Preço</option>
+              <option value={1}>Mais Recentes</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">Quantidade Máxima</label>
+            <input
+              type="number"
+              value={config.maxQuantity || 5}
+              onChange={(e) => setConfig({ ...config, maxQuantity: parseInt(e.target.value) || 5 })}
+              min={1}
+              max={20}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+            />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'filtros' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">Desconto Mín. %</label>
+              <input
+                type="number"
+                value={config.minDiscount || 0}
+                onChange={(e) => setConfig({ ...config, minDiscount: parseInt(e.target.value) || 0 })}
+                min={0}
+                max={99}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">Nota Mín.</label>
+              <input
+                type="number"
+                step="0.1"
+                value={config.minRating || 0}
+                onChange={(e) => setConfig({ ...config, minRating: parseFloat(e.target.value) || 0 })}
+                min={0}
+                max={5}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'mensagem' && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">Texto de Intro</label>
+            <textarea
+              value={config.introText || ''}
+              onChange={(e) => setConfig({ ...config, introText: e.target.value })}
+              placeholder="Ex: Confira as ofertas do dia na Shopee! 🛍️"
+              className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white h-20 placeholder-gray-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">Texto de Rodapé</label>
+            <textarea
+              value={config.footerText || ''}
+              onChange={(e) => setConfig({ ...config, footerText: e.target.value })}
+              placeholder="Ex: Aproveite! Oferta por tempo limitado. ⏰"
+              className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm text-white h-20 placeholder-gray-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">Intervalo entre mensagens (seg)</label>
+            <input
+              type="number"
+              value={config.messageInterval || 3}
+              onChange={(e) => setConfig({ ...config, messageInterval: parseInt(e.target.value) || 3 })}
+              min={1}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PixelEventConfig({ config, setConfig }: any) {
   const eventTypes = [
     { value: 'Lead', label: 'Lead' },
@@ -3524,6 +3694,9 @@ export default function NodeConfigModal({
 
       case WorkflowNodeType.PROMO_ML_API:
         return <PromoMLApiConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.PROMO_SHOPEE:
+        return <PromoShopeeConfig config={config} setConfig={setConfig} />
 
       case 'TRIGGER_GRUPO':
       case WorkflowNodeType.TRIGGER_GRUPO:

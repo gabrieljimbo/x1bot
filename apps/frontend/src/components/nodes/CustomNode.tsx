@@ -92,6 +92,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#3b6e8f]',
     iconBg: 'bg-gradient-to-br from-blue-500 to-cyan-500',
   },
+  'PROMO_SHOPEE': {
+    label: 'Ofertas Shopee',
+    subtitle: 'AFILIADO',
+    icon: '🟠',
+    bgColor: 'bg-[#2e1a0e]',
+    borderColor: 'border-[#8f4a1a]',
+    iconBg: 'bg-gradient-to-br from-orange-500 to-orange-600',
+  },
   'HTTP_REQUEST': {
     label: 'HTTP Request',
     subtitle: 'AÇÃO',
@@ -544,6 +552,10 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
 
     if (type === 'SEND_CONTACT') {
       return `👤 ${config.nome || 'Nome'} • ${config.telefone || 'Telefone'}`
+    }
+
+    if (type === 'PROMO_SHOPEE') {
+      return `🟠 ${config.searchTerm || 'Busca não configurada'} • ${config.maxQuantity || 5} produtos`
     }
 
     if (type === 'SEND_PIX') {
