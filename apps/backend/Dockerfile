@@ -37,6 +37,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared ./packages/shared
 COPY apps/backend ./apps/backend
 
+# Force development mode so pnpm installs devDependencies (TypeScript, NestJS CLI, etc.)
+# even when Coolify passes NODE_ENV=production as build arg
+ENV NODE_ENV=development
 # Install all deps (build + prisma)
 RUN pnpm install --frozen-lockfile
 
