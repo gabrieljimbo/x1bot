@@ -23,9 +23,32 @@ import {
     Pause,
     CheckCircle2,
     X,
-    RefreshCw
+    RefreshCw,
+    Smartphone
 } from 'lucide-react'
 import Link from 'next/link'
+import WhatsAppConnect from '@/components/WhatsAppConnect'
+
+/*
+# Fluxos de Grupo - UX Improvements
+
+- [x] Melhorar UX da aba "Gerenciar Grupos" (Estado Vazio)
+    - [x] Criar componente reutilizável `WhatsAppConnect`
+    - [x] Refatorar `sessions/new/page.tsx` para usar o novo componente
+    - [x] Implementar estado vazio na aba "Gerenciar Grupos" com ícone e botão
+    - [x] Criar modal de conexão de WhatsApp na aba "Gerenciar Grupos"
+    - [x] Implementar lógica de auto-seleção e auto-sync após conexão
+- [x] Correções Promo ML & Node Fixes (Previous Tasks)
+    - [x] Corrigir erro "No paths found" no motor de execução (Generic Fallback)
+    - [x] Estabilizar Scheduler (Pre-save e Prevenção de Loop)
+    - [x] Database Migration (pausedAt, groupName, status)
+    - [x] Reconstruir UI de Fluxos de Grupo
+    - [x] PROMO_ML_API: Add pass-through logs
+    - [x] PROMO_ML: Implement category-based URL search
+    - [x] PROMO_ML: Update CSS selectors for scraping
+    - [x] Testes Finais e Validação
+    - [x] Documentar no Walkthrough
+*/
 
 interface GroupLink {
     id: string
@@ -70,6 +93,7 @@ export default function GroupWorkflowsPage() {
     const [error, setError] = useState<string | null>(null)
     const [executingWorkflow, setExecutingWorkflow] = useState<any | null>(null)
     const [loadingLinkId, setLoadingLinkId] = useState<string | null>(null)
+    const [showConnectModal, setShowConnectModal] = useState(false)
 
     const TEMPLATES = [
         {
@@ -114,7 +138,7 @@ export default function GroupWorkflowsPage() {
         }
     }, [activeTab, selectedSessionId])
 
-    const loadInitialData = async () => {
+    const loadInitialData = async (newSessionId?: string) => {
         try {
             setLoading(true)
             const [linksData, workflowsData, sessionsData] = await Promise.all([
@@ -126,10 +150,15 @@ export default function GroupWorkflowsPage() {
             setWorkflows(workflowsData.filter((w: any) =>
                 w.nodes?.some((n: any) => n.type === 'TRIGGER_GRUPO')
             ))
-            setSessions(sessionsData.filter((s: any) => s.status === 'CONNECTED'))
-            if (sessionsData.length > 0 && !selectedSessionId) {
-                const connected = sessionsData.find((s: any) => s.status === 'CONNECTED')
-                if (connected) setSelectedSessionId(connected.id)
+
+            const connectedSessions = sessionsData.filter((s: any) => s.status === 'CONNECTED')
+            setSessions(connectedSessions)
+
+            if (newSessionId) {
+                setSelectedSessionId(newSessionId)
+                handleSync(newSessionId)
+            } else if (connectedSessions.length > 0 && !selectedSessionId) {
+                setSelectedSessionId(connectedSessions[0].id)
             }
         } catch (err: any) {
             setError('Erro ao carregar dados.')
@@ -147,15 +176,19 @@ export default function GroupWorkflowsPage() {
         }
     }
 
-    const handleSync = async () => {
-        if (!selectedSessionId) return
+    const handleSync = async (sid?: string) => {
+        const sessionId = sid || selectedSessionId
+        if (!sessionId) return
+
         setSyncing(true)
         try {
-            await apiClient.syncGroups(selectedSessionId)
-            await loadGroupConfigs(selectedSessionId)
-            loadInitialData() // for links too
+            await apiClient.syncGroups(sessionId)
+            await loadGroupConfigs(sessionId)
+            // Reload links as they might have changed on backend
+            const linksData = await apiClient.getGroupLinks(tenantId!)
+            setLinks(linksData)
         } catch (error) {
-            alert('Falha ao sincronizar grupos.')
+            console.error('Error syncing groups:', error)
         } finally {
             setSyncing(false)
         }
@@ -222,6 +255,13 @@ export default function GroupWorkflowsPage() {
 
     const getWorkflowName = (workflowId: string) => {
         return workflows.find(w => w.id === workflowId)?.name || 'Fluxo Desconhecido'
+    }
+
+    const handleConnectSuccess = (sessionId: string) => {
+        setTimeout(() => {
+            setShowConnectModal(false)
+            loadInitialData(sessionId)
+        }, 2000)
     }
 
     return (
@@ -392,89 +432,110 @@ export default function GroupWorkflowsPage() {
                     {
                         activeTab === 'manage' && (
                             <section className="space-y-6">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <select
-                                            value={selectedSessionId}
-                                            onChange={(e) => setSelectedSessionId(e.target.value)}
-                                            className="bg-[#151515] border border-gray-800 rounded-lg px-4 py-2 text-sm text-white outline-none focus:border-primary"
-                                        >
-                                            <option value="">Selecionar Sessão</option>
-                                            {sessions.map(s => (
-                                                <option key={s.id} value={s.id}>{s.name} ({s.phoneNumber})</option>
-                                            ))}
-                                        </select>
+                                {sessions.length === 0 ? (
+                                    <div className="bg-[#151515] border border-gray-800 rounded-2xl p-16 text-center flex flex-col items-center gap-6 shadow-xl">
+                                        <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center border border-primary/20">
+                                            <Smartphone size={40} className="text-primary" />
+                                        </div>
+                                        <div className="max-w-md">
+                                            <h2 className="text-2xl font-bold text-white mb-2">Nenhuma sessão conectada</h2>
+                                            <p className="text-gray-500">Conecte um número de WhatsApp para começar a gerenciar seus grupos e automatizar suas mensagens.</p>
+                                        </div>
                                         <button
-                                            onClick={handleSync}
-                                            disabled={syncing || !selectedSessionId}
-                                            className="flex items-center gap-2 bg-primary text-black px-4 py-2 rounded-lg font-bold hover:bg-primary/80 disabled:opacity-50 transition"
+                                            onClick={() => setShowConnectModal(true)}
+                                            className="px-8 py-4 bg-primary text-black font-bold rounded-xl hover:bg-primary/80 transition flex items-center gap-2 shadow-[0_0_30px_rgba(0,186,124,0.2)]"
                                         >
-                                            <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-                                            {syncing ? 'Sincronizando...' : 'Sincronizar Grupos'}
+                                            <Plus size={20} />
+                                            Conectar WhatsApp
                                         </button>
                                     </div>
-                                </div>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <select
+                                                    value={selectedSessionId}
+                                                    onChange={(e) => setSelectedSessionId(e.target.value)}
+                                                    className="bg-[#151515] border border-gray-800 rounded-lg px-4 py-2 text-sm text-white outline-none focus:border-primary"
+                                                >
+                                                    <option value="">Selecionar Sessão</option>
+                                                    {sessions.map(s => (
+                                                        <option key={s.id} value={s.id}>{s.name} ({s.phoneNumber})</option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    onClick={() => handleSync()}
+                                                    disabled={syncing || !selectedSessionId}
+                                                    className="flex items-center gap-2 bg-primary text-black px-4 py-2 rounded-lg font-bold hover:bg-primary/80 disabled:opacity-50 transition"
+                                                >
+                                                    <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
+                                                    {syncing ? 'Sincronizando...' : 'Sincronizar Grupos'}
+                                                </button>
+                                            </div>
+                                        </div>
 
-                                <div className="bg-[#151515] border border-gray-800 rounded-xl overflow-hidden">
-                                    <table className="w-full text-left">
-                                        <thead>
-                                            <tr className="bg-black/40 border-b border-gray-800">
-                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase">Grupo / JID</th>
-                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase">Bot Ativo</th>
-                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase">Fluxos Vinculados</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {groupConfigs.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={3} className="p-12 text-center text-gray-500">
-                                                        {selectedSessionId ? 'Nenhum grupo encontrado nesta sessão. Clique em Sincronizar.' : 'Selecione uma sessão conectada acima.'}
-                                                    </td>
-                                                </tr>
-                                            ) : (
-                                                groupConfigs.map(config => (
-                                                    <tr key={config.id} className="border-b border-gray-800 hover:bg-white/5 transition">
-                                                        <td className="p-4">
-                                                            <div className="font-bold text-gray-200">{config.name}</div>
-                                                            <div className="text-[10px] text-gray-500 font-mono">{config.groupId}</div>
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="sr-only peer"
-                                                                    checked={config.enabled}
-                                                                    onChange={() => handleToggleEnable(config)}
-                                                                />
-                                                                <div className="w-10 h-5 bg-gray-700 rounded-full peer peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
-                                                                <span className="ml-2 text-xs font-bold text-gray-400">{config.enabled ? 'ATIVADO' : 'DESLIGADO'}</span>
-                                                            </label>
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <div className="flex flex-wrap gap-3">
-                                                                {workflows.length === 0 ? (
-                                                                    <span className="text-xs text-gray-600 italic">Crie fluxos de grupo primeiro</span>
-                                                                ) : (
-                                                                    workflows.map(wf => (
-                                                                        <label key={wf.id} className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white cursor-pointer select-none">
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                className="rounded border-gray-700 bg-black text-primary"
-                                                                                checked={config.workflowIds?.includes(wf.id)}
-                                                                                onChange={(e) => handleWorkflowChange(config.id, wf.id, e.target.checked)}
-                                                                            />
-                                                                            {wf.name}
-                                                                        </label>
-                                                                    ))
-                                                                )}
-                                                            </div>
-                                                        </td>
+                                        <div className="bg-[#151515] border border-gray-800 rounded-xl overflow-hidden">
+                                            <table className="w-full text-left">
+                                                <thead>
+                                                    <tr className="bg-black/40 border-b border-gray-800">
+                                                        <th className="p-4 text-xs font-bold text-gray-400 uppercase">Grupo / JID</th>
+                                                        <th className="p-4 text-xs font-bold text-gray-400 uppercase">Bot Ativo</th>
+                                                        <th className="p-4 text-xs font-bold text-gray-400 uppercase">Fluxos Vinculados</th>
                                                     </tr>
-                                                ))
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                </thead>
+                                                <tbody>
+                                                    {groupConfigs.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={3} className="p-12 text-center text-gray-500">
+                                                                {selectedSessionId ? 'Nenhum grupo encontrado nesta sessão. Clique em Sincronizar.' : 'Selecione uma sessão conectada acima.'}
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        groupConfigs.map(config => (
+                                                            <tr key={config.id} className="border-b border-gray-800 hover:bg-white/5 transition">
+                                                                <td className="p-4">
+                                                                    <div className="font-bold text-gray-200">{config.name}</div>
+                                                                    <div className="text-[10px] text-gray-500 font-mono">{config.groupId}</div>
+                                                                </td>
+                                                                <td className="p-4">
+                                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            className="sr-only peer"
+                                                                            checked={config.enabled}
+                                                                            onChange={() => handleToggleEnable(config)}
+                                                                        />
+                                                                        <div className="w-10 h-5 bg-gray-700 rounded-full peer peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+                                                                        <span className="ml-2 text-xs font-bold text-gray-400">{config.enabled ? 'ATIVADO' : 'DESLIGADO'}</span>
+                                                                    </label>
+                                                                </td>
+                                                                <td className="p-4">
+                                                                    <div className="flex flex-wrap gap-3">
+                                                                        {workflows.length === 0 ? (
+                                                                            <span className="text-xs text-gray-600 italic">Crie fluxos de grupo primeiro</span>
+                                                                        ) : (
+                                                                            workflows.map(wf => (
+                                                                                <label key={wf.id} className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        className="rounded border-gray-700 bg-black text-primary"
+                                                                                        checked={config.workflowIds?.includes(wf.id)}
+                                                                                        onChange={(e) => handleWorkflowChange(config.id, wf.id, e.target.checked)}
+                                                                                    />
+                                                                                    {wf.name}
+                                                                                </label>
+                                                                            ))
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                )}
                             </section>
                         )
                     }
@@ -592,6 +653,32 @@ export default function GroupWorkflowsPage() {
                         </div>
                     )
                 }
+
+                {/* WhatsApp Connection Modal */}
+                {showConnectModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                        <div className="bg-[#151515] border border-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+                            <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-black/20">
+                                <div>
+                                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                        <Smartphone className="text-primary" size={20} />
+                                        Conectar WhatsApp
+                                    </h2>
+                                    <p className="text-xs text-gray-500 mt-1">Siga os passos para vincular seu número.</p>
+                                </div>
+                                <button onClick={() => setShowConnectModal(false)} className="p-2 hover:bg-white/5 rounded-full transition text-gray-500 hover:text-white">
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="p-8">
+                                <WhatsAppConnect
+                                    onSuccess={handleConnectSuccess}
+                                    onCancel={() => setShowConnectModal(false)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div >
         </AuthGuard >
     )
