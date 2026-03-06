@@ -2254,6 +2254,7 @@ functions, etc.)
     contactPhone?: string,
   ): Promise<NodeExecutionResult> {
     const config = node.config as PromoMLConfig;
+    console.log('[PROMO_ML] Config recebido:', JSON.stringify(config));
     const tenantId = (context.variables as any)?._tenantId;
     const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
     const finalContactPhone = destination;
