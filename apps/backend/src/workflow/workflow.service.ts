@@ -361,6 +361,7 @@ export class WorkflowService {
         initialContext: {
           variables: {
             _tenantId: tenantId,
+            isTestExecution: true,
             groupJid,
             groupName,
             contact: {

@@ -2479,19 +2479,22 @@ ${config.footerText || ''}`;
     }
 
     const contactPhone = groupJid;
+    const isTestExecution = (context.variables as any)?.isTestExecution === true;
 
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const recentMention = await this.prisma.groupMentionLog.findFirst({
-      where: {
-        groupJid: contactPhone,
-        mentionedAt: { gte: oneHourAgo }
+    if (!isTestExecution) {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const recentMention = await this.prisma.groupMentionLog.findFirst({
+        where: {
+          groupJid: contactPhone,
+          mentionedAt: { gte: oneHourAgo }
+        }
+      });
+
+      if (recentMention) {
+        console.warn(`[GROUP_MENTIONS] skipping mention for ${contactPhone} as it was mentioned less than 1h ago`);
+        const nextEdge = edges.find((e) => e.source === node.id);
+        return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
       }
-    });
-
-    if (recentMention) {
-      console.warn(`[GROUP_MENTIONS] skipping mention for ${contactPhone} as it was mentioned less than 1h ago`);
-      const nextEdge = edges.find((e) => e.source === node.id);
-      return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
     }
 
     const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId, contactPhone);
@@ -2504,13 +2507,15 @@ ${config.footerText || ''}`;
       })
       .map((p: any) => p.id);
 
-    await this.prisma.groupMentionLog.create({
-      data: {
-        groupJid: contactPhone,
-        tenantId: tenantId!,
-        mentionedAt: new Date()
-      }
-    });
+    if (!isTestExecution) {
+      await this.prisma.groupMentionLog.create({
+        data: {
+          groupJid: contactPhone,
+          tenantId: tenantId!,
+          mentionedAt: new Date()
+        }
+      });
+    }
 
     // Handle string or GroupMessageConfig
     const msgConfig = typeof config.mensagem === 'string'
@@ -2877,6 +2882,9 @@ ${config.footerText || ''}`;
     const searchTerm = this.contextService.interpolate(config.searchTerm, context);
     const category = config.category || 'MLA1051';
 
+    console.log('[PROMO_ML] destination:', contactPhone);
+    console.log('[PROMO_ML] sessionId:', sessionId);
+
     try {
       const response = await fetch(`https://api.mercadolibre.com/sites/MLB/search?q=${encodeURIComponent(searchTerm)}&category=${category}&limit=20`);
       const data = await response.json();
@@ -2900,6 +2908,8 @@ ${config.footerText || ''}`;
 
       if (config.bestValue) filtered.sort((a: any, b: any) => b.discount - a.discount);
       filtered = filtered.slice(0, config.maxQuantity || 5);
+
+      console.log('[PROMO_ML] produtos encontrados:', filtered.length);
 
       if (config.ignoreAlreadySent) {
         const sentUrls = await this.prisma.promoMLSent.findMany({
