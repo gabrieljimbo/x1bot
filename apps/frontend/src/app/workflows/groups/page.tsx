@@ -21,10 +21,12 @@ import {
     Trash2,
     Play,
     Pause,
+    Square,
     CheckCircle2,
     X,
     RefreshCw,
-    Smartphone
+    Smartphone,
+    Loader2
 } from 'lucide-react'
 import Link from 'next/link'
 import WhatsAppConnect from '@/components/WhatsAppConnect'
@@ -91,6 +93,8 @@ export default function GroupWorkflowsPage() {
     const [error, setError] = useState<string | null>(null)
     const [executingWorkflow, setExecutingWorkflow] = useState<any | null>(null)
     const [loadingLinkId, setLoadingLinkId] = useState<string | null>(null)
+    const [runningExecutionId, setRunningExecutionId] = useState<string | null>(null)
+    const [stoppingExecution, setStoppingExecution] = useState(false)
     const [showConnectModal, setShowConnectModal] = useState(false)
 
     const TEMPLATES = [
@@ -237,13 +241,26 @@ export default function GroupWorkflowsPage() {
         if (loadingLinkId) return
         setLoadingLinkId(link.id)
         try {
-            await apiClient.executeGroupTest(link.workflowId, link.groupJid, link.groupName || link.name)
-            alert(`Teste iniciado com sucesso!`)
-            setExecutingWorkflow(null)
+            const result = await apiClient.executeGroupTest(link.workflowId, link.groupJid, link.groupName || link.name)
+            setRunningExecutionId(result?.executionId || null)
         } catch (err: any) {
             alert(err.response?.data?.error || err.message || 'Erro ao realizar teste.')
         } finally {
             setLoadingLinkId(null)
+        }
+    }
+
+    const handleStopExecution = async () => {
+        if (!runningExecutionId) return
+        setStoppingExecution(true)
+        try {
+            await apiClient.cancelExecution(runningExecutionId)
+        } catch (err) {
+            // ignore — execution may have already finished
+        } finally {
+            setStoppingExecution(false)
+            setRunningExecutionId(null)
+            setExecutingWorkflow(null)
         }
     }
 
@@ -619,30 +636,58 @@ export default function GroupWorkflowsPage() {
                                         </h2>
                                         <p className="text-xs text-gray-500 mt-1">Disparar fluxo: <span className="text-indigo-400 font-bold">{executingWorkflow.name}</span></p>
                                     </div>
-                                    <button onClick={() => setExecutingWorkflow(null)} className="p-2 hover:bg-white/5 rounded-full transition text-gray-500 hover:text-white">
+                                    <button onClick={() => { setExecutingWorkflow(null); setRunningExecutionId(null); }} className="p-2 hover:bg-white/5 rounded-full transition text-gray-500 hover:text-white">
                                         <X size={20} />
                                     </button>
                                 </div>
                                 <div className="p-6 max-h-[60vh] overflow-y-auto space-y-3">
-                                    <p className="text-sm text-gray-400 mb-2">Selecione para qual grupo deseja disparar:</p>
-                                    {executingWorkflow.linkedGroups.map((link: any) => (
-                                        <button
-                                            key={link.id}
-                                            onClick={() => handleTestNow(link)}
-                                            disabled={loadingLinkId === link.id}
-                                            className="w-full text-left p-4 bg-black border border-gray-800 rounded-xl hover:border-primary/50 hover:bg-primary/5 transition group flex items-center justify-between disabled:opacity-50"
-                                        >
-                                            <div>
-                                                <div className="font-bold text-sm text-white group-hover:text-primary transition-colors">{link.groupName || link.groupJid}</div>
-                                                <div className="text-[10px] text-gray-500 font-mono">{link.groupJid}</div>
+                                    {runningExecutionId ? (
+                                        <div className="space-y-4">
+                                            <div className="flex items-center gap-3 p-4 bg-primary/5 border border-primary/20 rounded-xl">
+                                                <Loader2 size={18} className="text-primary animate-spin shrink-0" />
+                                                <div>
+                                                    <p className="text-sm font-bold text-white">Teste em execução...</p>
+                                                    <p className="text-[10px] text-gray-500 font-mono">ID: {runningExecutionId}</p>
+                                                </div>
                                             </div>
-                                            {loadingLinkId === link.id ? (
-                                                <RefreshCw size={16} className="text-primary animate-spin" />
-                                            ) : (
-                                                <Play size={16} className="text-gray-700 group-hover:text-primary transition-colors" />
-                                            )}
-                                        </button>
-                                    ))}
+                                            <button
+                                                onClick={handleStopExecution}
+                                                disabled={stoppingExecution}
+                                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl font-bold text-sm hover:bg-red-500/20 transition disabled:opacity-50"
+                                            >
+                                                {stoppingExecution ? <Loader2 size={16} className="animate-spin" /> : <Square size={16} fill="currentColor" />}
+                                                {stoppingExecution ? 'Parando...' : 'Parar Teste'}
+                                            </button>
+                                            <button
+                                                onClick={() => { setRunningExecutionId(null); setExecutingWorkflow(null); }}
+                                                className="w-full text-center text-xs text-gray-500 hover:text-gray-300 transition py-1"
+                                            >
+                                                Fechar (execução continua em background)
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <p className="text-sm text-gray-400 mb-2">Selecione para qual grupo deseja disparar:</p>
+                                            {executingWorkflow.linkedGroups.map((link: any) => (
+                                                <button
+                                                    key={link.id}
+                                                    onClick={() => handleTestNow(link)}
+                                                    disabled={!!loadingLinkId}
+                                                    className="w-full text-left p-4 bg-black border border-gray-800 rounded-xl hover:border-primary/50 hover:bg-primary/5 transition group flex items-center justify-between disabled:opacity-50"
+                                                >
+                                                    <div>
+                                                        <div className="font-bold text-sm text-white group-hover:text-primary transition-colors">{link.groupName || link.groupJid}</div>
+                                                        <div className="text-[10px] text-gray-500 font-mono">{link.groupJid}</div>
+                                                    </div>
+                                                    {loadingLinkId === link.id ? (
+                                                        <RefreshCw size={16} className="text-primary animate-spin" />
+                                                    ) : (
+                                                        <Play size={16} className="text-gray-700 group-hover:text-primary transition-colors" />
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </>
+                                    )}
                                 </div>
                                 <div className="p-4 bg-black/40 text-center text-[10px] text-gray-600 italic">
                                     * Disparos manuais também são registrados nos logs de execução.

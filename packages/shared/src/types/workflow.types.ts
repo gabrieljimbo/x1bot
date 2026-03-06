@@ -49,6 +49,7 @@ export enum ExecutionStatus {
   COMPLETED = 'COMPLETED',
   EXPIRED = 'EXPIRED',
   ERROR = 'ERROR',
+  CANCELLED = 'CANCELLED',
 }
 
 export enum WhatsappSessionStatus {
@@ -412,13 +413,21 @@ export interface SendContactConfig {
 }
 
 export interface PromoShopeeConfig {
-  appId: string;
-  secret: string;
   searchTerm: string;
-  sortType: number; // 1=latest, 2=commission_desc, 5=sold_desc (productOfferV2 sorts)
+  sortType: number;
+  catId?: number;           // Shopee category ID filter (0 = all)
+  fetchLimit?: number;      // how many to request from API (default 30)
+  maxQuantity: number;      // how many to actually send
   minDiscount: number;
   minRating: number;
-  maxQuantity: number;
+  minSales?: number;
+  minPrice?: number;        // min price R$ filter (0 = off)
+  maxPrice?: number;        // max price R$ filter (0 = off)
+  requireImage?: boolean;   // skip products without image
+  antiRepeat?: boolean;     // don't resend already-sent products
+  antiRepeatScope?: 'contact' | 'global';
+  showRating?: boolean;
+  showSales?: boolean;
   introText?: string;
   footerText?: string;
   messageInterval: number;

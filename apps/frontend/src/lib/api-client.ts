@@ -253,6 +253,11 @@ export const apiClient = {
     return data
   },
 
+  async cancelExecution(executionId: string) {
+    const { data } = await client.post(`/api/executions/${executionId}/cancel`, {});
+    return data;
+  },
+
   async executeGroupTest(workflowId: string, groupJid: string, groupName?: string) {
     const { data } = await client.post(`/api/workflows/${workflowId}/execute-group-test`, {
       groupJid,

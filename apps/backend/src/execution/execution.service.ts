@@ -101,7 +101,8 @@ export class ExecutionService {
         updatedAt: new Date(),
         completedAt: data.status === ExecutionStatus.COMPLETED ||
           data.status === ExecutionStatus.EXPIRED ||
-          data.status === ExecutionStatus.ERROR
+          data.status === ExecutionStatus.ERROR ||
+          data.status === ExecutionStatus.CANCELLED
           ? new Date()
           : undefined,
       },

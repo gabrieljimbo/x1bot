@@ -2112,7 +2112,7 @@ function PromoMLApiConfig({ config, setConfig }: any) {
 
 
 function PromoShopeeConfig({ config, setConfig }: any) {
-  const [activeTab, setActiveTab] = useState<'busca' | 'filtros' | 'mensagem'>('busca');
+  const [activeTab, setActiveTab] = useState<'busca' | 'filtros' | 'mensagem' | 'avancado'>('busca');
 
   return (
     <div className="space-y-6">
@@ -2146,6 +2146,7 @@ function PromoShopeeConfig({ config, setConfig }: any) {
           { id: 'busca', label: 'Busca', icon: '🔍' },
           { id: 'filtros', label: 'Filtros', icon: '⚙️' },
           { id: 'mensagem', label: 'Mensagem', icon: '💬' },
+          { id: 'avancado', label: 'Avançado', icon: '🛡️' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -2166,35 +2167,73 @@ function PromoShopeeConfig({ config, setConfig }: any) {
               type="text"
               value={config.searchTerm || ''}
               onChange={(e) => setConfig({ ...config, searchTerm: e.target.value })}
-              placeholder="Ex: fone bluetooth, airfryer..."
+              placeholder="Ex: fone bluetooth, airfryer, samsung..."
               className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
             />
             <p className="text-xs text-gray-500 mt-1">Suporta variáveis: {`{{keyword}}`}</p>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1.5 text-gray-200">Ordenar por</label>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">Categoria</label>
             <select
-              value={config.sortType || 5}
-              onChange={(e) => setConfig({ ...config, sortType: parseInt(e.target.value) })}
+              value={config.catId || 0}
+              onChange={(e) => setConfig({ ...config, catId: parseInt(e.target.value) || 0 })}
               className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
             >
-              <option value={5}>Maior Comissão</option>
-              <option value={2}>Mais Vendidos</option>
-              <option value={3}>Maior Preço</option>
-              <option value={4}>Menor Preço</option>
-              <option value={1}>Mais Recentes</option>
+              <option value={0}>Todas as categorias</option>
+              <option value={100013}>📱 Celulares e Telefonia</option>
+              <option value={11000582}>💻 Eletrônicos</option>
+              <option value={100010}>🖥️ Informática</option>
+              <option value={100015}>🏠 Casa e Decoração</option>
+              <option value={100006}>💄 Beleza e Cuidado Pessoal</option>
+              <option value={100008}>👗 Moda Feminina</option>
+              <option value={100009}>👔 Moda Masculina</option>
+              <option value={100019}>⚽ Esportes e Lazer</option>
+              <option value={100007}>🧸 Brinquedos e Bebê</option>
+              <option value={100003}>🍕 Alimentos e Bebidas</option>
+              <option value={100018}>🔧 Ferramentas e Construção</option>
+              <option value={100017}>🐾 Pet Shop</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1.5 text-gray-200">Quantidade Máxima</label>
-            <input
-              type="number"
-              value={config.maxQuantity || 5}
-              onChange={(e) => setConfig({ ...config, maxQuantity: parseInt(e.target.value) || 5 })}
-              min={1}
-              max={20}
-              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">Ordenar por</label>
+              <select
+                value={config.sortType || 2}
+                onChange={(e) => setConfig({ ...config, sortType: parseInt(e.target.value) })}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+              >
+                <option value={2}>🔥 Mais Vendidos</option>
+                <option value={6}>💸 Maior Desconto</option>
+                <option value={5}>⭐ Maior Comissão</option>
+                <option value={4}>💰 Menor Preço</option>
+                <option value={3}>💰 Maior Preço</option>
+                <option value={1}>🆕 Mais Recentes</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">Buscar da API</label>
+              <input
+                type="number"
+                value={config.fetchLimit || 30}
+                onChange={(e) => setConfig({ ...config, fetchLimit: parseInt(e.target.value) || 30 })}
+                min={5}
+                max={100}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+              />
+              <p className="text-[10px] text-gray-500 mt-1">Qtd. buscada na API antes dos filtros</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">Enviar no máximo</label>
+              <input
+                type="number"
+                value={config.maxQuantity || 5}
+                onChange={(e) => setConfig({ ...config, maxQuantity: parseInt(e.target.value) || 5 })}
+                min={1}
+                max={20}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+              />
+              <p className="text-[10px] text-gray-500 mt-1">Qtd. enviada após filtros</p>
+            </div>
           </div>
         </div>
       )}
@@ -2210,27 +2249,90 @@ function PromoShopeeConfig({ config, setConfig }: any) {
                 onChange={(e) => setConfig({ ...config, minDiscount: parseInt(e.target.value) || 0 })}
                 min={0}
                 max={99}
+                placeholder="0 = sem filtro"
                 className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5 text-gray-200">Nota Mín.</label>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">Nota Mín. ⭐</label>
               <input
                 type="number"
-                step="0.1"
+                step="0.5"
                 value={config.minRating || 0}
                 onChange={(e) => setConfig({ ...config, minRating: parseFloat(e.target.value) || 0 })}
                 min={0}
                 max={5}
+                placeholder="0 = sem filtro"
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">Mín. vendidos 🛒</label>
+              <input
+                type="number"
+                value={config.minSales || 0}
+                onChange={(e) => setConfig({ ...config, minSales: parseInt(e.target.value) || 0 })}
+                min={0}
+                placeholder="0 = sem filtro"
                 className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
               />
             </div>
           </div>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-200">Faixa de Preço R$</label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">R$</span>
+                <input
+                  type="number"
+                  value={config.minPrice || 0}
+                  onChange={(e) => setConfig({ ...config, minPrice: parseFloat(e.target.value) || 0 })}
+                  min={0}
+                  placeholder="Mín."
+                  className="w-full pl-8 pr-3 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white text-sm"
+                />
+              </div>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">R$</span>
+                <input
+                  type="number"
+                  value={config.maxPrice || 0}
+                  onChange={(e) => setConfig({ ...config, maxPrice: parseFloat(e.target.value) || 0 })}
+                  min={0}
+                  placeholder="Máx."
+                  className="w-full pl-8 pr-3 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white text-sm"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-500">Valor 0 = sem limite de preço.</p>
+          </div>
+          <p className="text-xs text-gray-500">Todos os filtros são aplicados após a busca na API.</p>
         </div>
       )}
 
       {activeTab === 'mensagem' && (
         <div className="space-y-4">
+          <div className="p-3 bg-[#1a1a1a] rounded-lg space-y-3">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Exibir na mensagem</p>
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm text-gray-300">⭐ Nota do produto</span>
+              <input
+                type="checkbox"
+                checked={config.showRating !== false}
+                onChange={(e) => setConfig({ ...config, showRating: e.target.checked })}
+                className="w-4 h-4 accent-orange-500"
+              />
+            </label>
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm text-gray-300">🛒 Quantidade vendida</span>
+              <input
+                type="checkbox"
+                checked={!!config.showSales}
+                onChange={(e) => setConfig({ ...config, showSales: e.target.checked })}
+                className="w-4 h-4 accent-orange-500"
+              />
+            </label>
+          </div>
           <div>
             <label className="block text-sm font-medium mb-1.5 text-gray-200">Texto de Intro</label>
             <textarea
@@ -2259,6 +2361,78 @@ function PromoShopeeConfig({ config, setConfig }: any) {
               className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
             />
           </div>
+        </div>
+      )}
+
+      {activeTab === 'avancado' && (
+        <div className="space-y-5">
+
+          {/* 1. Anti-repetição */}
+          <div className="p-4 bg-[#1a1a1a] border border-gray-800 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-white">🔁 Não repetir produtos enviados</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">Evita enviar o mesmo produto duas vezes.</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!config.antiRepeat}
+                  onChange={(e) => setConfig({ ...config, antiRepeat: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-gray-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+              </label>
+            </div>
+            {config.antiRepeat && (
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Escopo da verificação</label>
+                <select
+                  value={config.antiRepeatScope || 'contact'}
+                  onChange={(e) => setConfig({ ...config, antiRepeatScope: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm focus:outline-none focus:border-orange-500 text-white"
+                >
+                  <option value="contact">Por contato/grupo — não repete para o mesmo destinatário</option>
+                  <option value="global">Global no workspace — nunca repete para nenhum destinatário</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* 2. Apenas com imagem */}
+          <div className="p-4 bg-[#1a1a1a] border border-gray-800 rounded-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-white">🖼️ Apenas produtos com imagem</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">Ignora produtos sem foto disponível.</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!config.requireImage}
+                  onChange={(e) => setConfig({ ...config, requireImage: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-gray-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+              </label>
+            </div>
+          </div>
+
+          {/* 3. Salvar resultado como variável */}
+          <div className="p-4 bg-[#1a1a1a] border border-gray-800 rounded-xl space-y-3">
+            <div>
+              <p className="text-sm font-bold text-white">📦 Salvar resultado como variável</p>
+              <p className="text-[11px] text-gray-500 mt-0.5">Armazena os produtos encontrados para uso em nodes seguintes.</p>
+            </div>
+            <input
+              type="text"
+              value={config.saveResponseAs || ''}
+              onChange={(e) => setConfig({ ...config, saveResponseAs: e.target.value })}
+              placeholder="Ex: shopeeProducts (deixe vazio para não salvar)"
+              className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded text-sm focus:outline-none focus:border-orange-500 text-white placeholder-gray-600"
+            />
+          </div>
+
         </div>
       )}
     </div>

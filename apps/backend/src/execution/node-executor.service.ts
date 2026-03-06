@@ -2327,13 +2327,16 @@ functions, etc.)
     const finalSessionId = config.sessionId || sessionId;
 
     const searchTerm = this.contextService.interpolate(config.searchTerm || '', context);
-    const limit = config.maxQuantity || 5;
-    const sortType = config.sortType || 5; // default: commission desc
+    const sendLimit = config.maxQuantity || 5;
+    const fetchLimit = config.fetchLimit && config.fetchLimit > 0 ? Math.min(config.fetchLimit, 100) : Math.max(sendLimit * 4, 30);
+    const sortType = config.sortType || 2; // default: sold desc
+    const catId = config.catId && config.catId > 0 ? config.catId : null;
 
     // Build GraphQL query
+    const catArg = catId ? `, catId: ${catId}` : '';
     const payload = JSON.stringify({
       query: `{
-  productOfferV2(keyword: ${JSON.stringify(searchTerm)}, sortType: ${sortType}, page: 1, limit: ${Math.min(limit * 3, 50)}) {
+  productOfferV2(keyword: ${JSON.stringify(searchTerm)}, sortType: ${sortType}, page: 1, limit: ${fetchLimit}${catArg}) {
     nodes {
       itemId
       productName
@@ -2341,10 +2344,8 @@ functions, etc.)
       priceMax
       imageUrl
       offerLink
-      commissionRate
       ratingStar
       priceDiscountRate
-      shopName
       sales
     }
     pageInfo { hasNextPage }
@@ -2385,17 +2386,38 @@ functions, etc.)
       if (json.errors?.length) throw new Error(`Shopee API: ${json.errors[0].message}`);
 
       const nodes = json.data?.productOfferV2?.nodes || [];
+
+      // Load already-sent product URLs for anti-repeat
+      let sentUrls = new Set<string>();
+      if (config.antiRepeat && tenantId) {
+        const sentRecords = await this.prisma.promoMLSent.findMany({
+          where: {
+            tenantId,
+            ...(config.antiRepeatScope !== 'global' && destination ? { contactPhone: destination } : {}),
+          },
+          select: { productUrl: true },
+        });
+        sentUrls = new Set(sentRecords.map((r: any) => r.productUrl));
+      }
+
       products = nodes
         .filter((p: any) => {
-          const discount = p.priceDiscountRate || 0;
+          const discount = parseFloat(p.priceDiscountRate || '0');
           const rating = parseFloat(p.ratingStar || '0');
+          const sales = parseInt(p.sales || '0', 10);
+          const price = parseFloat(p.priceMin || '0');
+          if (config.requireImage && !p.imageUrl?.startsWith('https')) return false;
           if (config.minDiscount > 0 && discount < config.minDiscount) return false;
           if (config.minRating > 0 && rating < config.minRating) return false;
+          if ((config.minSales || 0) > 0 && sales < (config.minSales || 0)) return false;
+          if ((config.minPrice || 0) > 0 && price < (config.minPrice || 0)) return false;
+          if ((config.maxPrice || 0) > 0 && price > (config.maxPrice || 0)) return false;
+          if (config.antiRepeat && sentUrls.has(p.offerLink)) return false;
           return true;
         })
-        .slice(0, limit);
+        .slice(0, sendLimit);
 
-      console.log(`[PROMO_SHOPEE] Encontrados ${nodes.length} produtos, ${products.length} após filtros`);
+      console.log(`[PROMO_SHOPEE] Buscados ${nodes.length}, após filtros: ${products.length}`);
     } catch (err: any) {
       console.error('[PROMO_SHOPEE] Erro na API:', err.message);
     }
@@ -2411,20 +2433,22 @@ functions, etc.)
         for (const p of products) {
           const priceMin = p.priceMin ? `R$ ${parseFloat(p.priceMin).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : null;
           const priceMax = p.priceMax && p.priceMax !== p.priceMin ? ` ~ R$ ${parseFloat(p.priceMax).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
-          const commPercent = p.commissionRate ? `${(parseFloat(p.commissionRate) * 100).toFixed(1)}%` : null;
           const discount = p.priceDiscountRate ? `${p.priceDiscountRate}% OFF` : null;
-          const rating = p.ratingStar ? `⭐ ${p.ratingStar}` : '';
+          const ratingStr = (config.showRating !== false) && p.ratingStar ? `⭐ ${parseFloat(p.ratingStar).toFixed(1)}` : null;
+          const salesNum = parseInt(p.sales || '0', 10);
+          const salesStr = config.showSales && salesNum > 0
+            ? `🛒 ${salesNum >= 1000 ? `${(salesNum / 1000).toFixed(1)}k` : salesNum} vendidos`
+            : null;
 
           const caption = [
             `🛍️ *${p.productName}*`,
             '',
             priceMin ? `💰 *${priceMin}${priceMax}*` : '',
             discount ? `🔥 *${discount}*` : '',
-            [rating, commPercent ? `💸 Comissão: ${commPercent}` : ''].filter(Boolean).join('  |  '),
-            p.shopName ? `🏪 _${p.shopName}_` : '',
+            [ratingStr, salesStr].filter(Boolean).join('  |  '),
             '',
             `👉 ${p.offerLink}`,
-          ].filter(line => line !== undefined && !(line === '')).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+          ].filter(line => line !== undefined && line !== '').join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
           try {
             if (p.imageUrl?.startsWith('https')) {
@@ -2442,6 +2466,18 @@ functions, etc.)
 
         if (config.footerText) {
           await this.whatsappSessionManager.sendMessage(finalSessionId, destination, config.footerText);
+        }
+
+        // Record sent products for anti-repeat
+        if (config.antiRepeat && tenantId && products.length > 0) {
+          await this.prisma.promoMLSent.createMany({
+            data: products.map((p: any) => ({
+              productUrl: p.offerLink,
+              tenantId,
+              contactPhone: config.antiRepeatScope !== 'global' && destination ? destination : '',
+            })),
+            skipDuplicates: true,
+          });
         }
       } else {
         await this.whatsappSessionManager.sendMessage(

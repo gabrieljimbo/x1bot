@@ -17,6 +17,7 @@ import { TagService, CreateTagDto, UpdateTagDto } from './tag.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { WhatsappSessionManager } from '../whatsapp/whatsapp-session-manager.service';
 import { ExecutionService } from '../execution/execution.service';
+import { ExecutionStatus } from '@n9n/shared';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { Tenant } from '../auth/decorators/tenant.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -106,6 +107,24 @@ export class WorkflowController {
       workflowId,
       body,
     );
+  }
+
+  @Post('executions/:executionId/cancel')
+  async cancelExecution(
+    @Tenant() tenantId: string,
+    @Param('executionId') executionId: string,
+  ) {
+    const execution = await this.executionService.getExecution(tenantId, executionId);
+    if (!execution) {
+      throw new NotFoundException('Execution not found');
+    }
+    if (execution.status !== ExecutionStatus.RUNNING && execution.status !== ExecutionStatus.WAITING) {
+      return { success: false, message: 'Execution is not active' };
+    }
+    await this.executionService.updateExecution(executionId, {
+      status: ExecutionStatus.CANCELLED,
+    });
+    return { success: true, executionId };
   }
 
   @Post('workflows/:id/test-node')
