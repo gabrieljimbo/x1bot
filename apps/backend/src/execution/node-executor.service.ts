@@ -2257,12 +2257,16 @@ functions, etc.)
 
     // 1. Scraping logic
     const searchTerm = this.contextService.interpolate(config.searchTerm, context);
-    const discount = config.minDiscount || 5;
+    const minDiscount = (config as any).descontoMinimo || config.minDiscount || 5;
     const encodedTerm = encodeURIComponent(searchTerm);
 
+    const categoria = (config as any).categoria;
+    const categoryPath = categoria && categoria !== 'todas' ? `${categoria}/` : '';
     const searchUrl = searchTerm
-      ? `https://lista.mercadolivre.com.br/${encodedTerm}_Discount_${discount}-100_NoIndex_True?sb=all_mercadolibre`
+      ? `https://lista.mercadolivre.com.br/${categoryPath}${encodedTerm}_Discount_${minDiscount}-100_NoIndex_True?sb=all_mercadolibre`
       : 'https://www.mercadolivre.com.br/offers';
+
+    console.log(`[PROMO_ML] URL de busca: ${searchUrl}`);
 
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const puppeteer = require('puppeteer');
@@ -2306,7 +2310,7 @@ functions, etc.)
       });
 
       products = await page.evaluate(() => {
-        const items = Array.from(document.querySelectorAll('.ui-search-layout__item, .promotion-item, .ui-search-result'));
+        const items = Array.from(document.querySelectorAll('.ui-search-results .ui-search-layout__item, [class*="ui-search-layout__item"], .promotion-item, .ui-search-result'));
         return items.map(item => {
           const title = item.querySelector('.ui-search-item__title, .promotion-item__title')?.textContent?.trim();
 
@@ -2934,9 +2938,11 @@ ${config.footerText || ''}`;
         filtered = filtered.filter((p: any) => !sentUrlSet.has(p.productUrl));
       }
 
+      const nextNodeId = edges.find((e) => e.source === node.id)?.target || null;
+      console.log(`[PROMO_ML_API] passing to next node: ${nextNodeId}`);
       if (filtered.length === 0) {
         this.contextService.setVariable(context, 'promoApiProductsFound', false);
-        return { nextNodeId: edges.find((e) => e.source === node.id)?.target || null, shouldWait: false };
+        return { nextNodeId, shouldWait: false };
       }
 
       this.contextService.setVariable(context, 'promoApiProductsFound', true);
@@ -2968,8 +2974,10 @@ ${config.footerText || ''}`;
       console.error('[PROMO_ML_API] Error:', error);
     }
 
+    const nextNodeId = edges.find((e) => e.source === node.id)?.target || null;
+    console.log(`[PROMO_ML_API] passing to next node: ${nextNodeId}`);
     return {
-      nextNodeId: edges.find((e) => e.source === node.id)?.target || null,
+      nextNodeId,
       shouldWait: false
     };
   }
