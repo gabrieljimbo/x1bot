@@ -243,7 +243,7 @@ export class NodeExecutorService {
         return this.executeSequenciaLancamento(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.PROMO_ML_API:
-        return this.executePromoMLApi(node, context, edges, sessionId, contactPhone);
+        return this.executePromoML(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.GRUPO_MEDIA:
         return this.executeGrupoMedia(node, context, edges, sessionId, contactPhone);
@@ -2336,7 +2336,7 @@ export default async function ({ page }) {
 `;
 
       const response = await fetch(
-      \`\${browserlessUrl}/function?token=\${browserlessToken}\`,
+        `${browserlessUrl}/function?token=${browserlessToken}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/javascript' },
@@ -2345,7 +2345,7 @@ export default async function ({ page }) {
       );
 
       if (!response.ok) {
-        throw new Error(\`Browserless error: \${response.statusText}\`);
+        throw new Error(`Browserless error: ${response.statusText}`);
       }
 
       const result = await response.json() as any;
@@ -2403,19 +2403,19 @@ export default async function ({ page }) {
             if (alreadySent) continue;
           }
 
-          const affiliateUrl = product.productUrl + (config.affiliateTag ? `${ product.productUrl.includes('?') ? '&' : '?' } deal_print_id = ${ config.affiliateTag } ` : '');
+          const affiliateUrl = product.productUrl + (config.affiliateTag ? `${product.productUrl.includes('?') ? '&' : '?'} deal_print_id = ${config.affiliateTag} ` : '');
 
-          const caption = `🛒 * ${ product.title }*
+          const caption = `🛒 * ${product.title}*
    
-💰 De ~~R$ ${ product.originalPrice.toLocaleString('pt-BR') } ~~por * R$ ${ product.price.toLocaleString('pt-BR') }*
-🔥 ${ product.discount }% OFF
-⭐ ${ product.rating > 0 ? product.rating + '/5' : 'N/A' } (${ product.reviewCount } avaliações)
-🏪 Vendido por: ${ product.seller }
+💰 De ~~R$ ${product.originalPrice.toLocaleString('pt-BR')} ~~por * R$ ${product.price.toLocaleString('pt-BR')}*
+🔥 ${product.discount}% OFF
+⭐ ${product.rating > 0 ? product.rating + '/5' : 'N/A'} (${product.reviewCount} avaliações)
+🏪 Vendido por: ${product.seller}
 
-${ config.introText || '' }
-👉 ${ affiliateUrl }
+${config.introText || ''}
+👉 ${affiliateUrl}
 
-${ config.footerText || '' } `;
+${config.footerText || ''} `;
 
           try {
             if (product.imageUrl) {
@@ -2446,7 +2446,7 @@ ${ config.footerText || '' } `;
         const promoApiFound = (context.variables as any)?.promoApiProductsFound === true;
         if (!promoApiFound) {
           const searchTerm = this.contextService.interpolate(config.searchTerm, context);
-          const aviso = `🔍 Nenhum produto encontrado para * ${ searchTerm }* no momento.`;
+          const aviso = `🔍 Nenhum produto encontrado para * ${searchTerm}* no momento.`;
           console.log('[PROMO_ML] Nenhum produto encontrado, enviando aviso');
           await this.whatsappSessionManager.sendMessage(sessionId, finalContactPhone, aviso);
         }
@@ -2504,7 +2504,7 @@ ${ config.footerText || '' } `;
       });
 
       if (recentMention) {
-        console.warn(`[GROUP_MENTIONS] skipping mention for ${ contactPhone } as it was mentioned less than 1h ago`);
+        console.warn(`[GROUP_MENTIONS] skipping mention for ${contactPhone} as it was mentioned less than 1h ago`);
         const nextEdge = edges.find((e) => e.source === node.id);
         return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
       }
