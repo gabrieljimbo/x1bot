@@ -2,7 +2,7 @@ import { Controller, Get, Post, Delete, Patch, Body, Param, UseGuards, Request }
 import { ApiConfigsService } from './api-configs.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-@Controller('api-configs')
+@Controller('api/api-configs')
 @UseGuards(JwtAuthGuard)
 export class ApiConfigsController {
     constructor(private service: ApiConfigsService) {}
