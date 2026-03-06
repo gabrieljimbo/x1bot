@@ -2285,6 +2285,11 @@ functions, etc.)
         for (const product of filteredProducts) {
           // Check if sent today
           const cleanUrl = product.productUrl.split('?')[0].split('#')[0];
+          const mlbId = product.productUrl.match(/\/p\/(MLB\d+)/i)?.[1];
+          const shortBase = mlbId ? `https://www.mercadolivre.com.br/p/${mlbId}` : cleanUrl;
+          const affiliateUrl = config.affiliateTag
+            ? `${shortBase}?deal_print_id=${config.affiliateTag}`
+            : shortBase;
 
           if (config.ignoreAlreadySent && tenantId) {
             const startOfDay = new Date();
@@ -2293,14 +2298,12 @@ functions, etc.)
               where: {
                 productUrl: cleanUrl,
                 tenantId,
+                contactPhone: finalContactPhone || '',
                 sentAt: { gte: startOfDay }
               }
             });
             if (alreadySent) continue;
           }
-          const affiliateUrl = config.affiliateTag
-            ? `${cleanUrl}?deal_print_id=${config.affiliateTag}`
-            : cleanUrl;
 
           const caption = `🛒 *${product.title}*
 
@@ -2314,18 +2317,20 @@ ${config.introText || ''}
 ${config.footerText || ''}`;
 
           try {
-            if (product.imageUrl) {
-              await this.whatsappSessionManager.sendMedia(sessionId, finalContactPhone, 'image', product.imageUrl, { caption });
+            const validImageUrl = product.imageUrl?.startsWith('https') ? product.imageUrl : null;
+            if (validImageUrl) {
+              await this.whatsappSessionManager.sendMedia(sessionId, finalContactPhone, 'image', validImageUrl, { caption });
             } else {
               await this.whatsappSessionManager.sendMessage(sessionId, finalContactPhone, caption);
             }
 
-            // Track as sent (usa cleanUrl para evitar duplicatas por parâmetros de tracking)
+            // Track as sent por destino (cleanUrl + tenantId + contactPhone)
             if (tenantId) {
               await this.prisma.promoMLSent.create({
                 data: {
                   productUrl: cleanUrl,
-                  tenantId
+                  tenantId,
+                  contactPhone: finalContactPhone || '',
                 }
               });
             }

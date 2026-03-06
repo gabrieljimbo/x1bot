@@ -362,13 +362,15 @@ enum LicenseStatus {
 }
 
 model PromoMLSent {
-  id         String   @id @default(cuid())
-  productUrl String
-  tenantId   String
-  sentAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  productUrl   String
+  tenantId     String
+  contactPhone String   @default("")
+  sentAt       DateTime @default(now())
 
   @@index([productUrl])
   @@index([tenantId])
+  @@index([contactPhone])
   @@map("promo_ml_sent")
 }
 

@@ -43,7 +43,7 @@ export default async function ({ page }) {
       const title = item.querySelector(".poly-component__title")?.textContent?.trim();
       const link = item.querySelector("a.poly-component__title")?.href;
       const imgEl = item.querySelector("img.poly-component__picture");
-      const img = imgEl?.src || imgEl?.getAttribute('data-src') || null;
+      const img = (imgEl?.src?.startsWith('https') ? imgEl.src : null) || imgEl?.getAttribute('data-src') || null;
       const seller = item.querySelector(".poly-component__seller")?.textContent?.replace(/por\\s+/i, '')?.trim();
       const rating = item.querySelector(".poly-reviews__rating")?.textContent?.trim();
       const reviews = item.querySelector(".poly-reviews__total")?.textContent?.replace(/\\D/g, '')?.trim();
