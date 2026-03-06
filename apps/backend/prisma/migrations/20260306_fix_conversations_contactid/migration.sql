@@ -1,10 +1,31 @@
 -- Fix: contactId was NOT NULL in original migration but is no longer used in schema
--- Every INSERT to conversations was failing with NOT NULL violation, causing Inbox to show empty
-ALTER TABLE "conversations" ALTER COLUMN "contactId" DROP NOT NULL;
+-- Wrapped in DO block to be safe if column does not exist
+DO $$
+BEGIN
+  -- Drop NOT NULL from contactId only if the column exists
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'conversations' AND column_name = 'contactId'
+  ) THEN
+    ALTER TABLE "conversations" ALTER COLUMN "contactId" DROP NOT NULL;
+  END IF;
 
--- Ensure contactPhone and phoneNumber columns exist
-ALTER TABLE "conversations" ADD COLUMN IF NOT EXISTS "contactPhone" TEXT;
-ALTER TABLE "conversations" ADD COLUMN IF NOT EXISTS "phoneNumber" TEXT;
+  -- Ensure contactPhone exists
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'conversations' AND column_name = 'contactPhone'
+  ) THEN
+    ALTER TABLE "conversations" ADD COLUMN "contactPhone" TEXT;
+  END IF;
+
+  -- Ensure phoneNumber exists
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'conversations' AND column_name = 'phoneNumber'
+  ) THEN
+    ALTER TABLE "conversations" ADD COLUMN "phoneNumber" TEXT;
+  END IF;
+END $$;
 
 -- Backfill phoneNumber from contactPhone where missing
 UPDATE "conversations"

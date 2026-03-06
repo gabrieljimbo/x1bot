@@ -13,8 +13,9 @@ fi
 cd /app/apps/backend
 
 echo "📦 Running database migrations..."
-# Resolver migration falhada se existir
+# Resolver migrations falhadas se existirem
 npx prisma migrate resolve --rolled-back 20260304222000_multi_pixel_support 2>/dev/null || true
+npx prisma migrate resolve --rolled-back 20260306_fix_conversations_contactid 2>/dev/null || true
 npx prisma migrate deploy --schema prisma/schema.prisma
 
 echo "🌱 Running database seeds..."
