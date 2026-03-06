@@ -48,9 +48,13 @@ export default async function ({ page }) {
       const reviews = item.querySelector(".poly-reviews__total")?.textContent?.replace(/\\D/g, '')?.trim();
       const fractions = item.querySelectorAll("[class*='andes-money-amount__fraction']");
       const price = fractions[0] ? parseFloat(fractions[0].textContent.replace(/\\D/g, '')) : 0;
+      const discountBadge = item.querySelector("[class*='andes-badge']")?.textContent?.trim();
+      const discountMatch = discountBadge ? discountBadge.match(/(\\d+)\\s*%/) : null;
+      const discountFromBadge = discountMatch ? parseInt(discountMatch[1]) : 0;
       const oldPriceEl = item.querySelector("[class*='andes-money-amount--previous'] [class*='andes-money-amount__fraction']");
       const originalPrice = oldPriceEl ? parseFloat(oldPriceEl.textContent.replace(/\\D/g, '')) : price;
-      const discount = originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
+      const discountFromPrice = originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
+      const discount = Math.max(discountFromBadge, discountFromPrice);
       return { title, productUrl: link, imageUrl: img, seller, rating: rating ? parseFloat(rating) : 0, reviewCount: reviews ? parseInt(reviews) : 0, price, originalPrice, discount };
     }).filter(p => p.title && p.productUrl && p.price > 0);
   });
@@ -121,7 +125,7 @@ export default async function ({ page }) {
         const cached = await this.prisma.mlDailyOffer.findMany({
             where: {
                 expiresAt: { gte: now },
-                discount: { gte: minDiscount },
+                ...(minDiscount > 0 ? { discount: { gte: minDiscount } } : {}),
                 rating: { gte: minRating },
             },
             orderBy: { discount: 'desc' },

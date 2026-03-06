@@ -1525,7 +1525,7 @@ function PromoMLConfig({ config, setConfig }: any) {
               <label className="block text-sm font-medium mb-1.5 text-gray-200">🏷️ Desconto mín. (%)</label>
               <input
                 type="number"
-                value={config.minDiscount || 10}
+                value={config.minDiscount ?? 10}
                 onChange={(e) => setConfig({ ...config, minDiscount: parseInt(e.target.value) || 0 })}
                 className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
                 min="0"
