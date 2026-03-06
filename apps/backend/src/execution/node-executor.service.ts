@@ -2271,6 +2271,11 @@ functions, etc.)
 
     let filteredProducts = await this.mlOffersService.searchOffers(keywords, minDiscount, minRating, limit);
 
+    // Remove duplicatas por productUrl
+    filteredProducts = filteredProducts.filter((p, index, self) =>
+      index === self.findIndex(t => t.productUrl === p.productUrl)
+    );
+
     console.log(`[PROMO_ML] Encontrados ${filteredProducts.length} produtos para keywords: ${keywords.join(', ')}`);
 
     // 3. Send to WhatsApp
@@ -2291,15 +2296,15 @@ functions, etc.)
             if (alreadySent) continue;
           }
 
+          const cleanUrl = product.productUrl.split('?')[0].split('#')[0];
           const affiliateUrl = config.affiliateTag
-            ? `${product.productUrl}?deal_print_id=${config.affiliateTag}`
-            : product.productUrl;
+            ? `${cleanUrl}?deal_print_id=${config.affiliateTag}`
+            : cleanUrl;
 
           const caption = `🛒 * ${product.title}*
-   
+
 💰 De ~~R$ ${product.originalPrice.toLocaleString('pt-BR')} ~~por * R$ ${product.price.toLocaleString('pt-BR')}*
-🔥 ${product.discount}% OFF
-⭐ ${product.rating > 0 ? product.rating + '/5' : 'N/A'} (${product.reviewCount} avaliações)
+${product.discount > 0 ? `🔥 ${product.discount}% OFF\n` : ''}⭐ ${product.rating > 0 ? product.rating + '/5' : 'N/A'} (${product.reviewCount} avaliações)
 🏪 Vendido por: ${product.seller}
 
 ${config.introText || ''}

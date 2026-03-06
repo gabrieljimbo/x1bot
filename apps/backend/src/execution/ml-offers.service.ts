@@ -46,8 +46,8 @@ export default async function ({ page }) {
       const seller = item.querySelector(".poly-component__seller")?.textContent?.replace(/por\\s+/i, '')?.trim();
       const rating = item.querySelector(".poly-reviews__rating")?.textContent?.trim();
       const reviews = item.querySelector(".poly-reviews__total")?.textContent?.replace(/\\D/g, '')?.trim();
-      const fractions = item.querySelectorAll("[class*='andes-money-amount__fraction']");
-      const price = fractions[0] ? parseFloat(fractions[0].textContent.replace(/\\D/g, '')) : 0;
+      const currentPriceEl = item.querySelector(".poly-price__current [class*='andes-money-amount__fraction']");
+      const price = currentPriceEl ? parseFloat(currentPriceEl.textContent.replace(/\\D/g, '')) : 0;
       const discountBadge = item.querySelector("[class*='andes-badge']")?.textContent?.trim();
       const discountMatch = discountBadge ? discountBadge.match(/(\\d+)\\s*%/) : null;
       const discountFromBadge = discountMatch ? parseInt(discountMatch[1]) : 0;
