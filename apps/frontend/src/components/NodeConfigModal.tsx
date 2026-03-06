@@ -7276,6 +7276,77 @@ return {
           </div>
         )
 
+      case 'SEND_CONTACT':
+        return (
+          <div className="space-y-6">
+            <div className="bg-[#1a2535] border border-blue-700/30 rounded-lg p-4">
+              <div className="flex items-start gap-4">
+                <div className="text-3xl">👤</div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-white mb-1">Enviar Contato</h3>
+                  <p className="text-xs text-gray-400">
+                    Envia um cartão de contato. O destinatário verá os botões &quot;Salvar&quot; e &quot;Conversar&quot; nativamente no WhatsApp.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-gray-200">Nome do Contato</label>
+              <input
+                type="text"
+                value={config.nome || ''}
+                onChange={(e) => setConfig({ ...config, nome: e.target.value })}
+                placeholder="Ex: João Silva"
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-gray-200">Telefone (com DDD e código do país)</label>
+              <input
+                type="text"
+                value={config.telefone || ''}
+                onChange={(e) => setConfig({ ...config, telefone: e.target.value })}
+                placeholder="Ex: 5511999998888"
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Use somente números. Ex: 5511999998888 (55 = Brasil)</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-gray-200">Empresa / Cargo <span className="text-gray-500 font-normal">(opcional)</span></label>
+              <input
+                type="text"
+                value={config.empresa || ''}
+                onChange={(e) => setConfig({ ...config, empresa: e.target.value })}
+                placeholder="Ex: Suporte X1Bot"
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
+              />
+            </div>
+
+            {(config.nome || config.telefone) && (
+              <div className="bg-[#0f1f2e] border border-blue-800/40 rounded-xl p-4">
+                <p className="text-xs text-gray-400 mb-3 font-medium uppercase tracking-wider">Preview do cartão</p>
+                <div className="bg-[#1a2535] border border-blue-700/20 rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+                    {(config.nome || 'C')[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-semibold truncate">{config.nome || 'Nome do Contato'}</p>
+                    {config.empresa && <p className="text-gray-400 text-xs truncate">{config.empresa}</p>}
+                    <p className="text-gray-500 text-xs truncate">+{(config.telefone || '').replace(/\D/g, '')}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <div className="flex-1 bg-[#1e3a4a] border border-blue-700/30 rounded-lg py-1.5 text-center text-xs text-blue-300 font-medium">Salvar</div>
+                  <div className="flex-1 bg-[#1e3a4a] border border-blue-700/30 rounded-lg py-1.5 text-center text-xs text-blue-300 font-medium">Conversar</div>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+
       default:
         return (
           <div className="text-center py-8">

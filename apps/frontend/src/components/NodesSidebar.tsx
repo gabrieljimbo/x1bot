@@ -105,6 +105,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         description: 'Envia chave PIX com botão copiar (sem aguardar)'
       },
       {
+        type: 'SEND_CONTACT' as WorkflowNodeType,
+        label: 'Enviar Contato',
+        icon: '👤',
+        color: 'from-blue-500 to-cyan-500',
+        bgColor: 'bg-[#1a2535]',
+        borderColor: 'border-[#3b6e8f]',
+        description: 'Envia um contato com botões "Salvar" e "Conversar"'
+      },
+      {
         type: 'SEND_BUTTONS' as WorkflowNodeType,
         label: 'Enviar Botões',
         icon: '🔘',

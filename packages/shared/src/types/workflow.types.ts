@@ -38,6 +38,7 @@ export enum WorkflowNodeType {
   RANDOMIZER = 'RANDOMIZER',
   PIXEL_EVENT = 'PIXEL_EVENT',
   PIX_SIMPLES = 'PIX_SIMPLES',
+  SEND_CONTACT = 'SEND_CONTACT',
   END = 'END',
 }
 
@@ -401,6 +402,12 @@ export interface PixSimplesConfig {
   nomeRecebedor: string;
   valor: string;
   descricao?: string;
+}
+
+export interface SendContactConfig {
+  nome: string;
+  telefone: string;
+  empresa?: string;
 }
 
 export interface MarkStageConfig {

@@ -84,6 +84,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#4d9b4d]',
     iconBg: 'bg-gradient-to-br from-lime-500 to-green-500',
   },
+  'SEND_CONTACT': {
+    label: 'Enviar Contato',
+    subtitle: 'AÇÃO',
+    icon: '👤',
+    bgColor: 'bg-[#1a2535]',
+    borderColor: 'border-[#3b6e8f]',
+    iconBg: 'bg-gradient-to-br from-blue-500 to-cyan-500',
+  },
   'HTTP_REQUEST': {
     label: 'HTTP Request',
     subtitle: 'AÇÃO',
@@ -532,6 +540,10 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
 
     if (type === 'PIX_SIMPLES') {
       return `🟢 R$ ${config.valor || '?'} • ${config.chavePix || 'chave não configurada'}`
+    }
+
+    if (type === 'SEND_CONTACT') {
+      return `👤 ${config.nome || 'Nome'} • ${config.telefone || 'Telefone'}`
     }
 
     if (type === 'SEND_PIX') {

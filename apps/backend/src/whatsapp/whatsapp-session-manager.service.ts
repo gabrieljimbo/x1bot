@@ -528,6 +528,38 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Send SEND_CONTACT — contact card with name and phone, WhatsApp shows "Salvar" and "Conversar"
+   */
+  async sendContact(sessionId: string, contactPhone: string, config: { nome: string; telefone: string; empresa?: string }): Promise<void> {
+    const sessionClient = this.resolveSessionClient(sessionId);
+    if (!sessionClient) throw new Error('Session not found');
+    if (sessionClient.status !== WhatsappSessionStatus.CONNECTED) throw new Error('Session not connected');
+
+    const jid = this.formatJid(contactPhone);
+    const rawPhone = config.telefone.replace(/\D/g, '');
+    const vcard = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      `FN:${config.nome}`,
+      ...(config.empresa ? [`ORG:${config.empresa}`] : []),
+      `TEL;type=CELL;type=VOICE;waid=${rawPhone}:+${rawPhone}`,
+      'END:VCARD',
+    ].join('\n');
+
+    await this.messageQueue.enqueue(
+      sessionId,
+      jid,
+      sessionClient.socket,
+      { type: 'text', payload: { text: config.nome } },
+      async () => {
+        await sessionClient.socket.sendMessage(jid, {
+          contacts: { displayName: config.nome, contacts: [{ vcard }] },
+        });
+      }
+    );
+  }
+
+  /**
    * Send WhatsApp media (image, video, audio, document)
    */
   async sendMedia(

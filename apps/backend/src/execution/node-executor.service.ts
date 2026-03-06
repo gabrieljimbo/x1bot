@@ -25,6 +25,7 @@ import {
   RmktConfig,
   PixConfig,
   PixSimplesConfig,
+  SendContactConfig,
   PromoMLConfig,
   MencionarTodosConfig,
   AquecimentoConfig,
@@ -149,6 +150,33 @@ export class NodeExecutorService {
         pixConfig: interpolatedConfig,
       } : undefined,
     };
+  }
+
+  /**
+   * Execute SEND_CONTACT node — sends a contact card and continues immediately
+   */
+  private async executeSendContact(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    sessionId?: string,
+    contactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as SendContactConfig;
+    const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
+
+    const interpolated: SendContactConfig = {
+      nome: this.contextService.interpolate(config.nome, context),
+      telefone: this.contextService.interpolate(config.telefone, context),
+      empresa: config.empresa ? this.contextService.interpolate(config.empresa, context) : undefined,
+    };
+
+    if (sessionId && destination) {
+      await this.whatsappSessionManager.sendContact(sessionId, destination, interpolated);
+    }
+
+    const nextEdge = edges.find(e => e.source === node.id);
+    return { nextNodeId: nextEdge?.target ?? null, shouldWait: false };
   }
 
   /**
@@ -291,6 +319,9 @@ export class NodeExecutorService {
 
       case WorkflowNodeType.PIX_SIMPLES:
         return this.executePixSimples(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.SEND_CONTACT:
+        return this.executeSendContact(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
