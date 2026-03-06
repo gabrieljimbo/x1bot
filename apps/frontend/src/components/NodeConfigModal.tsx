@@ -4794,28 +4794,79 @@ export default function NodeConfigModal({
               </div>
             </div>
 
+            {/* MODO DE ENVIO */}
+            <div className="border border-gray-700 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-200">Enviar como Contato</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Exibe o botão nativo <span className="text-green-400">"Copiar chave Pix"</span> no WhatsApp (recomendado para chave telefone)
+                  </p>
+                </div>
+                <button
+                  onClick={() => setConfig({ ...config, enviarComoContato: !config.enviarComoContato })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.enviarComoContato ? 'bg-green-500' : 'bg-gray-600'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.enviarComoContato ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            </div>
+
             {/* MESSAGE PREVIEW */}
-            <div className="mt-8 pt-6 border-t border-gray-700">
+            <div className="mt-2 pt-6 border-t border-gray-700">
               <label className="block text-xs font-bold text-gray-500 uppercase mb-4 tracking-widest">
                 Preview da Mensagem
               </label>
-              <div className="bg-[#0b141a] rounded-lg p-4 font-sans text-[14px] leading-relaxed relative overflow-hidden ring-1 ring-white/10 shadow-xl">
-                <div className="text-[#e9edef] whitespace-pre-wrap">
-                  {`💰 *${config.descricao || 'Cobrança PIX'}*\n\n`}
-                  {config.mensagemCustom ? `${config.mensagemCustom}\n\n` : ''}
-                  {`Valor: *R$ ${config.valor || '0.00'}*\n`}
-                  {`Recebedor: ${config.nomeRecebedor || '...'}\n\n`}
-                  {`━━━━━━━━━━━━━━━━━\n`}
-                  {`📋 *Chave PIX:*\n`}
-                  {`${config.chavePix || '...'}\n`}
-                  {`━━━━━━━━━━━━━━━━━\n\n`}
-                  {`Após o pagamento, envie o comprovante aqui. ✅\n`}
-                  {`⏱ _Válido por ${config.timeoutMinutos || 30} minutos._`}
+              {config.enviarComoContato ? (
+                <div className="space-y-2">
+                  {/* Contact card preview */}
+                  <div className="bg-[#0b141a] rounded-lg p-3 ring-1 ring-white/10 shadow-xl">
+                    <div className="flex items-center gap-3 bg-[#1f2c33] rounded-lg p-3">
+                      <div className="w-10 h-10 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                        {(config.nomeRecebedor || 'N')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-medium truncate">{config.nomeRecebedor || 'Nome Recebedor'}</p>
+                        <p className="text-gray-400 text-xs">Celular: {config.chavePix || '...'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 border-t border-gray-700 pt-2">
+                      <button className="w-full flex items-center justify-center gap-2 text-green-400 text-sm py-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        Copiar chave Pix
+                      </button>
+                    </div>
+                  </div>
+                  {/* Text details preview */}
+                  <div className="bg-[#0b141a] rounded-lg p-4 ring-1 ring-white/10 shadow-xl">
+                    <div className="text-[#e9edef] whitespace-pre-wrap text-[13px]">
+                      {`💰 *${config.descricao || 'Cobrança PIX'}*`}
+                      {config.mensagemCustom ? `\n\n${config.mensagemCustom}` : ''}
+                      {`\n\nValor: *R$ ${config.valor || '0.00'}*`}
+                      {`\n⏱ _Válido por ${config.timeoutMinutos || 30} minutos._`}
+                      {`\n\nApós o pagamento, envie o comprovante aqui. ✅`}
+                    </div>
+                  </div>
                 </div>
-                <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">
-                  12:00 ✓✓
+              ) : (
+                <div className="bg-[#0b141a] rounded-lg p-4 font-sans text-[14px] leading-relaxed relative overflow-hidden ring-1 ring-white/10 shadow-xl">
+                  <div className="text-[#e9edef] whitespace-pre-wrap">
+                    {`💰 *${config.descricao || 'Cobrança PIX'}*\n\n`}
+                    {config.mensagemCustom ? `${config.mensagemCustom}\n\n` : ''}
+                    {`Valor: *R$ ${config.valor || '0.00'}*\n`}
+                    {`Recebedor: ${config.nomeRecebedor || '...'}\n\n`}
+                    {`━━━━━━━━━━━━━━━━━\n`}
+                    {`📋 *Chave PIX:*\n`}
+                    {`${config.chavePix || '...'}\n`}
+                    {`━━━━━━━━━━━━━━━━━\n\n`}
+                    {`Após o pagamento, envie o comprovante aqui. ✅\n`}
+                    {`⏱ _Válido por ${config.timeoutMinutos || 30} minutos._`}
+                  </div>
+                  <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">
+                    12:00 ✓✓
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )

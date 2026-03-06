@@ -392,6 +392,7 @@ export interface PixConfig {
   autoRetry?: boolean;
   retryCount?: number;
   enviarMensagensAutomaticas?: boolean;
+  enviarComoContato?: boolean; // envia como contato vCard com botão "Copiar chave Pix"
 }
 
 export interface MarkStageConfig {

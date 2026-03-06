@@ -442,8 +442,52 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     }
 
     const jid = this.formatJid(contactPhone);
-
     const timeoutMin = config.timeoutMinutos || 30;
+
+    if (config.enviarComoContato) {
+      // Build vCard — WhatsApp Brasil renders "Copiar chave Pix" button for phone keys
+      const digits = config.chavePix.replace(/\D/g, '');
+      const waid = digits.startsWith('55') ? digits : `55${digits}`;
+      const displayNumber = `+${waid}`;
+
+      const vcard = [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `FN:${config.nomeRecebedor}`,
+        `TEL;type=CELL;type=VOICE;waid=${waid}:${displayNumber}`,
+        'END:VCARD',
+      ].join('\n');
+
+      const detailsMsg = [
+        `💰 *${config.descricao || 'Cobrança PIX'}*`,
+        config.mensagemCustom ? `\n${config.mensagemCustom}` : '',
+        `\nValor: *R$ ${config.valor}*`,
+        `⏱ _Válido por ${timeoutMin} minutos._`,
+        `\nApós o pagamento, envie o comprovante aqui. ✅`,
+      ].join('\n');
+
+      await this.messageQueue.enqueue(
+        sessionId,
+        jid,
+        sessionClient.socket,
+        { type: 'text', payload: { text: detailsMsg } },
+        async () => {
+          // Send contact card first — shows "Copiar chave Pix" button
+          await sessionClient.socket.sendMessage(jid, {
+            contacts: {
+              displayName: config.nomeRecebedor,
+              contacts: [{ vcard }],
+            },
+          });
+          await new Promise(resolve => setTimeout(resolve, 600));
+          // Then send payment details text
+          await sessionClient.socket.sendMessage(jid, { text: detailsMsg });
+        }
+      );
+      return;
+    }
+
+    // Default mode: text + nativeFlowMessage with fallback
     const formattedMessage = `💰 *${config.descricao || 'Dados para pagamento'}*
 
 ${config.mensagemCustom || ''}
@@ -493,7 +537,7 @@ Após o pagamento, envie o comprovante aqui. ✅
         } catch (error) {
           console.warn(`[SEND_PIX] Native flow message failed for ${jid}, falling back to text messages`);
           await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
-          await new Promise(resolve => setTimeout(resolve, 500)); // Short delay
+          await new Promise(resolve => setTimeout(resolve, 500));
           await sessionClient.socket.sendMessage(jid, { text: config.chavePix });
         }
       }
