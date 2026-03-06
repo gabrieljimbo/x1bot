@@ -2258,6 +2258,7 @@ functions, etc.)
     const tenantId = (context.variables as any)?._tenantId;
     const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
     const finalContactPhone = destination;
+    console.log(`[PROMO_ML] Destino: ${finalContactPhone} | groupJid: ${(context.variables as any)?.groupJid} | contactId: ${context.contactId} | contactPhone param: ${contactPhone}`);
 
     // 1. Scraping logic via cache
     const keywords = (config.searchTerm || '')
@@ -2270,40 +2271,51 @@ functions, etc.)
     const minReviews = config.minReviews || 0;
     const limit = config.maxQuantity || 5;
 
-    let filteredProducts = await this.mlOffersService.searchOffers(keywords, minDiscount, minRating, limit, minReviews);
+    // Fetch a larger pool so ignoreAlreadySent doesn't reduce below the limit
+    let filteredProducts = await this.mlOffersService.searchOffers(keywords, minDiscount, minRating, limit * 10, minReviews);
 
     // Remove duplicatas por productUrl
     filteredProducts = filteredProducts.filter((p, index, self) =>
       index === self.findIndex(t => t.productUrl === p.productUrl)
     );
 
-    console.log(`[PROMO_ML] Encontrados ${filteredProducts.length} produtos para keywords: ${keywords.join(', ')}`);
+    console.log(`[PROMO_ML] Encontrados ${filteredProducts.length} produtos no cache para keywords: ${keywords.join(', ')}`);
+
+    // Pre-filter already sent products so we can report accurate count
+    if (config.ignoreAlreadySent && tenantId && finalContactPhone) {
+      const startOfDay = new Date();
+      startOfDay.setUTCHours(3, 0, 0, 0);
+      if (new Date().getUTCHours() < 3) startOfDay.setUTCDate(startOfDay.getUTCDate() - 1);
+
+      const cleanUrls = filteredProducts.map(p => p.productUrl.split('?')[0].split('#')[0]);
+      const alreadySentRecords = await this.prisma.promoMLSent.findMany({
+        where: {
+          productUrl: { in: cleanUrls },
+          tenantId,
+          contactPhone: finalContactPhone,
+          sentAt: { gte: startOfDay },
+        },
+        select: { productUrl: true },
+      });
+      const sentUrls = new Set(alreadySentRecords.map(r => r.productUrl));
+      filteredProducts = filteredProducts.filter(p => !sentUrls.has(p.productUrl.split('?')[0].split('#')[0]));
+      console.log(`[PROMO_ML] Após ignorar já enviados: ${filteredProducts.length} produtos disponíveis`);
+    }
+
+    // Apply final limit
+    filteredProducts = filteredProducts.slice(0, limit);
+    console.log(`[PROMO_ML] Enviando ${filteredProducts.length} produto(s) para ${finalContactPhone}`);
 
     // 3. Send to WhatsApp
     if (sessionId && finalContactPhone && this.whatsappSessionManager) {
       if (filteredProducts.length > 0) {
         for (const product of filteredProducts) {
-          // Check if sent today
           const cleanUrl = product.productUrl.split('?')[0].split('#')[0];
           const mlbId = product.productUrl.match(/\/p\/(MLB\d+)/i)?.[1];
           const shortBase = mlbId ? `https://www.mercadolivre.com.br/p/${mlbId}` : cleanUrl;
           const affiliateUrl = config.affiliateTag
             ? `${shortBase}?deal_print_id=${config.affiliateTag}`
             : shortBase;
-
-          if (config.ignoreAlreadySent && tenantId) {
-            const startOfDay = new Date();
-            startOfDay.setHours(0, 0, 0, 0);
-            const alreadySent = await this.prisma.promoMLSent.findFirst({
-              where: {
-                productUrl: cleanUrl,
-                tenantId,
-                contactPhone: finalContactPhone || '',
-                sentAt: { gte: startOfDay }
-              }
-            });
-            if (alreadySent) continue;
-          }
 
           const caption = `🛒 *${product.title}*
 
