@@ -42,7 +42,8 @@ export default async function ({ page }) {
     return items.map(item => {
       const title = item.querySelector(".poly-component__title")?.textContent?.trim();
       const link = item.querySelector("a.poly-component__title")?.href;
-      const img = item.querySelector("img.poly-component__picture")?.src;
+      const imgEl = item.querySelector("img.poly-component__picture");
+      const img = imgEl?.src || imgEl?.getAttribute('data-src') || null;
       const seller = item.querySelector(".poly-component__seller")?.textContent?.replace(/por\\s+/i, '')?.trim();
       const rating = item.querySelector(".poly-reviews__rating")?.textContent?.trim();
       const reviews = item.querySelector(".poly-reviews__total")?.textContent?.replace(/\\D/g, '')?.trim();
@@ -119,7 +120,7 @@ export default async function ({ page }) {
         }
     }
 
-    async searchOffers(keywords: string[], minDiscount = 0, minRating = 0, limit = 5): Promise<any[]> {
+    async searchOffers(keywords: string[], minDiscount = 0, minRating = 0, limit = 5, minReviews = 0): Promise<any[]> {
         const now = new Date();
 
         const cached = await this.prisma.mlDailyOffer.findMany({
@@ -127,6 +128,7 @@ export default async function ({ page }) {
                 expiresAt: { gte: now },
                 ...(minDiscount > 0 ? { discount: { gte: minDiscount } } : {}),
                 rating: { gte: minRating },
+                ...(minReviews > 0 ? { reviewCount: { gte: minReviews } } : {}),
             },
             orderBy: { discount: 'desc' },
         });

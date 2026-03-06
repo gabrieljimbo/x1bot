@@ -405,6 +405,7 @@ export interface PromoMLConfig {
   searchTerm: string;
   minRating: number;
   minDiscount: number;
+  minReviews: number;
   category: string;
   bestValue: boolean;
   maxQuantity: number;

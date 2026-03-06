@@ -2267,9 +2267,10 @@ functions, etc.)
 
     const minDiscount = config.minDiscount || 0;
     const minRating = config.minRating || 0;
+    const minReviews = config.minReviews || 0;
     const limit = config.maxQuantity || 5;
 
-    let filteredProducts = await this.mlOffersService.searchOffers(keywords, minDiscount, minRating, limit);
+    let filteredProducts = await this.mlOffersService.searchOffers(keywords, minDiscount, minRating, limit, minReviews);
 
     // Remove duplicatas por productUrl
     filteredProducts = filteredProducts.filter((p, index, self) =>
@@ -2283,34 +2284,34 @@ functions, etc.)
       if (filteredProducts.length > 0) {
         for (const product of filteredProducts) {
           // Check if sent today
+          const cleanUrl = product.productUrl.split('?')[0].split('#')[0];
+
           if (config.ignoreAlreadySent && tenantId) {
             const startOfDay = new Date();
             startOfDay.setHours(0, 0, 0, 0);
             const alreadySent = await this.prisma.promoMLSent.findFirst({
               where: {
-                productUrl: product.productUrl,
+                productUrl: cleanUrl,
                 tenantId,
                 sentAt: { gte: startOfDay }
               }
             });
             if (alreadySent) continue;
           }
-
-          const cleanUrl = product.productUrl.split('?')[0].split('#')[0];
           const affiliateUrl = config.affiliateTag
             ? `${cleanUrl}?deal_print_id=${config.affiliateTag}`
             : cleanUrl;
 
-          const caption = `🛒 * ${product.title}*
+          const caption = `🛒 *${product.title}*
 
-💰 De ~~R$ ${product.originalPrice.toLocaleString('pt-BR')} ~~por * R$ ${product.price.toLocaleString('pt-BR')}*
-${product.discount > 0 ? `🔥 ${product.discount}% OFF\n` : ''}⭐ ${product.rating > 0 ? product.rating + '/5' : 'N/A'} (${product.reviewCount} avaliações)
-🏪 Vendido por: ${product.seller}
+💰 De ~R$ ${product.originalPrice.toLocaleString('pt-BR')}~ por *R$ ${product.price.toLocaleString('pt-BR')}*
+${product.discount > 0 ? `🔥 *${product.discount}% OFF*\n` : ''}⭐ ${product.rating > 0 ? product.rating + '/5' : 'N/A'} (${product.reviewCount} avaliações)
+🏪 _Vendido por: ${product.seller}_
 
 ${config.introText || ''}
 👉 ${affiliateUrl}
 
-${config.footerText || ''} `;
+${config.footerText || ''}`;
 
           try {
             if (product.imageUrl) {
@@ -2319,11 +2320,11 @@ ${config.footerText || ''} `;
               await this.whatsappSessionManager.sendMessage(sessionId, finalContactPhone, caption);
             }
 
-            // Track as sent
+            // Track as sent (usa cleanUrl para evitar duplicatas por parâmetros de tracking)
             if (tenantId) {
               await this.prisma.promoMLSent.create({
                 data: {
-                  productUrl: product.productUrl,
+                  productUrl: cleanUrl,
                   tenantId
                 }
               });

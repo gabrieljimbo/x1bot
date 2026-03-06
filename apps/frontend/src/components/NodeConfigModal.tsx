@@ -1533,6 +1533,17 @@ function PromoMLConfig({ config, setConfig }: any) {
               />
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">💬 Avaliações mínimas</label>
+            <input
+              type="number"
+              value={config.minReviews ?? 0}
+              onChange={(e) => setConfig({ ...config, minReviews: parseInt(e.target.value) || 0 })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+              min="0"
+              placeholder="0 = sem filtro"
+            />
+          </div>
 
           <div className="flex items-center justify-between p-4 bg-[#151515] border border-gray-700 rounded-lg">
             <div>
