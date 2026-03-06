@@ -76,6 +76,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#3b7d3b]',
     iconBg: 'bg-gradient-to-br from-green-500 to-green-600',
   },
+  'PIX_SIMPLES': {
+    label: 'Enviar PIX',
+    subtitle: 'AÇÃO',
+    icon: '🟢',
+    bgColor: 'bg-[#1a2e1a]',
+    borderColor: 'border-[#4d9b4d]',
+    iconBg: 'bg-gradient-to-br from-lime-500 to-green-500',
+  },
   'HTTP_REQUEST': {
     label: 'HTTP Request',
     subtitle: 'AÇÃO',
@@ -520,6 +528,10 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
     if (type === 'TRIGGER_GRUPO') {
       if (!config.executions || config.executions.length === 0) return '👥 Nenhuma execução'
       return `📅 ${config.executions.length} execução(ões) configurada(s)`
+    }
+
+    if (type === 'PIX_SIMPLES') {
+      return `🟢 R$ ${config.valor || '?'} • ${config.chavePix || 'chave não configurada'}`
     }
 
     if (type === 'SEND_PIX') {

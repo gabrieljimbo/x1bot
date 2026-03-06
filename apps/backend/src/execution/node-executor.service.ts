@@ -24,6 +24,7 @@ import {
   PixRecognitionConfig,
   RmktConfig,
   PixConfig,
+  PixSimplesConfig,
   PromoMLConfig,
   MencionarTodosConfig,
   AquecimentoConfig,
@@ -151,6 +152,34 @@ export class NodeExecutorService {
   }
 
   /**
+   * Execute PIX_SIMPLES node — sends Pix message and continues immediately
+   */
+  private async executePixSimples(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    sessionId?: string,
+    contactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as PixSimplesConfig;
+    const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
+
+    const interpolated: PixSimplesConfig = {
+      chavePix: this.contextService.interpolate(config.chavePix, context),
+      nomeRecebedor: this.contextService.interpolate(config.nomeRecebedor, context),
+      valor: this.contextService.interpolate(config.valor, context),
+      descricao: config.descricao ? this.contextService.interpolate(config.descricao, context) : undefined,
+    };
+
+    if (sessionId && destination) {
+      await this.whatsappSessionManager.sendPixSimples(sessionId, destination, interpolated);
+    }
+
+    const nextEdge = edges.find(e => e.source === node.id);
+    return { nextNodeId: nextEdge?.target ?? null };
+  }
+
+  /**
    * Execute a node and return the result
    */
   async executeNode(
@@ -259,6 +288,9 @@ export class NodeExecutorService {
 
       case WorkflowNodeType.PIXEL_EVENT:
         return this.executePixelEvent(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.PIX_SIMPLES:
+        return this.executePixSimples(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);

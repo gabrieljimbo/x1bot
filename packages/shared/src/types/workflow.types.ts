@@ -37,6 +37,7 @@ export enum WorkflowNodeType {
   GRUPO_WAIT = 'GRUPO_WAIT',
   RANDOMIZER = 'RANDOMIZER',
   PIXEL_EVENT = 'PIXEL_EVENT',
+  PIX_SIMPLES = 'PIX_SIMPLES',
   END = 'END',
 }
 
@@ -393,6 +394,13 @@ export interface PixConfig {
   retryCount?: number;
   enviarMensagensAutomaticas?: boolean;
   enviarComoContato?: boolean; // envia como contato vCard com botão "Copiar chave Pix"
+}
+
+export interface PixSimplesConfig {
+  chavePix: string;
+  nomeRecebedor: string;
+  valor: string;
+  descricao?: string;
 }
 
 export interface MarkStageConfig {

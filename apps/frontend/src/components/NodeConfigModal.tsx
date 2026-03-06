@@ -4679,6 +4679,109 @@ export default function NodeConfigModal({
           </div>
         )
 
+      case 'PIX_SIMPLES':
+        return (
+          <div className="space-y-6">
+            <div className="bg-[#1a2e1a] border border-green-700/30 rounded-lg p-4">
+              <div className="flex items-start gap-4">
+                <div className="text-3xl">🟢</div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-white mb-1">Enviar PIX</h3>
+                  <p className="text-xs text-gray-400">
+                    Envia a chave Pix com botão "Copiar chave Pix" e continua o fluxo imediatamente. Para chave telefone, aparece o botão nativo do WhatsApp.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-gray-200">Chave PIX</label>
+              <input
+                type="text"
+                value={config.chavePix || ''}
+                onChange={(e) => setConfig({ ...config, chavePix: e.target.value })}
+                placeholder="Telefone, CPF, e-mail ou chave aleatória"
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">Nome do Recebedor</label>
+                <input
+                  type="text"
+                  value={config.nomeRecebedor || ''}
+                  onChange={(e) => setConfig({ ...config, nomeRecebedor: e.target.value })}
+                  placeholder="Ex: João Silva"
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">Valor (R$)</label>
+                <input
+                  type="text"
+                  value={config.valor || ''}
+                  onChange={(e) => setConfig({ ...config, valor: e.target.value })}
+                  placeholder="Ex: 15 ou {{valor}}"
+                  className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-gray-200">Descrição (Opcional)</label>
+              <input
+                type="text"
+                value={config.descricao || ''}
+                onChange={(e) => setConfig({ ...config, descricao: e.target.value })}
+                placeholder="Ex: Pagamento Pedido #123"
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
+              />
+            </div>
+
+            {/* PREVIEW */}
+            <div className="pt-4 border-t border-gray-700">
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-4 tracking-widest">
+                Preview da Mensagem
+              </label>
+              {config.chavePix && /^\d{10,13}$/.test(config.chavePix.replace(/\D/g, '')) ? (
+                <div className="space-y-2">
+                  <div className="bg-[#0b141a] rounded-lg p-3 ring-1 ring-white/10 shadow-xl">
+                    <div className="flex items-center gap-3 bg-[#1f2c33] rounded-lg p-3">
+                      <div className="w-10 h-10 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                        {(config.nomeRecebedor || 'N')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-medium truncate">{config.nomeRecebedor || 'Nome Recebedor'}</p>
+                        <p className="text-gray-400 text-xs">Celular: {config.chavePix}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 border-t border-gray-700 pt-2">
+                      <button className="w-full flex items-center justify-center gap-2 text-green-400 text-sm py-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        Copiar chave Pix
+                      </button>
+                    </div>
+                  </div>
+                  <div className="bg-[#0b141a] rounded-lg p-3 ring-1 ring-white/10 shadow-xl text-[#e9edef] text-[13px] whitespace-pre-wrap">
+                    {`💰 *${config.descricao || 'Pagamento PIX'}*\n\nValor: *R$ ${config.valor || '0,00'}*\nRecebedor: ${config.nomeRecebedor || '...'}`}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-[#0b141a] rounded-lg p-4 ring-1 ring-white/10 shadow-xl text-[#e9edef] text-[13px] whitespace-pre-wrap">
+                  {`💰 *${config.descricao || 'Pagamento PIX'}*\n\nValor: *R$ ${config.valor || '0,00'}*\nRecebedor: ${config.nomeRecebedor || '...'}\n\n📋 *Chave PIX:*\n`}
+                  <span className="font-mono bg-[#1f2c33] px-1 rounded">{config.chavePix || 'sua-chave'}</span>
+                </div>
+              )}
+              <p className="text-xs text-gray-600 mt-2">
+                {config.chavePix && /^\d{10,13}$/.test(config.chavePix.replace(/\D/g, ''))
+                  ? '✅ Chave telefone detectada — aparece botão nativo "Copiar chave Pix"'
+                  : '📋 Chave não-telefone — enviada como texto copiável'}
+              </p>
+            </div>
+          </div>
+        )
+
       case 'SEND_PIX':
         return (
           <div className="space-y-6">
@@ -4844,22 +4947,20 @@ export default function NodeConfigModal({
                       {config.mensagemCustom ? `\n\n${config.mensagemCustom}` : ''}
                       {`\n\nValor: *R$ ${config.valor || '0.00'}*`}
                       {`\n⏱ _Válido por ${config.timeoutMinutos || 30} minutos._`}
-                      {`\n\nApós o pagamento, envie o comprovante aqui. ✅`}
+                      {`\n\nApós pagar, envie o comprovante. ✅`}
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="bg-[#0b141a] rounded-lg p-4 font-sans text-[14px] leading-relaxed relative overflow-hidden ring-1 ring-white/10 shadow-xl">
                   <div className="text-[#e9edef] whitespace-pre-wrap">
-                    {`💰 *${config.descricao || 'Cobrança PIX'}*\n\n`}
-                    {config.mensagemCustom ? `${config.mensagemCustom}\n\n` : ''}
-                    {`Valor: *R$ ${config.valor || '0.00'}*\n`}
-                    {`Recebedor: ${config.nomeRecebedor || '...'}\n\n`}
-                    {`━━━━━━━━━━━━━━━━━\n`}
-                    {`📋 *Chave PIX:*\n`}
-                    {`${config.chavePix || '...'}\n`}
-                    {`━━━━━━━━━━━━━━━━━\n\n`}
-                    {`Após o pagamento, envie o comprovante aqui. ✅\n`}
+                    {`💰 *${config.descricao || 'Cobrança PIX'}*`}
+                    {config.mensagemCustom ? `\n\n${config.mensagemCustom}` : ''}
+                    {`\n\nValor: *R$ ${config.valor || '0.00'}*\n`}
+                    {`Recebedor: ${config.nomeRecebedor || '...'}\n`}
+                    {`\n📋 *Chave PIX:*\n`}
+                    <span className="font-mono bg-[#1f2c33] px-1 rounded">{config.chavePix || '...'}</span>
+                    {`\n\nApós pagar, envie o comprovante. ✅\n`}
                     {`⏱ _Válido por ${config.timeoutMinutos || 30} minutos._`}
                   </div>
                   <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">

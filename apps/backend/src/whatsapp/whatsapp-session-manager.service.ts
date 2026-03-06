@@ -445,26 +445,26 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     const timeoutMin = config.timeoutMinutos || 30;
 
     if (config.enviarComoContato) {
-      // Build vCard — WhatsApp Brasil renders "Copiar chave Pix" button for phone keys
+      // vCard mode: contact card (WhatsApp shows "Copiar chave Pix") + 1 short text
       const digits = config.chavePix.replace(/\D/g, '');
       const waid = digits.startsWith('55') ? digits : `55${digits}`;
-      const displayNumber = `+${waid}`;
 
       const vcard = [
         'BEGIN:VCARD',
         'VERSION:3.0',
         `FN:${config.nomeRecebedor}`,
-        `TEL;type=CELL;type=VOICE;waid=${waid}:${displayNumber}`,
+        `TEL;type=CELL;type=VOICE;waid=${waid}:+${waid}`,
         'END:VCARD',
       ].join('\n');
 
-      const detailsMsg = [
+      const parts = [
         `💰 *${config.descricao || 'Cobrança PIX'}*`,
         config.mensagemCustom ? `\n${config.mensagemCustom}` : '',
         `\nValor: *R$ ${config.valor}*`,
         `⏱ _Válido por ${timeoutMin} minutos._`,
-        `\nApós o pagamento, envie o comprovante aqui. ✅`,
-      ].join('\n');
+        `\nApós pagar, envie o comprovante. ✅`,
+      ].filter(Boolean);
+      const detailsMsg = parts.join('\n');
 
       await this.messageQueue.enqueue(
         sessionId,
@@ -472,37 +472,30 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         sessionClient.socket,
         { type: 'text', payload: { text: detailsMsg } },
         async () => {
-          // Send contact card first — shows "Copiar chave Pix" button
           await sessionClient.socket.sendMessage(jid, {
-            contacts: {
-              displayName: config.nomeRecebedor,
-              contacts: [{ vcard }],
-            },
+            contacts: { displayName: config.nomeRecebedor, contacts: [{ vcard }] },
           });
           await new Promise(resolve => setTimeout(resolve, 600));
-          // Then send payment details text
           await sessionClient.socket.sendMessage(jid, { text: detailsMsg });
         }
       );
       return;
     }
 
-    // Default mode: text + nativeFlowMessage with fallback
-    const formattedMessage = `💰 *${config.descricao || 'Dados para pagamento'}*
-
-${config.mensagemCustom || ''}
-
-Valor: *R$ ${config.valor}*
-Recebedor: ${config.nomeRecebedor}
-
-━━━━━━━━━━━━━━━━━
-📋 *Chave PIX:*
-
-\`${config.chavePix}\`
-
-━━━━━━━━━━━━━━━━━
-Após o pagamento, envie o comprovante aqui. ✅
-⏱ _Válido por ${timeoutMin} minutos._`;
+    // Default mode: single text message with key in monospace for easy copy
+    const lines = [
+      `💰 *${config.descricao || 'Cobrança PIX'}*`,
+    ];
+    if (config.mensagemCustom) lines.push(`\n${config.mensagemCustom}`);
+    lines.push(
+      `\nValor: *R$ ${config.valor}*`,
+      `Recebedor: ${config.nomeRecebedor}`,
+      `\n📋 *Chave PIX:*`,
+      `\`${config.chavePix}\``,
+      `\nApós pagar, envie o comprovante. ✅`,
+      `⏱ _Válido por ${timeoutMin} minutos._`,
+    );
+    const formattedMessage = lines.join('\n');
 
     await this.messageQueue.enqueue(
       sessionId,
@@ -510,35 +503,47 @@ Após o pagamento, envie o comprovante aqui. ✅
       sessionClient.socket,
       { type: 'text', payload: { text: formattedMessage } },
       async () => {
-        try {
+        await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
+      }
+    );
+  }
+
+  /**
+   * Send PIX_SIMPLES — contact card (shows "Copiar chave Pix") + short text, no waiting
+   */
+  async sendPixSimples(sessionId: string, contactPhone: string, config: { chavePix: string; nomeRecebedor: string; valor: string; descricao?: string }): Promise<void> {
+    const sessionClient = this.resolveSessionClient(sessionId);
+    if (!sessionClient) throw new Error('Session not found');
+    if (sessionClient.status !== WhatsappSessionStatus.CONNECTED) throw new Error('Session not connected');
+
+    const jid = this.formatJid(contactPhone);
+    const digits = config.chavePix.replace(/\D/g, '');
+    const isPhoneKey = digits.length >= 10 && digits.length <= 13;
+
+    await this.messageQueue.enqueue(
+      sessionId,
+      jid,
+      sessionClient.socket,
+      { type: 'text', payload: { text: config.descricao || 'PIX' } },
+      async () => {
+        if (isPhoneKey) {
+          const waid = digits.startsWith('55') ? digits : `55${digits}`;
+          const vcard = [
+            'BEGIN:VCARD',
+            'VERSION:3.0',
+            `FN:${config.nomeRecebedor}`,
+            `TEL;type=CELL;type=VOICE;waid=${waid}:+${waid}`,
+            'END:VCARD',
+          ].join('\n');
           await sessionClient.socket.sendMessage(jid, {
-            nativeFlowMessage: {
-              messageParamsJson: JSON.stringify({
-                flow_token: 'pix_payment',
-                screens: []
-              }),
-              buttons: [{
-                name: 'pix_copy_and_paste',
-                buttonParamsJson: JSON.stringify({
-                  currency: 'BRL',
-                  total_amount: {
-                    value: Math.round(parseFloat(config.valor.replace(',', '.')) * 100),
-                    offset: 100
-                  },
-                  reference_id: `pix_${Date.now()}`,
-                  type: 'pix',
-                  pix_key: config.chavePix,
-                  merchant_name: config.nomeRecebedor,
-                  expiration_time: (config.timeoutMinutos || 30) * 60
-                })
-              }]
-            }
-          } as any);
-        } catch (error) {
-          console.warn(`[SEND_PIX] Native flow message failed for ${jid}, falling back to text messages`);
-          await sessionClient.socket.sendMessage(jid, { text: formattedMessage });
-          await new Promise(resolve => setTimeout(resolve, 500));
-          await sessionClient.socket.sendMessage(jid, { text: config.chavePix });
+            contacts: { displayName: config.nomeRecebedor, contacts: [{ vcard }] },
+          });
+          await new Promise(r => setTimeout(r, 500));
+          const detailsMsg = `💰 *${config.descricao || 'Pagamento PIX'}*\n\nValor: *R$ ${config.valor}*\nRecebedor: ${config.nomeRecebedor}`;
+          await sessionClient.socket.sendMessage(jid, { text: detailsMsg });
+        } else {
+          const msg = `💰 *${config.descricao || 'Pagamento PIX'}*\n\nValor: *R$ ${config.valor}*\nRecebedor: ${config.nomeRecebedor}\n\n📋 *Chave PIX:*\n\`${config.chavePix}\``;
+          await sessionClient.socket.sendMessage(jid, { text: msg });
         }
       }
     );

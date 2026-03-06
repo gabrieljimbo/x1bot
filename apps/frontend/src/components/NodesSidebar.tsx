@@ -96,6 +96,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         description: 'Envia cobrança PIX e aguarda comprovante'
       },
       {
+        type: 'PIX_SIMPLES' as WorkflowNodeType,
+        label: 'Enviar PIX',
+        icon: '🟢',
+        color: 'from-lime-500 to-green-500',
+        bgColor: 'bg-[#1a2e1a]',
+        borderColor: 'border-[#4d9b4d]',
+        description: 'Envia chave PIX com botão copiar (sem aguardar)'
+      },
+      {
         type: 'SEND_BUTTONS' as WorkflowNodeType,
         label: 'Enviar Botões',
         icon: '🔘',
