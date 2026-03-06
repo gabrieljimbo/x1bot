@@ -13,6 +13,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MlOffersService } from './ml-offers.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MlOffersController } from './ml-offers.controller';
+import { ApiConfigsService } from '../api-configs/api-configs.service';
 
 @Global()
 @Module({
@@ -35,6 +36,7 @@ import { MlOffersController } from './ml-offers.controller';
     OCRService,
     RmktProcessor,
     MlOffersService,
+    ApiConfigsService,
   ],
   exports: [
     ExecutionService,

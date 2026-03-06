@@ -53,6 +53,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappSenderService } from './whatsapp-sender.service';
 import { WhatsappSessionManager } from '../whatsapp/whatsapp-session-manager.service';
 import { MlOffersService } from './ml-offers.service';
+import { ApiConfigsService } from '../api-configs/api-configs.service';
 
 export interface NodeExecutionResult {
   nextNodeId: string | null;
@@ -96,6 +97,7 @@ export class NodeExecutorService {
     private prisma: PrismaService,
     private whatsappSender: WhatsappSenderService,
     private mlOffersService: MlOffersService,
+    private apiConfigsService: ApiConfigsService,
   ) { }
 
   setWhatsappSessionManager(manager: any) {
@@ -2350,9 +2352,16 @@ functions, etc.)
 }`,
     });
 
+    // Fetch Shopee credentials from DB (tenant-level, configured in Settings > APIs)
+    const tenantId = (context.variables as any)?._tenantId;
+    const apiCreds = tenantId ? await this.apiConfigsService.getByProvider(tenantId, 'shopee') : null;
+    if (!apiCreds?.isActive) {
+      throw new Error('[PROMO_SHOPEE] Credenciais Shopee não configuradas. Acesse Configurações > APIs.');
+    }
+
     // Build SHA256 auth header: SHA256(AppId + Timestamp + Payload + Secret)
-    const appId = config.appId;
-    const secret = config.secret;
+    const appId = apiCreds.appId;
+    const secret = apiCreds.secret;
     const timestamp = Math.floor(Date.now() / 1000);
     const { createHash } = await import('crypto');
     const signatureFactor = `${appId}${timestamp}${payload}${secret}`;

@@ -479,4 +479,24 @@ export const apiClient = {
     const { data } = await client.patch('/api/leads/pixel-config', config);
     return data;
   },
+
+  // API Configs (per-tenant, per-provider credentials)
+  getApiConfigs: async () => {
+    const { data } = await client.get('/api/api-configs');
+    return data;
+  },
+
+  upsertApiConfig: async (provider: string, appId: string, secret: string) => {
+    const { data } = await client.post(`/api/api-configs/${provider}`, { appId, secret });
+    return data;
+  },
+
+  setApiConfigActive: async (provider: string, isActive: boolean) => {
+    const { data } = await client.patch(`/api/api-configs/${provider}/active`, { isActive });
+    return data;
+  },
+
+  deleteApiConfig: async (provider: string) => {
+    await client.delete(`/api/api-configs/${provider}`);
+  },
 }

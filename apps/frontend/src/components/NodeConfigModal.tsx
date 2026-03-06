@@ -2112,7 +2112,7 @@ function PromoMLApiConfig({ config, setConfig }: any) {
 
 
 function PromoShopeeConfig({ config, setConfig }: any) {
-  const [activeTab, setActiveTab] = useState<'auth' | 'busca' | 'filtros' | 'mensagem'>('auth');
+  const [activeTab, setActiveTab] = useState<'busca' | 'filtros' | 'mensagem'>('busca');
 
   return (
     <div className="space-y-6">
@@ -2126,9 +2126,23 @@ function PromoShopeeConfig({ config, setConfig }: any) {
         </div>
       </div>
 
+      {/* API credentials hint */}
+      <a
+        href="/settings/apis"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-lg hover:bg-primary/10 transition-colors group"
+      >
+        <span className="text-lg">🔑</span>
+        <div className="flex-1">
+          <p className="text-xs font-semibold text-primary">Credenciais configuradas em Configurações → APIs</p>
+          <p className="text-[10px] text-gray-500">Clique para configurar seu AppID e Secret da Shopee Affiliate.</p>
+        </div>
+        <span className="text-primary text-xs opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+      </a>
+
       <div className="flex border-b border-gray-700 overflow-x-auto no-scrollbar">
         {[
-          { id: 'auth', label: 'API', icon: '🔑' },
           { id: 'busca', label: 'Busca', icon: '🔍' },
           { id: 'filtros', label: 'Filtros', icon: '⚙️' },
           { id: 'mensagem', label: 'Mensagem', icon: '💬' },
@@ -2143,36 +2157,6 @@ function PromoShopeeConfig({ config, setConfig }: any) {
           </button>
         ))}
       </div>
-
-      {activeTab === 'auth' && (
-        <div className="space-y-4">
-          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 text-xs text-yellow-300">
-            Obtenha seu AppID e Secret em{' '}
-            <span className="font-mono text-yellow-200">affiliate.shopee.com.br/open_api</span>.
-            Nunca compartilhe o Secret — ele é equivalente a uma senha.
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1.5 text-gray-200">AppID</label>
-            <input
-              type="text"
-              value={config.appId || ''}
-              onChange={(e) => setConfig({ ...config, appId: e.target.value })}
-              placeholder="Ex: 123456"
-              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white placeholder-gray-500 font-mono"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1.5 text-gray-200">Secret</label>
-            <input
-              type="password"
-              value={config.secret || ''}
-              onChange={(e) => setConfig({ ...config, secret: e.target.value })}
-              placeholder="Seu secret da API"
-              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white placeholder-gray-500 font-mono"
-            />
-          </div>
-        </div>
-      )}
 
       {activeTab === 'busca' && (
         <div className="space-y-4">
