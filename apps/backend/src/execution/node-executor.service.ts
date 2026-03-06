@@ -176,7 +176,7 @@ export class NodeExecutorService {
     }
 
     const nextEdge = edges.find(e => e.source === node.id);
-    return { nextNodeId: nextEdge?.target ?? null };
+    return { nextNodeId: nextEdge?.target ?? null, shouldWait: false };
   }
 
   /**
