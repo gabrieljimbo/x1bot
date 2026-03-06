@@ -9,7 +9,7 @@ export class MlOffersService {
 
     constructor(private prisma: PrismaService) { }
 
-    @Cron('0 2 * * *')
+    @Cron('0 5 * * *') // 05:00 UTC = 02:00 America/Sao_Paulo (UTC-3)
     async refreshDailyOffers() {
         if (this.isScraping) {
             this.logger.warn('[ML_OFFERS] Scraping já em andamento, ignorando.');
@@ -90,8 +90,12 @@ export default async function ({ page }) {
                 return;
             }
 
+            // Expira à meia-noite de SP (UTC-3) = 03:00:00 UTC do dia seguinte
             const expiresAt = new Date();
-            expiresAt.setHours(23, 59, 59, 999);
+            expiresAt.setUTCHours(3, 0, 0, 0);
+            if (new Date().getUTCHours() >= 3) {
+                expiresAt.setUTCDate(expiresAt.getUTCDate() + 1);
+            }
 
             await this.prisma.$transaction([
                 this.prisma.mlDailyOffer.deleteMany(),
