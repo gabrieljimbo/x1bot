@@ -69,6 +69,7 @@ export default function GroupWorkflowsPage() {
     const [syncing, setSyncing] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [executingWorkflow, setExecutingWorkflow] = useState<any | null>(null)
+    const [loadingLinkId, setLoadingLinkId] = useState<string | null>(null)
 
     const TEMPLATES = [
         {
@@ -202,12 +203,16 @@ export default function GroupWorkflowsPage() {
     }
 
     const handleTestNow = async (link: any) => {
+        if (loadingLinkId) return
+        setLoadingLinkId(link.id)
         try {
-            const result = await apiClient.executeGroupTest(link.workflowId, link.groupJid, link.groupName || link.name)
+            await apiClient.executeGroupTest(link.workflowId, link.groupJid, link.groupName || link.name)
             alert(`Teste iniciado com sucesso!`)
             setExecutingWorkflow(null)
         } catch (err: any) {
             alert(err.response?.data?.error || err.message || 'Erro ao realizar teste.')
+        } finally {
+            setLoadingLinkId(null)
         }
     }
 
@@ -514,10 +519,15 @@ export default function GroupWorkflowsPage() {
                                                         <div className="flex items-center justify-end gap-2">
                                                             <button
                                                                 onClick={() => handleTestNow(link)}
-                                                                className="p-2 bg-indigo-500/10 text-indigo-400 rounded hover:bg-indigo-500/20 transition"
+                                                                disabled={loadingLinkId === link.id}
+                                                                className="p-2 bg-indigo-500/10 text-indigo-400 rounded hover:bg-indigo-500/20 transition disabled:opacity-50"
                                                                 title="Testar Agora"
                                                             >
-                                                                <Play size={14} fill="currentColor" />
+                                                                {loadingLinkId === link.id ? (
+                                                                    <RefreshCw size={14} className="animate-spin" />
+                                                                ) : (
+                                                                    <Play size={14} fill="currentColor" />
+                                                                )}
                                                             </button>
                                                             <button
                                                                 onClick={() => handleDeleteLink(link.id)}
@@ -560,13 +570,18 @@ export default function GroupWorkflowsPage() {
                                         <button
                                             key={link.id}
                                             onClick={() => handleTestNow(link)}
-                                            className="w-full text-left p-4 bg-black border border-gray-800 rounded-xl hover:border-primary/50 hover:bg-primary/5 transition group flex items-center justify-between"
+                                            disabled={loadingLinkId === link.id}
+                                            className="w-full text-left p-4 bg-black border border-gray-800 rounded-xl hover:border-primary/50 hover:bg-primary/5 transition group flex items-center justify-between disabled:opacity-50"
                                         >
                                             <div>
                                                 <div className="font-bold text-sm text-white group-hover:text-primary transition-colors">{link.groupName || link.groupJid}</div>
                                                 <div className="text-[10px] text-gray-500 font-mono">{link.groupJid}</div>
                                             </div>
-                                            <Play size={16} className="text-gray-700 group-hover:text-primary transition-colors" />
+                                            {loadingLinkId === link.id ? (
+                                                <RefreshCw size={16} className="text-primary animate-spin" />
+                                            ) : (
+                                                <Play size={16} className="text-gray-700 group-hover:text-primary transition-colors" />
+                                            )}
                                         </button>
                                     ))}
                                 </div>

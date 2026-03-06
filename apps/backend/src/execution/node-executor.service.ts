@@ -2257,8 +2257,11 @@ functions, etc.)
 
     // 1. Scraping logic
     const searchTerm = this.contextService.interpolate(config.searchTerm, context);
+    const discount = config.minDiscount || 5;
+    const encodedTerm = encodeURIComponent(searchTerm);
+
     const searchUrl = searchTerm
-      ? `https://lista.mercadolivre.com.br/${encodeURIComponent(searchTerm)}`
+      ? `https://lista.mercadolivre.com.br/${encodedTerm}_Discount_${discount}-100_NoIndex_True?sb=all_mercadolibre`
       : 'https://www.mercadolivre.com.br/offers';
 
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2277,13 +2280,13 @@ functions, etc.)
           '--single-process',
           '--no-zygote'
         ],
-        timeout: 60000,
+        timeout: 30000,
       });
       const page = await browser.newPage();
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
       await page.setViewport({ width: 1280, height: 800 });
 
-      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
       // Scroll to load lazy images
       await page.evaluate(async () => {
@@ -2348,8 +2351,8 @@ functions, etc.)
           };
         }).filter(p => p.title && p.productUrl && p.price > 0);
       });
-    } catch (e) {
-      console.error('[PROMO_ML] Scraping error:', e);
+    } catch (e: any) {
+      console.error('[PROMO_ML] Puppeteer error:', e.message);
     } finally {
       if (browser) await browser.close();
     }
@@ -2385,24 +2388,25 @@ functions, etc.)
 
     // 3. Send to WhatsApp
     if (sessionId && finalContactPhone && this.whatsappSessionManager) {
-      for (const product of filteredProducts) {
-        // Check if sent today
-        if (config.ignoreAlreadySent && tenantId) {
-          const startOfDay = new Date();
-          startOfDay.setHours(0, 0, 0, 0);
-          const alreadySent = await this.prisma.promoMLSent.findFirst({
-            where: {
-              productUrl: product.productUrl,
-              tenantId,
-              sentAt: { gte: startOfDay }
-            }
-          });
-          if (alreadySent) continue;
-        }
+      if (filteredProducts.length > 0) {
+        for (const product of filteredProducts) {
+          // Check if sent today
+          if (config.ignoreAlreadySent && tenantId) {
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            const alreadySent = await this.prisma.promoMLSent.findFirst({
+              where: {
+                productUrl: product.productUrl,
+                tenantId,
+                sentAt: { gte: startOfDay }
+              }
+            });
+            if (alreadySent) continue;
+          }
 
-        const affiliateUrl = product.productUrl + (config.affiliateTag ? `${product.productUrl.includes('?') ? '&' : '?'}deal_print_id=${config.affiliateTag}` : '');
+          const affiliateUrl = product.productUrl + (config.affiliateTag ? `${product.productUrl.includes('?') ? '&' : '?'}deal_print_id=${config.affiliateTag}` : '');
 
-        const caption = `🛒 *${product.title}*
+          const caption = `🛒 *${product.title}*
    
 💰 De ~~R$ ${product.originalPrice.toLocaleString('pt-BR')}~~ por *R$ ${product.price.toLocaleString('pt-BR')}*
 🔥 ${product.discount}% OFF
@@ -2414,29 +2418,39 @@ ${config.introText || ''}
 
 ${config.footerText || ''}`;
 
-        try {
-          if (product.imageUrl) {
-            await this.whatsappSessionManager.sendMedia(sessionId, finalContactPhone, 'image', product.imageUrl, { caption });
-          } else {
-            await this.whatsappSessionManager.sendMessage(sessionId, finalContactPhone, caption);
+          try {
+            if (product.imageUrl) {
+              await this.whatsappSessionManager.sendMedia(sessionId, finalContactPhone, 'image', product.imageUrl, { caption });
+            } else {
+              await this.whatsappSessionManager.sendMessage(sessionId, finalContactPhone, caption);
+            }
+
+            // Track as sent
+            if (tenantId) {
+              await this.prisma.promoMLSent.create({
+                data: {
+                  productUrl: product.productUrl,
+                  tenantId
+                }
+              });
+            }
+          } catch (err) {
+            console.error('[PROMO_ML] Send error:', err);
           }
 
-          // Track as sent
-          if (tenantId) {
-            await this.prisma.promoMLSent.create({
-              data: {
-                productUrl: product.productUrl,
-                tenantId
-              }
-            });
-          }
-        } catch (err) {
-          console.error('[PROMO_ML] Send error:', err);
+          // Wait interval
+          const interval = (config.messageInterval || 3) * 1000;
+          await new Promise(resolve => setTimeout(resolve, interval));
         }
-
-        // Wait interval
-        const interval = (config.messageInterval || 3) * 1000;
-        await new Promise(resolve => setTimeout(resolve, interval));
+      } else {
+        // No products found after filtering or scraping
+        const promoApiFound = (context.variables as any)?.promoApiProductsFound === true;
+        if (!promoApiFound) {
+          const searchTerm = this.contextService.interpolate(config.searchTerm, context);
+          const aviso = `🔍 Nenhum produto encontrado para *${searchTerm}* no momento.`;
+          console.log('[PROMO_ML] Nenhum produto encontrado, enviando aviso');
+          await this.whatsappSessionManager.sendMessage(sessionId, finalContactPhone, aviso);
+        }
       }
     }
 
@@ -2921,8 +2935,11 @@ ${config.footerText || ''}`;
       }
 
       if (filtered.length === 0) {
+        this.contextService.setVariable(context, 'promoApiProductsFound', false);
         return { nextNodeId: edges.find((e) => e.source === node.id)?.target || null, shouldWait: false };
       }
+
+      this.contextService.setVariable(context, 'promoApiProductsFound', true);
 
       await this.prisma.promoMLSent.createMany({
         data: filtered.map((p: any) => ({
