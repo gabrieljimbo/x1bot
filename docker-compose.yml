@@ -102,6 +102,22 @@ services:
 
       - "traefik.http.routers.frontend-n9n.middlewares=frontend-n9n-headers@docker"
 
+  browserless:
+    image: ghcr.io/browserless/chromium
+    container_name: browserless
+    ports:
+      - "3001:3000"
+    environment:
+      - TOKEN=x1bot_browserless_token
+      - CONNECTION_TIMEOUT=60000
+      - MAX_CONCURRENT_SESSIONS=3
+      - DEFAULT_BLOCK_ADS=true
+      - DEFAULT_LAUNCH_ARGS=["--no-sandbox"]
+    networks:
+      - internal
+      - n9n-network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

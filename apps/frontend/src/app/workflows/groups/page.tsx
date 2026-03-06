@@ -30,11 +30,10 @@ import Link from 'next/link'
 import WhatsAppConnect from '@/components/WhatsAppConnect'
 
 /*
-- [x] Corrigir PROMO_ML (Anti-Bot)
-    - [x] Configurar Puppeteer (headless: 'new', anti-bot args)
-    - [x] Remover flag `webdriver` via `page.evaluateOnNewDocument`
-    - [x] Atualizar seletores CSS para o novo layout do ML
-    - [x] Adicionar logs de diagnóstico (HTML length, Title)
+- [x] Migrar PROMO_ML para Browserless
+    - [x] Adicionar serviço `browserless` ao `docker-compose.yml`
+    - [x] Configurar variáveis de ambiente no backend (`BROWSERLESS_URL/TOKEN`)
+    - [x] Refatorar `executePromoML` para usar API do Browserless
     - [x] Validar extração via "Testar Agora"
     - [x] Commit e Push com mensagem específica
 - [x] Correções Promo ML & Node Fixes (Previous Tasks)

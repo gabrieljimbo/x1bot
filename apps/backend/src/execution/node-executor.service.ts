@@ -2255,7 +2255,7 @@ functions, etc.)
     const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
     const finalContactPhone = destination;
 
-    // 1. Scraping logic
+    // 1. Scraping logic via Browserless
     const searchTerm = this.contextService.interpolate(config.searchTerm, context);
     const minDiscount = (config as any).descontoMinimo || config.minDiscount || 5;
     const encodedTerm = encodeURIComponent(searchTerm);
@@ -2268,114 +2268,92 @@ functions, etc.)
 
     console.log(`[PROMO_ML] URL de busca: ${searchUrl}`);
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const puppeteer = require('puppeteer');
-    let browser = null;
+    const browserlessUrl = process.env.BROWSERLESS_URL || 'http://browserless:3000';
+    const browserlessToken = process.env.BROWSERLESS_TOKEN || 'x1bot_browserless_token';
+
     let products: any[] = [];
 
     try {
-      browser = await puppeteer.launch({
-        headless: 'new',
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-blink-features=AutomationControlled',
-          '--disable-infobars',
-          '--window-size=1366,768',
-        ],
-        ignoreDefaultArgs: ['--enable-automation'],
-        timeout: 30000,
-      });
-      const page = await browser.newPage();
+      const fnCode = `
+export default async function ({ page }) {
+  await page.setExtraHTTPHeaders({ "Accept-Language": "pt-BR,pt;q=0.9" });
+  await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+  
+  // Set viewport to avoid mobile layout
+  await page.setViewport({ width: 1366, height: 768 });
 
-      // Remove webdriver flag
-      await page.evaluateOnNewDocument(() => {
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      });
+  await page.goto("${searchUrl}", { waitUntil: "networkidle2", timeout: 30000 });
+  await page.waitForSelector('[class*="ui-search-layout__item"]', { timeout: 10000 }).catch(() => null);
+  
+  const results = await page.evaluate(() => {
+    const items = Array.from(document.querySelectorAll('[class*="ui-search-layout__item"]'));
+    return items.map(item => {
+      const title = item.querySelector('[class*="ui-search-item__title"]')?.textContent?.trim();
+      
+      const priceElement = item.querySelector('[class*="andes-money-amount__fraction"]');
+      const priceStr = priceElement?.textContent?.replace(/\\D/g, '');
 
-      // UserAgent real de Chrome
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-      await page.setViewport({ width: 1366, height: 768 });
+      const oldPriceElement = item.querySelector('.ui-search-price__part--del .andes-money-amount__fraction, .promotion-item__old-price .andes-money-amount__fraction');
+      const originalPriceStr = oldPriceElement?.textContent?.replace(/\\D/g, '');
 
-      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+      const discountElement = item.querySelector('[class*="ui-search-price__discount"]');
+      const discountStr = discountElement?.textContent?.replace(/\\D/g, '');
 
-      // Wait for selector with timeout
-      await page.waitForSelector('[class*="ui-search-layout__item"]', { timeout: 10000 }).catch(() => null);
+      const ratingElement = item.querySelector('.ui-search-reviews__rating-number');
+      const ratingStr = ratingElement?.textContent?.trim();
 
-      // Diagnostic logs
-      const html = await page.content();
-      console.log('[PROMO_ML] page title:', await page.title());
-      console.log('[PROMO_ML] html length:', html.length);
+      const reviewsElement = item.querySelector('.ui-search-reviews__amount');
+      const reviewsStr = reviewsElement?.textContent?.trim()?.replace(/\\D/g, '');
 
-      // Scroll to load lazy images
-      await page.evaluate(async () => {
-        await new Promise<void>((resolve) => {
-          let totalHeight = 0;
-          const distance = 200;
-          const timer = setInterval(() => {
-            const scrollHeight = document.body.scrollHeight;
-            window.scrollBy(0, distance);
-            totalHeight += distance;
-            if (totalHeight >= scrollHeight || totalHeight > 4000) {
-              clearInterval(timer);
-              resolve();
-            }
-          }, 150);
-        });
-      });
+      const imgElement = item.querySelector('img[class*="ui-search-result-image__element"]');
+      const imageUrl = imgElement?.getAttribute('src') || imgElement?.getAttribute('data-src');
 
-      products = await page.evaluate(() => {
-        const items = Array.from(document.querySelectorAll('[class*="ui-search-layout__item"]'));
-        console.log('[PROMO_ML] items found in evaluate:', items.length);
+      const linkElement = item.querySelector('a[class*="ui-search-item__image-link"], a[class*="ui-search-link"]');
+      const productUrl = linkElement?.getAttribute('href');
 
-        return items.map(item => {
-          const title = item.querySelector('[class*="ui-search-item__title"]')?.textContent?.trim();
+      const sellerElement = item.querySelector('.ui-search-item__group__element--seller, .poly-component__seller');
+      const seller = sellerElement?.textContent?.replace(/por\\s+/i, '')?.trim();
 
-          // Price extraction
-          const priceElement = item.querySelector('[class*="andes-money-amount__fraction"]');
-          const priceStr = priceElement?.textContent?.replace(/\D/g, '');
+      const price = priceStr ? parseFloat(priceStr) : 0;
+      const originalPrice = originalPriceStr ? parseFloat(originalPriceStr) : price;
 
-          const oldPriceElement = item.querySelector('.ui-search-price__part--del .andes-money-amount__fraction, .promotion-item__old-price .andes-money-amount__fraction');
-          const originalPriceStr = oldPriceElement?.textContent?.replace(/\D/g, '');
+      return {
+        title,
+        price,
+        originalPrice,
+        discount: discountStr ? parseInt(discountStr) : 0,
+        rating: ratingStr ? parseFloat(ratingStr) : 0,
+        reviewCount: reviewsStr ? parseInt(reviewsStr) : 0,
+        imageUrl,
+        productUrl,
+        seller: seller || 'Mercado Livre'
+      };
+    }).filter(p => p.title && p.productUrl && p.price > 0);
+  });
+  
+  return { data: results, type: "application/json" };
+}
+`;
 
-          const discountElement = item.querySelector('[class*="ui-search-price__discount"]');
-          const discountStr = discountElement?.textContent?.replace(/\D/g, '');
+      const response = await fetch(
+      \`\${browserlessUrl}/function?token=\${browserlessToken}\`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/javascript' },
+          body: fnCode,
+        }
+      );
 
-          const ratingElement = item.querySelector('.ui-search-reviews__rating-number');
-          const ratingStr = ratingElement?.textContent?.trim();
+      if (!response.ok) {
+        throw new Error(\`Browserless error: \${response.statusText}\`);
+      }
 
-          const reviewsElement = item.querySelector('.ui-search-reviews__amount');
-          const reviewsStr = reviewsElement?.textContent?.trim()?.replace(/\D/g, '');
+      const result = await response.json() as any;
+      products = Array.isArray(result) ? result : (result.data || []);
+      console.log('[PROMO_ML] produtos via Browserless:', products.length);
 
-          const imgElement = item.querySelector('img[class*="ui-search-result-image__element"]');
-          const imageUrl = imgElement?.getAttribute('src') || imgElement?.getAttribute('data-src');
-
-          const linkElement = item.querySelector('a[class*="ui-search-item__image-link"], a[class*="ui-search-link"]');
-          const productUrl = linkElement?.getAttribute('href');
-
-          const sellerElement = item.querySelector('.ui-search-item__group__element--seller, .poly-component__seller');
-          const seller = sellerElement?.textContent?.replace(/por\s+/i, '')?.trim();
-
-          const price = priceStr ? parseFloat(priceStr) : 0;
-          const originalPrice = originalPriceStr ? parseFloat(originalPriceStr) : price;
-
-          return {
-            title,
-            price,
-            originalPrice,
-            discount: discountStr ? parseInt(discountStr) : 0,
-            rating: ratingStr ? parseFloat(ratingStr) : 0,
-            reviewCount: reviewsStr ? parseInt(reviewsStr) : 0,
-            imageUrl,
-            productUrl,
-            seller: seller || 'Mercado Livre'
-          };
-        }).filter(p => p.title && p.productUrl && p.price > 0);
-      });
     } catch (e: any) {
-      console.error('[PROMO_ML] Puppeteer error:', e.message);
-    } finally {
-      if (browser) await browser.close();
+      console.error('[PROMO_ML] Browserless error:', e.message);
     }
 
     // 2. Filter products
@@ -2425,19 +2403,19 @@ functions, etc.)
             if (alreadySent) continue;
           }
 
-          const affiliateUrl = product.productUrl + (config.affiliateTag ? `${product.productUrl.includes('?') ? '&' : '?'}deal_print_id=${config.affiliateTag}` : '');
+          const affiliateUrl = product.productUrl + (config.affiliateTag ? `${ product.productUrl.includes('?') ? '&' : '?' } deal_print_id = ${ config.affiliateTag } ` : '');
 
-          const caption = `🛒 *${product.title}*
+          const caption = `🛒 * ${ product.title }*
    
-💰 De ~~R$ ${product.originalPrice.toLocaleString('pt-BR')}~~ por *R$ ${product.price.toLocaleString('pt-BR')}*
-🔥 ${product.discount}% OFF
-⭐ ${product.rating > 0 ? product.rating + '/5' : 'N/A'} (${product.reviewCount} avaliações)
-🏪 Vendido por: ${product.seller}
+💰 De ~~R$ ${ product.originalPrice.toLocaleString('pt-BR') } ~~por * R$ ${ product.price.toLocaleString('pt-BR') }*
+🔥 ${ product.discount }% OFF
+⭐ ${ product.rating > 0 ? product.rating + '/5' : 'N/A' } (${ product.reviewCount } avaliações)
+🏪 Vendido por: ${ product.seller }
 
-${config.introText || ''}
-👉 ${affiliateUrl}
+${ config.introText || '' }
+👉 ${ affiliateUrl }
 
-${config.footerText || ''}`;
+${ config.footerText || '' } `;
 
           try {
             if (product.imageUrl) {
@@ -2468,7 +2446,7 @@ ${config.footerText || ''}`;
         const promoApiFound = (context.variables as any)?.promoApiProductsFound === true;
         if (!promoApiFound) {
           const searchTerm = this.contextService.interpolate(config.searchTerm, context);
-          const aviso = `🔍 Nenhum produto encontrado para *${searchTerm}* no momento.`;
+          const aviso = `🔍 Nenhum produto encontrado para * ${ searchTerm }* no momento.`;
           console.log('[PROMO_ML] Nenhum produto encontrado, enviando aviso');
           await this.whatsappSessionManager.sendMessage(sessionId, finalContactPhone, aviso);
         }
@@ -2526,7 +2504,7 @@ ${config.footerText || ''}`;
       });
 
       if (recentMention) {
-        console.warn(`[GROUP_MENTIONS] skipping mention for ${contactPhone} as it was mentioned less than 1h ago`);
+        console.warn(`[GROUP_MENTIONS] skipping mention for ${ contactPhone } as it was mentioned less than 1h ago`);
         const nextEdge = edges.find((e) => e.source === node.id);
         return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
       }
@@ -2807,7 +2785,7 @@ ${config.footerText || ''}`;
         const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId, contactPhone);
         mentions = (metadata.participants || []).map((p: any) => p.id);
       } catch (e) {
-        console.warn(`[ENQUETE_GRUPO] Failed to fetch participants for mentions:`, e.message);
+        console.warn(`[ENQUETE_GRUPO] Failed to fetch participants for mentions: `, e.message);
       }
     }
 
