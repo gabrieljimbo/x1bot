@@ -12,6 +12,7 @@ import { RmktProcessor } from './rmkt.processor';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MlOffersService } from './ml-offers.service';
 import { ScheduleModule } from '@nestjs/schedule';
+import { MlOffersController } from './ml-offers.controller';
 
 @Global()
 @Module({
@@ -22,6 +23,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     PrismaModule,
     ScheduleModule.forRoot(),
   ],
+  controllers: [MlOffersController],
   providers: [
     ExecutionService,
     ExecutionEngineService,
