@@ -2278,59 +2278,58 @@ functions, etc.)
 export default async function ({ page }) {
   await page.setExtraHTTPHeaders({ "Accept-Language": "pt-BR,pt;q=0.9" });
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-  
-  // Set viewport to avoid mobile layout
   await page.setViewport({ width: 1366, height: 768 });
 
   await page.goto("${searchUrl}", { waitUntil: "networkidle2", timeout: 30000 });
-  await page.waitForSelector('[class*="ui-search-layout__item"]', { timeout: 10000 }).catch(() => null);
-  
+  await page.waitForSelector('[class*="poly-card"]', { timeout: 10000 }).catch(() => null);
+
   const results = await page.evaluate(() => {
     const items = Array.from(document.querySelectorAll('[class*="ui-search-layout__item"]'));
-    return items.map(item => {
-      const title = item.querySelector('[class*="ui-search-item__title"]')?.textContent?.trim();
-      
-      const priceElement = item.querySelector('[class*="andes-money-amount__fraction"]');
-      const priceStr = priceElement?.textContent?.replace(/\\D/g, '');
+    return items.slice(0, 20).map(item => {
+      const titleEl = item.querySelector('[class*="poly-component__title"]');
+      const title = titleEl?.textContent?.trim();
 
-      const oldPriceElement = item.querySelector('.ui-search-price__part--del .andes-money-amount__fraction, .promotion-item__old-price .andes-money-amount__fraction');
-      const originalPriceStr = oldPriceElement?.textContent?.replace(/\\D/g, '');
+      const imgEl = item.querySelector('img');
+      const imageUrl = imgEl?.getAttribute('src') || imgEl?.getAttribute('data-src');
 
-      const discountElement = item.querySelector('[class*="ui-search-price__discount"]');
-      const discountStr = discountElement?.textContent?.replace(/\\D/g, '');
+      // Extrai ID do produto via parâmetro wid= no link
+      const rawLink = item.querySelector('a')?.href || '';
+      const mlbMatch = rawLink.match(/wid=(MLB\\d+)/);
+      const mlbId = mlbMatch ? mlbMatch[1].replace('MLB', 'MLB-') : null;
+      const productUrl = mlbId ? 'https://produto.mercadolivre.com.br/' + mlbId : rawLink;
 
-      const ratingElement = item.querySelector('.ui-search-reviews__rating-number');
-      const ratingStr = ratingElement?.textContent?.trim();
+      // Preço atual
+      const fractions = item.querySelectorAll('[class*="andes-money-amount__fraction"]');
+      const price = fractions[0] ? parseFloat(fractions[0].textContent.replace(/\\D/g, '')) : 0;
 
-      const reviewsElement = item.querySelector('.ui-search-reviews__amount');
-      const reviewsStr = reviewsElement?.textContent?.trim()?.replace(/\\D/g, '');
+      // Preço original riscado
+      const oldPriceEl = item.querySelector('[class*="andes-money-amount--previous"] [class*="andes-money-amount__fraction"]');
+      const originalPrice = oldPriceEl ? parseFloat(oldPriceEl.textContent.replace(/\\D/g, '')) : price;
 
-      const imgElement = item.querySelector('img[class*="ui-search-result-image__element"]');
-      const imageUrl = imgElement?.getAttribute('src') || imgElement?.getAttribute('data-src');
+      // Desconto calculado
+      const discount = originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
 
-      const linkElement = item.querySelector('a[class*="ui-search-item__image-link"], a[class*="ui-search-link"]');
-      const productUrl = linkElement?.getAttribute('href');
+      // Rating e reviews
+      const ratingEl = item.querySelector('[class*="poly-reviews__rating"], [class*="ui-search-reviews__rating"]');
+      const rating = ratingEl ? parseFloat(ratingEl.textContent.trim()) : 0;
 
-      const sellerElement = item.querySelector('.ui-search-item__group__element--seller, .poly-component__seller');
-      const seller = sellerElement?.textContent?.replace(/por\\s+/i, '')?.trim();
-
-      const price = priceStr ? parseFloat(priceStr) : 0;
-      const originalPrice = originalPriceStr ? parseFloat(originalPriceStr) : price;
+      const reviewsEl = item.querySelector('[class*="poly-reviews__total"], [class*="ui-search-reviews__amount"]');
+      const reviewCount = reviewsEl ? parseInt(reviewsEl.textContent.replace(/\\D/g, '')) : 0;
 
       return {
         title,
         price,
-        originalPrice,
-        discount: discountStr ? parseInt(discountStr) : 0,
-        rating: ratingStr ? parseFloat(ratingStr) : 0,
-        reviewCount: reviewsStr ? parseInt(reviewsStr) : 0,
+        originalPrice: originalPrice || price,
+        discount,
+        rating,
+        reviewCount,
         imageUrl,
         productUrl,
-        seller: seller || 'Mercado Livre'
+        seller: 'Mercado Livre'
       };
     }).filter(p => p.title && p.productUrl && p.price > 0);
   });
-  
+
   return { data: results, type: "application/json" };
 }
 `;
@@ -2403,7 +2402,9 @@ export default async function ({ page }) {
             if (alreadySent) continue;
           }
 
-          const affiliateUrl = product.productUrl + (config.affiliateTag ? `${product.productUrl.includes('?') ? '&' : '?'} deal_print_id = ${config.affiliateTag} ` : '');
+          const affiliateUrl = config.affiliateTag
+            ? `${product.productUrl}?deal_print_id=${config.affiliateTag}`
+            : product.productUrl;
 
           const caption = `🛒 * ${product.title}*
    
