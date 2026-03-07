@@ -1,5 +1,5 @@
--- AlterTable
-ALTER TABLE "messages" ADD COLUMN "whatsappMessageId" TEXT;
+-- AlterTable (safe: adds column only if it doesn't exist)
+ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "whatsappMessageId" TEXT;
 
--- CreateIndex
-CREATE UNIQUE INDEX "messages_conversationId_whatsappMessageId_key" ON "messages"("conversationId", "whatsappMessageId");
+-- CreateIndex (safe: creates index only if it doesn't exist)
+CREATE UNIQUE INDEX IF NOT EXISTS "messages_conversationId_whatsappMessageId_key" ON "messages"("conversationId", "whatsappMessageId");
