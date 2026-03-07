@@ -29,6 +29,11 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
     console.log('[SCHEDULE WORKER] Initializing...');
     await this.loadScheduledWorkflows();
 
+    // Run immediately on startup (handles server restarts within target minute)
+    this.processGroupTriggers().catch(err =>
+      console.error('[SCHEDULE WORKER] Error in initial processGroupTriggers:', err),
+    );
+
     // Check for new/updated workflows every minute
     this.checkIntervalId = setInterval(() => {
       this.loadScheduledWorkflows();
@@ -61,6 +66,7 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
       const currentMinute = now.getMinutes();
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+
 
       // --- Collect links from GroupWorkflowLink (New System) ---
       const activeLinks = await this.prisma.groupWorkflowLink.findMany({
@@ -147,6 +153,7 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
               const [execHour, execMinute] = (exec.time || '09:00').split(':').map(Number);
 
               if (isDaily) {
+                console.log(`[GROUP TRIGGER] Daily check: group=${link.groupJid} workflow=${link.workflowId} target=${execHour}:${String(execMinute).padStart(2,'0')} current=${currentHour}:${String(currentMinute).padStart(2,'0')}`);
                 if (execHour === currentHour && execMinute === currentMinute) {
                   shouldFire = true;
                 }
@@ -332,7 +339,7 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
 
         const task = cron.schedule(cronExpression, async () => {
           await this.executeScheduledWorkflow(tenantId, workflowId, sessionId);
-        });
+        }, { timezone: 'America/Sao_Paulo' });
 
         this.scheduledWorkflows.set(scheduleKey, { workflowId, tenantId, cronExpression, sessionId, task });
         console.log(`[SCHEDULE WORKER] Scheduled ${workflowId} with cron: ${cronExpression}`);

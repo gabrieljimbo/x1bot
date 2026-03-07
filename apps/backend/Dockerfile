@@ -85,7 +85,11 @@ RUN apk add --no-cache \
     giflib \
     librsvg \
     pixman \
+    tzdata \
     && rm -rf /var/cache/apk/*
+
+# Set timezone to Brazil (Brasília, UTC-3, no DST since 2019)
+ENV TZ=America/Sao_Paulo
 
 # Use direct chromium path to avoid symlink issues
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true

@@ -3655,6 +3655,44 @@ ${config.footerText || ''}`;
 
     const resolvedEventName = this.resolvePixelEventName(config.eventType, config.customEventName);
 
+    // DDD → main city map for Brazil
+    const DDD_CITY_MAP: Record<string, string> = {
+      '11': 'sao paulo', '12': 'sao jose dos campos', '13': 'santos', '14': 'bauru',
+      '15': 'sorocaba', '16': 'ribeirao preto', '17': 'sao jose do rio preto',
+      '18': 'presidente prudente', '19': 'campinas',
+      '21': 'rio de janeiro', '22': 'campos dos goytacazes', '24': 'volta redonda',
+      '27': 'vitoria', '28': 'cachoeiro de itapemirim',
+      '31': 'belo horizonte', '32': 'juiz de fora', '33': 'governador valadares',
+      '34': 'uberlandia', '35': 'pocos de caldas', '37': 'divinopolis', '38': 'montes claros',
+      '41': 'curitiba', '42': 'ponta grossa', '43': 'londrina', '44': 'maringa',
+      '45': 'foz do iguacu', '46': 'francisco beltrao',
+      '47': 'joinville', '48': 'florianopolis', '49': 'chapeco',
+      '51': 'porto alegre', '53': 'pelotas', '54': 'caxias do sul', '55': 'santa maria',
+      '61': 'brasilia', '62': 'goiania', '63': 'palmas', '64': 'rio verde',
+      '65': 'cuiaba', '66': 'rondonopolis', '67': 'campo grande', '68': 'rio branco',
+      '69': 'porto velho', '71': 'salvador', '73': 'ilheus', '74': 'juazeiro',
+      '75': 'feira de santana', '77': 'vitoria da conquista', '79': 'aracaju',
+      '81': 'recife', '82': 'maceio', '83': 'joao pessoa', '84': 'natal',
+      '85': 'fortaleza', '86': 'teresina', '87': 'petrolina', '88': 'juazeiro do norte',
+      '89': 'picos', '91': 'belem', '92': 'manaus', '93': 'santarem', '94': 'maraba',
+      '95': 'boa vista', '96': 'macapa', '97': 'parintins', '98': 'sao luis', '99': 'imperatriz',
+    };
+
+    // Fetch leadOrigin from DB to enrich pixel data when variables don't have it
+    let leadOriginData: any = null;
+    if (contactPhone && tenantId) {
+      try {
+        leadOriginData = await (this.prisma as any).leadOrigin.findFirst({
+          where: { contactPhone, tenantId },
+          orderBy: { id: 'desc' },
+        });
+      } catch (_e) { /* table may not exist in all envs */ }
+    }
+
+    const resolvedAdCtwaClid = variables.adCtwaClid || leadOriginData?.adCtwaClid || null;
+    const resolvedContactState = variables.contactState || leadOriginData?.contactState || null;
+    const resolvedContactDDD = variables.contactDDD || leadOriginData?.contactDDD || null;
+
     // Build user_data
     const userData: Record<string, any> = {
       country: [this.hashSHA256('br')],
@@ -3674,12 +3712,22 @@ ${config.footerText || ''}`;
       }
     }
 
-    if (config.includeState !== false && variables.contactState) {
-      userData.st = [this.hashSHA256(String(variables.contactState).toLowerCase())];
+    if (config.includeState !== false && resolvedContactState) {
+      userData.st = [this.hashSHA256(String(resolvedContactState).toLowerCase())];
     }
 
-    if (config.includeCtwaClid !== false && variables.adCtwaClid) {
-      userData.ctwa_clid = variables.adCtwaClid;
+    // City from DDD
+    if (resolvedContactDDD) {
+      const city = DDD_CITY_MAP[resolvedContactDDD];
+      if (city) {
+        userData.ct = [this.hashSHA256(city)];
+      }
+    }
+
+    if (config.includeCtwaClid !== false && resolvedAdCtwaClid) {
+      userData.ctwa_clid = resolvedAdCtwaClid;
+      // Also derive fbc from ctwa_clid (Meta format: fb.1.{timestamp}.{ctwaClid})
+      userData.fbc = `fb.1.${Math.floor(Date.now() / 1000)}.${resolvedAdCtwaClid}`;
     }
 
     // Build custom_data
@@ -3778,8 +3826,9 @@ ${config.footerText || ''}`;
             eventName: resolvedEventName,
             eventId,
             contactPhone: rawPhone ? `${rawPhone.substring(0, 4)}****` : null,
-            contactState: variables.contactState || null,
-            ctwaClid: variables.adCtwaClid || null,
+            contactState: resolvedContactState || null,
+            contactDDD: resolvedContactDDD || null,
+            ctwaClid: resolvedAdCtwaClid || null,
             success,
             fbtrace_id: fbtraceId,
             error: errorMsg,

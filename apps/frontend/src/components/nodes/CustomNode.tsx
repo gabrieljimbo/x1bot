@@ -220,6 +220,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#7d5d39]',
     iconBg: 'bg-gradient-to-br from-orange-400 to-orange-500',
   },
+  'PIXEL_EVENT': {
+    label: 'Pixel Event',
+    subtitle: 'META CAPI',
+    icon: '📊',
+    bgColor: 'bg-[#1a1a35]',
+    borderColor: 'border-[#6366f1]',
+    iconBg: 'bg-gradient-to-br from-blue-500 to-violet-600',
+  },
   'PROMO_ML': {
     label: 'Promo ML',
     subtitle: 'AÇÃO',
@@ -556,6 +564,16 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
 
     if (type === 'PROMO_SHOPEE') {
       return `🟠 ${config.searchTerm || 'Busca não configurada'} • ${config.maxQuantity || 5} produtos`
+    }
+
+    if (type === 'PIXEL_EVENT') {
+      const eventLabel: Record<string, string> = {
+        Lead: 'Lead', Purchase: 'Purchase', InitiateCheckout: 'InitiateCheckout',
+        AddToCart: 'AddToCart', ViewContent: 'ViewContent', CompleteRegistration: 'CompleteRegistration',
+        Contact: 'Contact', Schedule: 'Schedule', QualifiedLead: 'QualifiedLead',
+        DisqualifiedLead: 'DisqualifiedLead', CustomEvent: config.customEventName || 'Custom',
+      }
+      return `📊 ${eventLabel[config.eventType] || config.eventType || 'Evento não configurado'}`
     }
 
     if (type === 'SEND_PIX') {

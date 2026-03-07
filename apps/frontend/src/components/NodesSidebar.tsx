@@ -368,6 +368,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         description: 'Busca oficial via API do ML com filtros avançados'
       },
       {
+        type: WorkflowNodeType.PIXEL_EVENT,
+        label: 'Pixel Event',
+        icon: '📊',
+        color: 'from-blue-500 to-violet-600',
+        bgColor: 'bg-[#1a1a35]',
+        borderColor: 'border-[#6366f1]',
+        description: 'Dispara evento para o Meta Conversions API (CAPI) com dados do contato',
+      },
+      {
         type: WorkflowNodeType.GRUPO_MEDIA,
         label: 'Mídia para Grupo',
         icon: '📲',
