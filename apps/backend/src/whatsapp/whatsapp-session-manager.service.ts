@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
   WASocket,
@@ -28,6 +28,7 @@ import * as os from 'os';
 import { useDatabaseAuthState } from './database-auth-state';
 import { MessageQueueService } from './message-queue.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { InboxService } from '../inbox/inbox.service';
 
 /**
  * Map of DDDs to Brazilian states
@@ -104,6 +105,8 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     private storageService: StorageService,
     private messageQueue: MessageQueueService,
     private prisma: PrismaService,
+    @Inject(forwardRef(() => InboxService))
+    private inboxService: InboxService,
   ) {
     this.readyPromise = new Promise((resolve) => {
       this.resolveReady = resolve;
@@ -916,27 +919,37 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     socket.ev.on('messaging-history.set', async ({ messages, chats }) => {
       console.log(`[HISTORY] Session ${sessionId}: Received historical data (${messages.length} messages, ${chats.length} chats)`);
 
-      // Group messages by remoteJid
-      const messagesByJid: { [jid: string]: any[] } = {};
+      // 1. Create/update conversation records for ALL known chats (even those without recent messages)
+      for (const chat of chats) {
+        const jid = (chat as any).id;
+        if (!jid || jid === 'status@broadcast') continue;
+        try {
+          const lastMsgTs = (chat as any).conversationTimestamp
+            ? new Date(Number((chat as any).conversationTimestamp) * 1000)
+            : undefined;
+          await this.inboxService.upsertConversation(tenantId, sessionId, jid, {
+            lastMessageAt: lastMsgTs,
+          });
+        } catch (e) {
+          // ignore per-chat errors
+        }
+      }
 
+      // 2. Group messages by remoteJid
+      const messagesByJid: { [jid: string]: any[] } = {};
       for (const msg of messages) {
         const jid = msg.key.remoteJid;
         if (!jid || jid === 'status@broadcast') continue;
-
-        if (!messagesByJid[jid]) {
-          messagesByJid[jid] = [];
-        }
+        if (!messagesByJid[jid]) messagesByJid[jid] = [];
         messagesByJid[jid].push(msg);
       }
 
-      // Process up to 50 most recent messages per conversation
+      // 3. Process up to 50 most recent messages per conversation
       for (const jid in messagesByJid) {
-        // Sort by timestamp descending and take 50
         const sortedMsgs = messagesByJid[jid]
           .sort((a, b) => Number(b.messageTimestamp) - Number(a.messageTimestamp))
           .slice(0, 50);
 
-        // Process them (in chronological order for the handler if it mattered, but handleMessage is independent)
         for (const msg of sortedMsgs.reverse()) {
           try {
             await this.handleIncomingMessage(tenantId, sessionId, msg, true);

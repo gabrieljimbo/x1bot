@@ -8,7 +8,7 @@ import { apiClient } from '@/lib/api-client'
 import { wsClient } from '@/lib/websocket'
 import {
     MessageSquare, Search, Filter, Send, ChevronDown, Check, CheckCheck,
-    ArrowLeft, Users, User, Zap, Circle, RefreshCw, X, Phone, Image,
+    ArrowLeft, Users, User, Zap, RefreshCw, X, Image,
     FileText, Mic, Play
 } from 'lucide-react'
 
@@ -23,6 +23,7 @@ interface Conversation {
     contactId: string
     contactName?: string
     contactPhone: string
+    phoneNumber?: string
     contactAvatar?: string
     lastMessage?: string
     lastMessageAt?: string
@@ -86,6 +87,28 @@ function formatFullDate(ts: string) {
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
+/** Format a phone number like +55 11 99999-9999 or return the raw number */
+function formatPhone(raw: string): string {
+    const digits = raw.replace(/\D/g, '')
+    if (digits.startsWith('55') && digits.length >= 12) {
+        const local = digits.substring(2)
+        const ddd = local.substring(0, 2)
+        const num = local.substring(2)
+        if (num.length === 9) return `+55 ${ddd} ${num.substring(0, 5)}-${num.substring(5)}`
+        if (num.length === 8) return `+55 ${ddd} ${num.substring(0, 4)}-${num.substring(4)}`
+    }
+    return digits
+}
+
+/** Returns the best display name for a conversation */
+function contactDisplay(conv: Conversation): string {
+    if (conv.contactName) return conv.contactName
+    const phone = conv.phoneNumber || conv.contactPhone.split('@')[0]
+    if (conv.isGroup) return `Grupo ${phone}`
+    if (conv.contactPhone.endsWith('@lid')) return phone // numeric LID, nothing better
+    return formatPhone(phone)
+}
+
 function getInitials(name?: string, phone?: string) {
     if (name) return name.charAt(0).toUpperCase()
     return (phone || '?').charAt(0)
@@ -129,7 +152,7 @@ function ConversationListItem({
             <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-sm text-white truncate">
-                        {conv.contactName || conv.contactPhone}
+                        {contactDisplay(conv)}
                     </span>
                     <span className="text-[10px] text-gray-500 flex-shrink-0">{formatTime(conv.lastMessageAt)}</span>
                 </div>
@@ -164,32 +187,61 @@ function MediaMessage({ msg }: { msg: Message }) {
     if (msg.mediaType === 'image') {
         return (
             <div>
-                <img src={msg.mediaUrl} alt="imagem" className="max-w-[240px] rounded-lg mb-1 cursor-pointer" />
-                {msg.content && <p className="text-sm">{msg.content}</p>}
+                {msg.mediaUrl ? (
+                    <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer">
+                        <img
+                            src={msg.mediaUrl}
+                            alt="imagem"
+                            className="max-w-[240px] rounded-lg mb-1 cursor-pointer"
+                            onError={(e) => {
+                                const t = e.currentTarget
+                                t.style.display = 'none'
+                                t.nextElementSibling?.classList.remove('hidden')
+                            }}
+                        />
+                        <span className="hidden text-xs text-blue-400 underline">Ver imagem</span>
+                    </a>
+                ) : (
+                    <div className="flex items-center gap-2 opacity-60"><Image size={16} /><span className="text-sm">Imagem</span></div>
+                )}
+                {msg.content && <p className="text-sm mt-1">{msg.content}</p>}
             </div>
         )
     }
     if (msg.mediaType === 'audio' || msg.mediaType === 'ptt') {
         return (
-            <div className="flex items-center gap-2">
-                <Mic size={16} />
-                <div className="flex-1 h-1 bg-white/30 rounded-full" />
-                <span className="text-xs opacity-70">áudio</span>
+            <div className="min-w-[200px]">
+                {msg.mediaUrl ? (
+                    <audio controls src={msg.mediaUrl} className="w-full h-8" style={{ colorScheme: 'dark' }} />
+                ) : (
+                    <div className="flex items-center gap-2 opacity-60"><Mic size={16} /><span className="text-xs">Áudio</span></div>
+                )}
             </div>
         )
     }
     if (msg.mediaType === 'video') {
         return (
-            <div className="flex items-center gap-2">
-                <Play size={16} />
-                <span className="text-sm">Vídeo</span>
+            <div>
+                {msg.mediaUrl ? (
+                    <video controls src={msg.mediaUrl} className="max-w-[240px] rounded-lg" />
+                ) : (
+                    <div className="flex items-center gap-2 opacity-60"><Play size={16} /><span className="text-sm">Vídeo</span></div>
+                )}
+                {msg.content && <p className="text-sm mt-1">{msg.content}</p>}
             </div>
         )
     }
+    // document / sticker / etc
     return (
         <div className="flex items-center gap-2">
             <FileText size={16} />
-            <span className="text-sm">{msg.content || 'Documento'}</span>
+            {msg.mediaUrl ? (
+                <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 underline">
+                    {msg.content || 'Documento'}
+                </a>
+            ) : (
+                <span className="text-sm">{msg.content || 'Documento'}</span>
+            )}
         </div>
     )
 }
@@ -363,10 +415,13 @@ function ChatArea({
                 <Avatar name={conversation.contactName} phone={conversation.contactPhone} size="md" />
                 <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-white text-sm truncate">
-                        {conversation.contactName || conversation.contactPhone}
+                        {contactDisplay(conversation)}
                     </h3>
                     <p className="text-[11px] text-gray-500 truncate">
-                        {conversation.contactPhone} · {conversation.session?.name || 'Sessão desconhecida'}
+                        {conversation.isGroup
+                            ? conversation.contactPhone
+                            : formatPhone(conversation.phoneNumber || conversation.contactPhone.split('@')[0])
+                        } · {conversation.session?.name || 'Sessão desconhecida'}
                     </p>
                 </div>
                 {/* Status badge & menu */}
@@ -729,7 +784,7 @@ function InboxContent() {
                 </div>
 
                 {/* ── Chat area (right panel) ── */}
-                <div className={`${showChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0`}>
+                <div className={`${showChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 overflow-hidden`}>
                     {selectedConv ? (
                         <ChatArea
                             key={selectedConv.id}  // remount when conv changes
