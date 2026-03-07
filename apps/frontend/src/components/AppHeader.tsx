@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { LogOut, User, ShieldCheck, Star, MessageSquare, Menu, X, Building2, Shield, Users, BarChart3, Target, Key, Tag } from 'lucide-react'
+import { LogOut, User, ShieldCheck, Star, MessageSquare, Menu, X, Building2, Shield, Users, BarChart3, Target, Key, Tag, Send } from 'lucide-react'
 import { isSuperAdmin, UserRole } from '@/lib/permissions'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
@@ -104,6 +104,14 @@ export default function AppHeader() {
             >
               <Tag size={16} />
               Tags
+            </Link>
+
+            <Link
+              href="/campaigns/simple"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
+            >
+              <Send size={16} />
+              Campanhas
             </Link>
 
             {isSuperAdmin(user?.role) && (
@@ -233,6 +241,14 @@ export default function AppHeader() {
             >
               <Tag size={18} />
               <span className="font-medium">Tags do Sistema</span>
+            </Link>
+            <Link
+              href="/campaigns/simple"
+              onClick={() => setIsMenuOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-[#00ff88] hover:bg-white/5 rounded-xl transition"
+            >
+              <Send size={18} />
+              <span className="font-medium">Campanhas</span>
             </Link>
           </div>
 

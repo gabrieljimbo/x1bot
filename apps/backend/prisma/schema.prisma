@@ -229,6 +229,9 @@ model Tenant {
   whatsappSessions    WhatsappSession[]
   workflowExecutions  WorkflowExecution[]
   workflows           Workflow[]
+  campaigns           Campaign[]
+  campaignBlacklist   CampaignBlacklist[]
+  contactLists        ContactList[]
   @@map("tenants")
 }
 
@@ -514,6 +517,163 @@ model ExternalWebhook {
 
   @@index([tenantId])
   @@map("external_webhooks")
+}
+
+model Campaign {
+  id              String              @id @default(cuid())
+  tenantId        String
+  name            String
+  type            CampaignType        @default(SIMPLE)
+  status          CampaignStatus      @default(DRAFT)
+  scheduledAt     DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  limitPerSession Int                 @default(50)
+  delayMin        Int                 @default(5)
+  delayMax        Int                 @default(30)
+  excludeBlocked  Boolean             @default(true)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  tenant          Tenant              @relation(fields: [tenantId], references: [id])
+  messages        CampaignMessage[]
+  recipients      CampaignRecipient[]
+  sessions        CampaignSession[]
+  logs            CampaignLog[]
+  workflow        CampaignWorkflow?
+  contactLists    CampaignContactList[]
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+enum CampaignType {
+  SIMPLE
+  WORKFLOW
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+}
+
+model CampaignMessage {
+  id         String   @id @default(cuid())
+  campaignId String
+  order      Int      @default(0)
+  type       String
+  content    String?
+  mediaUrl   String?
+  caption    String?
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+}
+
+model CampaignWorkflow {
+  id         String   @id @default(cuid())
+  campaignId String   @unique
+  nodes      Json     @default("[]")
+  edges      Json     @default("[]")
+  updatedAt  DateTime @updatedAt
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+model CampaignRecipient {
+  id         String    @id @default(cuid())
+  campaignId String
+  phone      String
+  name       String?
+  status     String    @default("pending")
+  sentAt     DateTime?
+  error      String?
+
+  campaign   Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([phone])
+}
+
+model CampaignSession {
+  id         String   @id @default(cuid())
+  campaignId String
+  sessionId  String
+  sentCount  Int      @default(0)
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+}
+
+model CampaignLog {
+  id         String   @id @default(cuid())
+  campaignId String
+  phone      String
+  sessionId  String
+  status     String
+  error      String?
+  sentAt     DateTime @default(now())
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+}
+
+model CampaignBlacklist {
+  id        String   @id @default(cuid())
+  tenantId  String
+  phone     String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, phone])
+  @@index([tenantId])
+}
+
+model ContactList {
+  id          String              @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  contacts    ContactListItem[]
+  campaigns   CampaignContactList[]
+
+  @@index([tenantId])
+}
+
+model ContactListItem {
+  id            String      @id @default(cuid())
+  contactListId String
+  phone         String
+  name          String?
+  createdAt     DateTime    @default(now())
+
+  contactList   ContactList @relation(fields: [contactListId], references: [id], onDelete: Cascade)
+
+  @@index([contactListId])
+}
+
+model CampaignContactList {
+  id            String      @id @default(cuid())
+  campaignId    String
+  contactListId String
+
+  campaign      Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactList   ContactList @relation(fields: [contactListId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, contactListId])
 }
 
 model MlDailyOffer {

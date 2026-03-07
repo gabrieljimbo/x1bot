@@ -504,4 +504,137 @@ export const apiClient = {
   deleteApiConfig: async (provider: string) => {
     await client.delete(`/api/api-configs/${provider}`);
   },
+
+  // Campaigns
+  getCampaigns: async (type?: string) => {
+    const { data } = await client.get('/api/campaigns', { params: type ? { type } : {} });
+    return data;
+  },
+
+  getCampaign: async (id: string) => {
+    const { data } = await client.get(`/api/campaigns/${id}`);
+    return data;
+  },
+
+  createCampaign: async (payload: any) => {
+    const { data } = await client.post('/api/campaigns', payload);
+    return data;
+  },
+
+  updateCampaign: async (id: string, payload: any) => {
+    const { data } = await client.put(`/api/campaigns/${id}`, payload);
+    return data;
+  },
+
+  deleteCampaign: async (id: string) => {
+    await client.delete(`/api/campaigns/${id}`);
+  },
+
+  startCampaign: async (id: string) => {
+    const { data } = await client.post(`/api/campaigns/${id}/start`);
+    return data;
+  },
+
+  pauseCampaign: async (id: string) => {
+    const { data } = await client.post(`/api/campaigns/${id}/pause`);
+    return data;
+  },
+
+  resumeCampaign: async (id: string) => {
+    const { data } = await client.post(`/api/campaigns/${id}/resume`);
+    return data;
+  },
+
+  getCampaignStats: async (id: string) => {
+    const { data } = await client.get(`/api/campaigns/${id}/stats`);
+    return data;
+  },
+
+  addCampaignRecipientsFromContacts: async (id: string, tags?: string[]) => {
+    const { data } = await client.post(`/api/campaigns/${id}/recipients/contacts`, { tags });
+    return data;
+  },
+
+  addCampaignRecipientsFromCsv: async (id: string, csv: string) => {
+    const { data } = await client.post(`/api/campaigns/${id}/recipients/csv`, { csv });
+    return data;
+  },
+
+  addCampaignRecipientsFromPhones: async (id: string, phones: string[]) => {
+    const { data } = await client.post(`/api/campaigns/${id}/recipients/phones`, { phones });
+    return data;
+  },
+
+  addCampaignRecipientsFromList: async (id: string, contactListId: string) => {
+    const { data } = await client.post(`/api/campaigns/${id}/recipients/list`, { contactListId });
+    return data;
+  },
+
+  getCampaignWorkflow: async (id: string) => {
+    const { data } = await client.get(`/api/campaigns/${id}/workflow`);
+    return data;
+  },
+
+  saveCampaignWorkflow: async (id: string, nodes: any[], edges: any[]) => {
+    const { data } = await client.put(`/api/campaigns/${id}/workflow`, { nodes, edges });
+    return data;
+  },
+
+  getCampaignBlacklist: async () => {
+    const { data } = await client.get('/api/campaigns/blacklist');
+    return data;
+  },
+
+  addToBlacklist: async (phone: string, reason?: string) => {
+    const { data } = await client.post('/api/campaigns/blacklist', { phone, reason });
+    return data;
+  },
+
+  removeFromBlacklist: async (phone: string) => {
+    await client.delete(`/api/campaigns/blacklist/${phone}`);
+  },
+
+  // Contact Lists
+  getContactLists: async () => {
+    const { data } = await client.get('/api/contact-lists');
+    return data;
+  },
+
+  getContactList: async (id: string) => {
+    const { data } = await client.get(`/api/contact-lists/${id}`);
+    return data;
+  },
+
+  createContactList: async (name: string, description?: string) => {
+    const { data } = await client.post('/api/contact-lists', { name, description });
+    return data;
+  },
+
+  updateContactList: async (id: string, payload: { name?: string; description?: string }) => {
+    const { data } = await client.put(`/api/contact-lists/${id}`, payload);
+    return data;
+  },
+
+  deleteContactList: async (id: string) => {
+    await client.delete(`/api/contact-lists/${id}`);
+  },
+
+  addContactsFromCsv: async (listId: string, csv: string) => {
+    const { data } = await client.post(`/api/contact-lists/${listId}/contacts/csv`, { csv });
+    return data;
+  },
+
+  addContactsFromInbox: async (listId: string, tags?: string[]) => {
+    const { data } = await client.post(`/api/contact-lists/${listId}/contacts/inbox`, { tags });
+    return data;
+  },
+
+  addContactsManually: async (listId: string, contacts: { phone: string; name?: string }[]) => {
+    const { data } = await client.post(`/api/contact-lists/${listId}/contacts/manual`, { contacts });
+    return data;
+  },
+
+  removeContact: async (listId: string, contactId: string) => {
+    await client.delete(`/api/contact-lists/${listId}/contacts/${contactId}`);
+  },
 }
