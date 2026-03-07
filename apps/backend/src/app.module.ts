@@ -17,6 +17,7 @@ import { InboxModule } from './inbox/inbox.module';
 import { LeadsModule } from './leads/leads.module';
 import { ApiConfigsModule } from './api-configs/api-configs.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
+import { ProductsModule } from './products/products.module';
 import { BullModule } from '@nestjs/bullmq';
 
 @Module({
@@ -41,6 +42,7 @@ import { BullModule } from '@nestjs/bullmq';
     LeadsModule,
     ApiConfigsModule,
     CampaignsModule,
+    ProductsModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

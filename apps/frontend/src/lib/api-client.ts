@@ -637,4 +637,23 @@ export const apiClient = {
   removeContact: async (listId: string, contactId: string) => {
     await client.delete(`/api/contact-lists/${listId}/contacts/${contactId}`);
   },
+
+  // Products (Vitrine)
+  searchProducts: async (params: {
+    keyword?: string;
+    sortType?: number;
+    page?: number;
+    limit?: number;
+    minDiscount?: number;
+    minRating?: number;
+    catId?: number;
+  }) => {
+    const { data } = await client.get('/api/products/search', { params });
+    return data as { products: any[]; fromCache: boolean; hasNextPage: boolean };
+  },
+
+  clearProductsCache: async () => {
+    const { data } = await client.delete('/api/products/cache');
+    return data as { deleted: number };
+  },
 }
