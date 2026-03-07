@@ -785,8 +785,30 @@ export class ExecutionEngineService implements OnModuleInit {
         );
       } catch (nodeError: any) {
         console.error(`[EXECUTION] Node ${currentNode.id} (${currentNode.type}) failed:`, nodeError.message);
-        await this.failExecution(execution, `Node ${currentNode.type} failed: ${nodeError.message}`);
-        return;
+
+        // Save error in context so downstream nodes can check it
+        if (execution.context.variables) {
+          execution.context.variables._lastNodeError = nodeError.message;
+          execution.context.variables._lastNodeErrorType = currentNode.type;
+        }
+
+        // Find next node and continue (don't stop the entire flow for a single node error)
+        const nextEdgeOnError = workflow.edges.find((e: any) => e.source === currentNode.id);
+        if (nextEdgeOnError?.target) {
+          await this.executionService.updateExecution(execution.id, {
+            currentNodeId: nextEdgeOnError.target,
+            context: execution.context,
+          });
+          execution.currentNodeId = nextEdgeOnError.target;
+          continue;
+        } else {
+          // No next node — complete gracefully
+          await this.executionService.updateExecution(execution.id, {
+            status: ExecutionStatus.COMPLETED,
+            context: execution.context,
+          });
+          return;
+        }
       }
 
       // Send message if node produced one

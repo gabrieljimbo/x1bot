@@ -501,10 +501,13 @@ export class NodeExecutorService {
     const nextEdge = edges.find((e) => e.source === node.id);
     const nextNodeId = nextEdge ? nextEdge.target : null;
 
+    // In group flows: send the buttons as a regular message but don't wait for response
+    const isGroupFlow = !!(context.variables as any)?.groupJid;
+
     return {
-      nextNodeId: null, // Clear nextNodeId because we wait for response
-      shouldWait: true,
-      waitTimeoutSeconds: config.delay ? (config.delay / 1000) + 3600 : 3600, // Wait 1h
+      nextNodeId: isGroupFlow ? nextNodeId : null,
+      shouldWait: !isGroupFlow,
+      waitTimeoutSeconds: isGroupFlow ? undefined : (config.delay ? (config.delay / 1000) + 3600 : 3600),
       output: { message, buttons, footer },
       messageToSend: sessionId && finalContactPhone ? {
         sessionId,
@@ -592,7 +595,10 @@ export class NodeExecutorService {
     const action = config.action || 'add'; // Default to 'add' if not specified
 
     if (!sessionId || !contactPhone) {
-      throw new Error('Session ID and Contact ID are required for MANAGE_LABELS node');
+      // Skip gracefully in group flows or when contact data is missing
+      console.warn('[MANAGE_LABELS] Skipping: missing sessionId or contactPhone (group flow?)');
+      const nextEdge = edges.find((e: any) => e.source === node.id);
+      return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
     }
 
     if (!this.whatsappSessionManager) {
@@ -769,6 +775,14 @@ export class NodeExecutorService {
     edges: any[],
   ): NodeExecutionResult {
     const config = node.config as WaitReplyConfig;
+
+    // In group flows, skip waiting for reply (groups don't have single-contact reply semantics)
+    const isGroupFlow = !!(context.variables as any)?.groupJid;
+    if (isGroupFlow) {
+      console.log(`[WAIT_REPLY] Skipping wait in group flow for node ${node.id}`);
+      const nextEdge = edges.find((e) => e.source === node.id);
+      return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
+    }
 
     const timeoutSeconds =
       config.timeoutSeconds ||

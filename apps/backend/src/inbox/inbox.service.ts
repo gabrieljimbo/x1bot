@@ -330,7 +330,7 @@ export class InboxService {
         return conversation;
     }
 
-    async saveMessage(conversationId: string, data: Partial<Message>) {
+    async saveMessage(conversationId: string, data: Partial<Message> & { whatsappMessageId?: string }) {
         const conversation = await this.prisma.conversation.findUnique({
             where: { id: conversationId },
             select: { tenantId: true }
@@ -338,9 +338,18 @@ export class InboxService {
 
         if (!conversation) throw new NotFoundException('Conversation not found');
 
+        // Deduplicate by whatsappMessageId when available
+        if (data.whatsappMessageId) {
+            const existing = await this.prisma.message.findFirst({
+                where: { conversationId, whatsappMessageId: data.whatsappMessageId },
+            });
+            if (existing) return existing;
+        }
+
         const message = await this.prisma.message.create({
             data: {
                 conversationId,
+                whatsappMessageId: data.whatsappMessageId,
                 content: data.content || '',
                 mediaUrl: data.mediaUrl,
                 mediaType: data.mediaType,

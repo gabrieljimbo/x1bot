@@ -1034,6 +1034,9 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
         });
       }
 
+      // Attach pushName so inbox can store contactName
+      (payload as any).contactName = msg.pushName || undefined;
+
       await this.messageHandler.handleMessage(tenantId, sessionId, contactPhone, payload, skipTrigger);
     } catch (error) {
       console.error('[BAILEYS] Error processing incoming message:', error);

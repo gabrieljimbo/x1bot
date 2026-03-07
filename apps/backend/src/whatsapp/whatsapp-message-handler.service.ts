@@ -42,22 +42,27 @@ export class WhatsappMessageHandler {
     // --- CRM / Inbox Registration ---
     const mediaPayload = normalizedPayload.media as any;
     const isGroup = contactPhone.endsWith('@g.us');
+    const messageContent = normalizedPayload.text || (normalizedPayload.media ? `[${mediaPayload?.mediaType || mediaPayload?.type || 'media'}]` : '');
+
+    const contactName = !normalizedPayload.fromMe ? ((normalizedPayload as any).contactName || undefined) : undefined;
 
     // Use InboxService to upsert conversation and save message
     const conversation = await this.inboxService.upsertConversation(tenantId, sessionId, contactPhone, {
-      lastMessage: normalizedPayload.text || (normalizedPayload.media ? `[${mediaPayload?.type || mediaPayload?.mediaType || 'media'}]` : ''),
+      contactName,
+      lastMessage: messageContent,
       lastMessageAt: new Date(normalizedPayload.timestamp),
-      unreadCount: normalizedPayload.fromMe ? 0 : { increment: 1 } as any, // Don't increment unread for our own messages
+      unreadCount: normalizedPayload.fromMe ? undefined : { increment: 1 } as any,
     });
 
     await this.inboxService.saveMessage(conversation.id, {
+      whatsappMessageId: normalizedPayload.messageId || undefined,
       content: normalizedPayload.text || '',
       mediaUrl: normalizedPayload.media?.url,
-      mediaType: mediaPayload?.type || mediaPayload?.mediaType || undefined,
+      mediaType: mediaPayload?.mediaType || mediaPayload?.type || undefined,
       fromMe: normalizedPayload.fromMe,
       timestamp: new Date(normalizedPayload.timestamp),
       status: MessageStatus.DELIVERED,
-    });
+    } as any);
     // --- End CRM / Inbox Registration ---
 
     // 1. Loop Protection & Skip Trigger: Ignore messages from bot itself for workflow triggering

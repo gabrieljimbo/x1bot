@@ -179,19 +179,36 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
 
             const executionDay = exec.type === 'days_after' ? (isDaily ? null : daysSinceActivation) : null;
 
-            // Check if already fired
-            const alreadyFired = await this.prisma.groupTriggerExecution.findFirst({
-              where: {
-                groupJid: link.groupJid,
-                workflowId: link.workflowId,
-                executionDay: executionDay,
-                type: exec.type,
-                executedAt: { gte: today },
-              },
-            });
+            // Check if already fired — for daily mode, scope dedup to the specific time slot
+            // (supports multiple daily firings at different hours)
+            let alreadyFired: any;
+            if (isDaily && exec.type === 'days_after') {
+              const slotStart = new Date(today);
+              slotStart.setHours(currentHour, currentMinute, 0, 0);
+              const slotEnd = new Date(today);
+              slotEnd.setHours(currentHour, currentMinute, 59, 999);
+              alreadyFired = await this.prisma.groupTriggerExecution.findFirst({
+                where: {
+                  groupJid: link.groupJid,
+                  workflowId: link.workflowId,
+                  type: exec.type,
+                  executedAt: { gte: slotStart, lte: slotEnd },
+                },
+              });
+            } else {
+              alreadyFired = await this.prisma.groupTriggerExecution.findFirst({
+                where: {
+                  groupJid: link.groupJid,
+                  workflowId: link.workflowId,
+                  executionDay: executionDay,
+                  type: exec.type,
+                  executedAt: { gte: today },
+                },
+              });
+            }
 
             if (alreadyFired) {
-              console.log(`[GROUP TRIGGER] Already fired day=${executionDay} for ${link.groupJid}. Skipping.`);
+              console.log(`[GROUP TRIGGER] Already fired day=${executionDay} time=${currentHour}:${String(currentMinute).padStart(2,'0')} for ${link.groupJid}. Skipping.`);
               continue;
             }
 

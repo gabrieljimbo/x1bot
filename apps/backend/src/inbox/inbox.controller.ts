@@ -3,7 +3,7 @@ import { InboxService } from './inbox.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ConversationStatus } from '@prisma/client';
 
-@Controller('inbox')
+@Controller('api/inbox')
 @UseGuards(JwtAuthGuard)
 export class InboxController {
     constructor(private readonly inboxService: InboxService) { }

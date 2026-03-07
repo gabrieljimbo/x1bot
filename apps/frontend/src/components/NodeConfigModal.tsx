@@ -3158,6 +3158,8 @@ function GroupTriggerConfig({ config, setConfig }: any) {
   const addExecution = () => {
     const defaultExec = mode === 'fixed_date'
       ? { id: crypto.randomUUID(), type: 'fixed_date', date: '', time: '10:00' }
+      : mode === 'daily'
+      ? { id: crypto.randomUUID(), type: 'days_after', day: 1, time: '12:00' }
       : { id: crypto.randomUUID(), type: 'days_after', day: executions.length + 1, time: '09:00' };
 
     setConfig({
@@ -3209,29 +3211,38 @@ function GroupTriggerConfig({ config, setConfig }: any) {
           <div className="pt-4 border-t border-gray-800 space-y-3">
             <div className="flex items-center justify-between pb-2">
               <h3 className="text-sm font-medium text-gray-300">
-                {mode === 'daily' ? 'Horário de Execução' : 'Cronograma'}
+                {mode === 'daily' ? 'Horários de Execução' : 'Cronograma'}
               </h3>
-              {(mode === 'days_after' || mode === 'fixed_date') && (
+              {(mode === 'days_after' || mode === 'fixed_date' || mode === 'daily') && (
                 <button
                   onClick={addExecution}
                   className="text-xs bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 font-medium px-3 py-1.5 rounded transition-colors"
                 >
-                  + Adicionar Disparo
+                  + Adicionar Horário
                 </button>
               )}
             </div>
 
-            {mode === 'daily' && executions.length > 0 && (
-              <div className="bg-[#1a1a1a] p-3 rounded border border-gray-700">
-                <label className="block text-xs text-gray-400 mb-1">Horário (Diário)</label>
+            {mode === 'daily' && executions.map((exec: any, index: number) => (
+              <div key={exec.id} className="bg-[#1a1a1a] p-3 rounded border border-gray-700 relative group flex items-center gap-3">
+                {executions.length > 1 && (
+                  <button
+                    onClick={() => removeExecution(exec.id)}
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500/20 hover:bg-red-500/40 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                    title="Remover"
+                  >
+                    ✕
+                  </button>
+                )}
+                <span className="text-xs font-bold text-gray-500 bg-black/40 px-2 py-1 rounded">#{index + 1}</span>
                 <input
                   type="time"
-                  value={executions[0].time || '09:00'}
-                  onChange={(e) => updateOnlyExecutionFields('time', e.target.value)}
-                  className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1.5 text-sm text-white w-full"
+                  value={exec.time || '09:00'}
+                  onChange={(e) => updateExecution(exec.id, 'time', e.target.value)}
+                  className="bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1.5 text-sm text-white flex-1"
                 />
               </div>
-            )}
+            ))}
 
             {(mode === 'days_after' || mode === 'fixed_date') && executions.map((exec: any, index: number) => (
               <div key={exec.id} className="bg-[#1a1a1a] p-3 rounded border border-gray-700 relative group flex gap-3 items-center">
@@ -3319,7 +3330,7 @@ function GroupTriggerConfig({ config, setConfig }: any) {
           💡 <strong>Resumo:</strong> {
             mode === 'days_after' ? "O grupo será engajado com uma sequência baseada em quantos dias possui desde sua ativação." :
               mode === 'fixed_date' ? "O grupo receberá mensagens em datas exóticas, ideal para lançamentos." :
-                mode === 'daily' ? "O grupo receberá mensagens todos os dias rigorosamente no mesmo horário." :
+                mode === 'daily' ? `O grupo receberá mensagens todos os dias nos horários: ${executions.map((e: any) => e.time || '09:00').join(', ')}.` :
                   "O grupo não receberá mensagens automáticas. Apenas rodará se a aba Gerenciar Grupos for ativada pelo botão Testar Agora."
           }
         </p>
