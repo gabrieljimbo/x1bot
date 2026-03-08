@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Edit2, Tag as TagIcon } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Plus, Trash2, Edit2, Tag as TagIcon, ArrowLeft } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { useAuth } from '@/contexts/AuthContext'
 import { AuthGuard } from '@/components/AuthGuard'
+import AppHeader from '@/components/AppHeader'
 
 interface Tag {
   id: string
@@ -16,6 +18,7 @@ interface Tag {
 }
 
 function TagsPageContent() {
+  const router = useRouter()
   const [tags, setTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -99,8 +102,16 @@ function TagsPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
+      <AppHeader />
+      <div className="max-w-6xl mx-auto p-8">
+        {/* Back button */}
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition mb-6"
+        >
+          <ArrowLeft size={16} /> Voltar
+        </button>
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>

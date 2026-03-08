@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { LogOut, User, ShieldCheck, Star, MessageSquare, Menu, X, Building2, Shield, Users, BarChart3, Target, Key, Tag, Send, ShoppingBag } from 'lucide-react'
+import { LogOut, User, ShieldCheck, Star, MessageSquare, Menu, X, Building2, Shield, Users, BarChart3, Target, Key, Tag, Megaphone, ShoppingBag } from 'lucide-react'
 import { isSuperAdmin, UserRole } from '@/lib/permissions'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
@@ -52,10 +52,11 @@ export default function AppHeader() {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden md:flex items-center gap-4 overflow-x-auto">
             <Link
               href="/inbox"
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium relative py-1"
+              title="Inbox"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium relative py-1 whitespace-nowrap"
             >
               <MessageSquare size={16} />
               Inbox
@@ -68,31 +69,56 @@ export default function AppHeader() {
 
             <Link
               href="/analytics"
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
+              title="Analytics"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium whitespace-nowrap"
             >
               <BarChart3 size={16} />
               Analytics
             </Link>
 
             <Link
+              href="/campaigns/simple"
+              title="Campanhas"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium whitespace-nowrap"
+            >
+              <Megaphone size={16} />
+              Campanhas
+            </Link>
+
+            <Link
+              href="/products"
+              title="Vitrine de Produtos"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium whitespace-nowrap"
+            >
+              <ShoppingBag size={16} />
+              Vitrine
+            </Link>
+
+            <Link
               href="/workflows/groups"
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
+              title="Fluxos de Grupo"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium whitespace-nowrap"
             >
               <Users size={16} />
               Fluxos de Grupo
             </Link>
 
+            {/* Settings divider */}
+            <div className="w-px h-4 bg-white/10 flex-shrink-0" />
+
             <Link
               href="/settings/pixel"
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
+              title="Configuração de Pixel"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium whitespace-nowrap"
             >
               <Target size={16} />
-              Config de Pixel
+              Pixel
             </Link>
 
             <Link
               href="/settings/apis"
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
+              title="Configuração de APIs"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium whitespace-nowrap"
             >
               <Key size={16} />
               APIs
@@ -100,40 +126,28 @@ export default function AppHeader() {
 
             <Link
               href="/tags"
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
+              title="Gerenciar Tags do Sistema"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium whitespace-nowrap"
             >
               <Tag size={16} />
               Tags
             </Link>
 
-            <Link
-              href="/campaigns/simple"
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
-            >
-              <Send size={16} />
-              Campanhas
-            </Link>
-
-            <Link
-              href="/products"
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
-            >
-              <ShoppingBag size={16} />
-              Vitrine
-            </Link>
-
             {isSuperAdmin(user?.role) && (
               <>
+                <div className="w-px h-4 bg-white/10 flex-shrink-0" />
                 <Link
                   href="/workspaces"
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
+                  title="Gerenciar Workspaces"
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium whitespace-nowrap"
                 >
                   <Building2 size={16} />
                   Workspaces
                 </Link>
                 <Link
                   href="/settings/whatsapp"
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium"
+                  title="Safe Settings"
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm font-medium whitespace-nowrap"
                 >
                   <Shield size={16} />
                   Safe Settings
@@ -255,7 +269,7 @@ export default function AppHeader() {
               onClick={() => setIsMenuOpen(false)}
               className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-[#00ff88] hover:bg-white/5 rounded-xl transition"
             >
-              <Send size={18} />
+              <Megaphone size={18} />
               <span className="font-medium">Campanhas</span>
             </Link>
             <Link

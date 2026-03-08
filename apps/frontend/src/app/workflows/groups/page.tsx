@@ -16,6 +16,7 @@ import {
     Rocket,
     Clock,
     ArrowRight,
+    ArrowLeft,
     ExternalLink,
     Shield,
     Trash2,
@@ -285,6 +286,12 @@ export default function GroupWorkflowsPage() {
                 <AppHeader />
 
                 <main className="max-w-7xl mx-auto p-8">
+                    <button
+                        onClick={() => router.back()}
+                        className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition mb-6"
+                    >
+                        <ArrowLeft size={16} /> Voltar
+                    </button>
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h1 className="text-3xl font-bold flex items-center gap-3">
