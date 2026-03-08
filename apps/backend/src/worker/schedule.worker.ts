@@ -139,8 +139,43 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
 
           const nodes = workflowData.nodes as any[];
           const triggerNode = nodes.find((n: any) => n.type === 'TRIGGER_GRUPO');
-          if (!triggerNode?.config?.executions?.length) continue;
 
+          // ── Case A: No TRIGGER_GRUPO node, or immediate mode ──────────────
+          // Fire once as soon as the link is active (no time-matching needed).
+          const isImmediate =
+            !triggerNode?.config?.executions?.length ||
+            triggerNode?.config?.mode === 'immediate';
+
+          if (isImmediate) {
+            const alreadyFired = await this.prisma.groupTriggerExecution.findFirst({
+              where: { groupJid: link.groupJid, workflowId: link.workflowId, type: 'immediate' },
+            });
+            if (alreadyFired) continue;
+
+            const session = await this.prisma.whatsappSession.findFirst({
+              where: { tenantId: link.tenantId, status: 'CONNECTED' },
+            });
+            if (!session) {
+              console.warn(`[GROUP TRIGGER] No connected session for tenant ${link.tenantId} (immediate).`);
+              continue;
+            }
+
+            console.log(`[GROUP TRIGGER] Firing IMMEDIATE for workflow ${link.workflowId}, group ${link.groupJid}`);
+            await this.prisma.groupTriggerExecution.create({
+              data: { groupJid: link.groupJid, workflowId: link.workflowId, executionDay: null, type: 'immediate', status: 'COMPLETED', tenantId: link.tenantId },
+            });
+            try {
+              await this.executionEngine.startExecution(link.tenantId, link.workflowId, session.id, link.groupJid, undefined, undefined, {
+                triggerType: 'TRIGGER_GRUPO',
+                initialContext: { variables: { groupJid: link.groupJid, groupName: link.groupName, contact: { name: link.groupName, phoneNumber: link.groupJid, groupJid: link.groupJid, isGroup: true } } },
+              });
+            } catch (execErr) {
+              console.error(`[GROUP TRIGGER] Immediate startExecution failed for ${link.workflowId}:`, execErr);
+            }
+            continue;
+          }
+
+          // ── Case B: Scheduled modes (daily / days_after / fixed_date) ─────
           const daysSinceActivation = Math.floor(
             (now.getTime() - new Date(link.activatedAt).getTime()) / (1000 * 60 * 60 * 24),
           );
