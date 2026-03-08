@@ -651,7 +651,7 @@ export const apiClient = {
   // Products (Vitrine)
   searchProducts: async (params: {
     keyword?: string;
-    sortType?: number;
+    sortBy?: string;
     page?: number;
     limit?: number;
     minDiscount?: number;

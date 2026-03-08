@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Star, Tag, RefreshCw, Download, Copy, Send, FileText, ChevronLeft, ChevronRight, AlertCircle, ShoppingBag, Loader2 } from 'lucide-react'
+import { Search, Star, Tag, RefreshCw, Download, Copy, Send, FileText, ChevronLeft, ChevronRight, AlertCircle, ShoppingBag, Loader2, X } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { AuthGuard } from '@/components/AuthGuard'
 import AppHeader from '@/components/AppHeader'
@@ -16,13 +16,15 @@ interface Product {
   ratingStar: string
   priceDiscountRate: string
   sales: string
+  commissionRate: string
 }
 
-const SORT_OPTIONS = [
-  { value: 2, label: 'Mais Vendidos' },
-  { value: 1, label: 'Mais Recentes' },
-  { value: 5, label: 'Menor Preço' },
-  { value: 6, label: 'Maior Preço' },
+// Regular sort options (mutually exclusive among themselves)
+const BASE_SORT_OPTIONS = [
+  { key: 'sales', label: 'Mais Vendidos' },
+  { key: 'recent', label: 'Mais Recentes' },
+  { key: 'price_asc', label: 'Menor Preço' },
+  { key: 'price_desc', label: 'Maior Preço' },
 ]
 
 function formatPrice(raw: string | undefined): string {
@@ -36,6 +38,13 @@ function formatSales(raw: string | undefined): string {
   if (!n) return '0'
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
   return String(n)
+}
+
+function calcOriginalPrice(priceMin: string, discountRate: string): string | null {
+  const price = parseFloat(priceMin || '0')
+  const discount = parseFloat(discountRate || '0')
+  if (!price || !discount || discount <= 0 || discount >= 100) return null
+  return String(price / (1 - discount / 100))
 }
 
 function SkeletonCard() {
@@ -61,6 +70,8 @@ function ProductCard({ product }: { product: Product }) {
 
   const discount = parseFloat(product.priceDiscountRate || '0')
   const rating = parseFloat(product.ratingStar || '0')
+  const commission = parseFloat(product.commissionRate || '0')
+  const originalPrice = calcOriginalPrice(product.priceMin, product.priceDiscountRate)
 
   const copyLink = () => {
     navigator.clipboard.writeText(product.offerLink)
@@ -113,7 +124,7 @@ function ProductCard({ product }: { product: Product }) {
         )}
         {discount > 0 && (
           <span className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-            -{Math.round(discount)}%
+            -{Math.round(discount)}% OFF
           </span>
         )}
         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
@@ -149,12 +160,20 @@ function ProductCard({ product }: { product: Product }) {
           <span>{formatSales(product.sales)} vendidos</span>
         </div>
 
+        {/* Prices */}
         <div className="mt-auto">
-          <p className="text-[#00ff88] font-bold text-lg">{formatPrice(product.priceMin)}</p>
-          {product.priceMax && product.priceMax !== product.priceMin && (
-            <p className="text-gray-600 text-xs">até {formatPrice(product.priceMax)}</p>
+          {originalPrice && (
+            <p className="text-gray-500 text-xs line-through">{formatPrice(originalPrice)}</p>
           )}
+          <p className="text-[#00ff88] font-bold text-lg leading-tight">{formatPrice(product.priceMin)}</p>
         </div>
+
+        {/* Commission */}
+        {commission > 0 && (
+          <p className="text-amber-400 text-xs font-medium flex items-center gap-1">
+            💵 Comissão: {commission.toFixed(1)}%
+          </p>
+        )}
 
         <div className="flex gap-2 mt-1">
           <button
@@ -183,7 +202,8 @@ function ProductCard({ product }: { product: Product }) {
 
 function ProductsPageContent() {
   const [keyword, setKeyword] = useState('')
-  const [sortType, setSortType] = useState(2)
+  const [commissionActive, setCommissionActive] = useState(false)
+  const [baseSort, setBaseSort] = useState<string | null>(null)
   const [minDiscount, setMinDiscount] = useState(0)
   const [minRating, setMinRating] = useState(0)
   const [page, setPage] = useState(1)
@@ -196,13 +216,22 @@ function ProductsPageContent() {
   const [clearingCache, setClearingCache] = useState(false)
   const [searched, setSearched] = useState(false)
 
+  // Derive effective sortBy from commission + baseSort state
+  const effectiveSortBy = commissionActive
+    ? (baseSort ? `commission_desc+${baseSort}` : 'commission_desc')
+    : (baseSort || 'sales')
+
   const doSearch = useCallback(async (pg = 1) => {
     setLoading(true)
     setError(null)
     try {
+      const sortBy = commissionActive
+        ? (baseSort ? `commission_desc+${baseSort}` : 'commission_desc')
+        : (baseSort || 'sales')
+
       const res = await apiClient.searchProducts({
         keyword: keyword.trim() || undefined,
-        sortType,
+        sortBy,
         page: pg,
         limit: 30,
         minDiscount: minDiscount > 0 ? minDiscount : undefined,
@@ -218,7 +247,7 @@ function ProductsPageContent() {
     } finally {
       setLoading(false)
     }
-  }, [keyword, sortType, minDiscount, minRating])
+  }, [keyword, commissionActive, baseSort, minDiscount, minRating])
 
   const handleClearCache = async () => {
     setClearingCache(true)
@@ -233,11 +262,26 @@ function ProductsPageContent() {
     }
   }
 
+  const handleBaseSort = (key: string) => {
+    setBaseSort(prev => prev === key ? null : key)
+  }
+
+  const handleCommissionToggle = () => {
+    setCommissionActive(prev => !prev)
+  }
+
+  const clearCombinedSort = () => {
+    setCommissionActive(false)
+    setBaseSort(null)
+  }
+
   // Auto-search on sort/filter change if already searched
   useEffect(() => {
     if (searched) doSearch(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortType, minDiscount, minRating])
+  }, [commissionActive, baseSort, minDiscount, minRating])
+
+  const showComboBadge = commissionActive && baseSort !== null
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -288,15 +332,41 @@ function ProductsPageContent() {
         {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-6 bg-[#111] border border-white/5 rounded-xl p-4">
           {/* Sort */}
-          <div className="flex flex-col gap-1 min-w-[160px]">
+          <div className="flex flex-col gap-2 min-w-[200px]">
             <label className="text-[10px] text-gray-500 uppercase tracking-wider">Ordenar por</label>
+
+            {/* Combined badge when commission + base are both active */}
+            {showComboBadge && (
+              <div className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  💵 Maior Comissão + {BASE_SORT_OPTIONS.find(o => o.key === baseSort)?.label}
+                  <button onClick={clearCombinedSort} className="ml-1 hover:text-white transition">
+                    <X size={12} />
+                  </button>
+                </span>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-1">
-              {SORT_OPTIONS.map(opt => (
+              {/* Commission button */}
+              <button
+                onClick={handleCommissionToggle}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                  commissionActive
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'
+                }`}
+              >
+                💵 Maior Comissão
+              </button>
+
+              {/* Regular sort buttons */}
+              {BASE_SORT_OPTIONS.map(opt => (
                 <button
-                  key={opt.value}
-                  onClick={() => setSortType(opt.value)}
+                  key={opt.key}
+                  onClick={() => handleBaseSort(opt.key)}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
-                    sortType === opt.value
+                    baseSort === opt.key
                       ? 'bg-[#00ff88]/20 text-[#00ff88] border border-[#00ff88]/30'
                       : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'
                   }`}
@@ -340,6 +410,17 @@ function ProductsPageContent() {
               className="accent-[#00ff88] w-full"
             />
           </div>
+
+          {/* Active sort indicator */}
+          {!showComboBadge && effectiveSortBy !== 'sales' && (
+            <div className="flex items-end">
+              <span className="text-xs text-gray-500">
+                Ordem: <span className="text-gray-300">
+                  {commissionActive ? '💵 Maior Comissão' : BASE_SORT_OPTIONS.find(o => o.key === baseSort)?.label}
+                </span>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Cache indicator */}

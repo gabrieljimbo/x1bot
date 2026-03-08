@@ -12,6 +12,7 @@ export class ProductsController {
     @Req() req: any,
     @Query('keyword') keyword?: string,
     @Query('sortType') sortType?: string,
+    @Query('sortBy') sortBy?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('minDiscount') minDiscount?: string,
@@ -22,6 +23,7 @@ export class ProductsController {
     return this.productsService.searchProducts(tenantId, {
       keyword,
       sortType: sortType ? parseInt(sortType, 10) : undefined,
+      sortBy,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
       minDiscount: minDiscount ? parseFloat(minDiscount) : undefined,
