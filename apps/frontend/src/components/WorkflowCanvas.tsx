@@ -115,7 +115,7 @@ export default function WorkflowCanvas({
       position: node.position || { x: 0, y: 0 },
       data: {
         type: node.type,
-        config: node.config,
+        config: node.config ?? {},
         isActive: currentNodeId === node.id,
         executionStatus,
         hasExecuted: executedNodes.has(node.id),

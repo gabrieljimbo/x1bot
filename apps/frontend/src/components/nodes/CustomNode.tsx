@@ -310,6 +310,30 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#A855F7]',
     iconBg: 'bg-gradient-to-br from-[#A855F7] to-[#9333EA]',
   },
+  'CAMPAIGN_START': {
+    label: 'Início de Campanha',
+    subtitle: 'CAMPANHA',
+    icon: '🚀',
+    bgColor: 'bg-[#1a2e1a]',
+    borderColor: 'border-[#22c55e]',
+    iconBg: 'bg-gradient-to-br from-green-500 to-emerald-600',
+  },
+  'STOP_CAMPAIGN': {
+    label: 'Parar Campanha',
+    subtitle: 'CAMPANHA',
+    icon: '🛑',
+    bgColor: 'bg-[#2e1a1a]',
+    borderColor: 'border-[#ef4444]',
+    iconBg: 'bg-gradient-to-br from-red-500 to-red-600',
+  },
+  'SEND_GROUP_INVITE': {
+    label: 'Enviar Convite de Grupo',
+    subtitle: 'CAMPANHA',
+    icon: '👥',
+    bgColor: 'bg-[#1e1b4b]',
+    borderColor: 'border-[#6366f1]',
+    iconBg: 'bg-gradient-to-br from-indigo-500 to-indigo-600',
+  },
 }
 
 
@@ -402,7 +426,8 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
 
   // Get preview text
   const getPreviewText = () => {
-    const { type, config } = data
+    const { type } = data
+    const config = data.config || {}
     if (config.message) {
       return config.message.length > 30
         ? config.message.substring(0, 30) + '...'

@@ -47,7 +47,7 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy() {
     console.log('[SCHEDULE WORKER] Shutting down...');
-    for (const [key] of this.scheduledWorkflows.keys()) {
+    for (const key of this.scheduledWorkflows.keys()) {
       this.stopScheduledWorkflow(key);
     }
     if (this.checkIntervalId) clearInterval(this.checkIntervalId);
@@ -153,7 +153,6 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
               const [execHour, execMinute] = (exec.time || '09:00').split(':').map(Number);
 
               if (isDaily) {
-                console.log(`[GROUP TRIGGER] Daily check: group=${link.groupJid} workflow=${link.workflowId} target=${execHour}:${String(execMinute).padStart(2,'0')} current=${currentHour}:${String(currentMinute).padStart(2,'0')}`);
                 if (execHour === currentHour && execMinute === currentMinute) {
                   shouldFire = true;
                 }
@@ -331,8 +330,6 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
           this.stopScheduledWorkflow(key);
         }
       }
-
-      console.log(`[SCHEDULE WORKER] Scheduled ${this.scheduledWorkflows.size} workflow(s)`);
     } catch (error) {
       console.error('[SCHEDULE WORKER] Error loading scheduled workflows:', error);
     }
