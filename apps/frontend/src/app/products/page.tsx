@@ -92,7 +92,7 @@ function ProductCard({ product }: { product: Product }) {
       priceLine +
       discLine +
       `\n✅ Link na bio para comprar\n\n` +
-      `#achados #promoção #desconto`
+      `#achados #promoção #nicho #desconto`
     navigator.clipboard.writeText(text)
     alert('Post copiado para a área de transferência!')
   }
