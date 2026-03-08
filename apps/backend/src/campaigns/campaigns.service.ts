@@ -247,6 +247,20 @@ export class CampaignsService {
 
   // ─── WORKFLOW ─────────────────────────────────────────────────────────────────
 
+  async getCampaignWorkflowsList(tenantId: string) {
+    const campaigns = await this.prisma.campaign.findMany({
+      where: { tenantId, type: CampaignType.WORKFLOW },
+      include: { workflow: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return campaigns.map(c => ({
+      id: c.id,
+      name: c.name,
+      nodes: (c.workflow?.nodes ?? []) as any[],
+      edges: (c.workflow?.edges ?? []) as any[],
+    }));
+  }
+
   async saveWorkflow(campaignId: string, tenantId: string, nodes: any[], edges: any[]) {
     await this.assertCampaignBelongs(tenantId, campaignId);
     return this.prisma.campaignWorkflow.upsert({
@@ -361,16 +375,42 @@ export class CampaignsService {
 
       try {
         if (campaign.workflowId) {
-          // Workflow campaign: trigger workflow per recipient
-          await this.executionEngine.startExecution(
-            campaign.tenantId,
-            campaign.workflowId,
-            session.sessionId,
-            recipient.phone,
-            undefined,
-            undefined,
-            { triggerType: 'CAMPAIGN' },
-          );
+          // Check if workflowId references a CampaignWorkflow (Campaign.id with type=WORKFLOW)
+          const campaignWf = await this.prisma.campaignWorkflow.findUnique({
+            where: { campaignId: campaign.workflowId },
+          });
+          if (campaignWf) {
+            // Execute CampaignWorkflow: send SEND_MESSAGE / SEND_MEDIA nodes in order
+            const nodes = (campaignWf.nodes as any[]) ?? [];
+            const sendNodes = nodes
+              .filter(n => n.type === 'SEND_MESSAGE' || n.type === 'SEND_MEDIA')
+              .sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0));
+            for (const node of sendNodes) {
+              const cfg = node.config ?? {};
+              if (node.type === 'SEND_MEDIA' && cfg.mediaUrl) {
+                await this.whatsappSessionManager.sendMedia(
+                  session.sessionId,
+                  recipient.phone,
+                  (cfg.mediaType ?? 'image') as 'image' | 'video' | 'audio' | 'document',
+                  cfg.mediaUrl,
+                  { caption: cfg.caption ?? undefined, bypassDelay: true },
+                );
+              } else if (cfg.message) {
+                await this.whatsappSessionManager.sendMessage(session.sessionId, recipient.phone, cfg.message, true);
+              }
+            }
+          } else {
+            // Fallback: workflowId references a regular Workflow
+            await this.executionEngine.startExecution(
+              campaign.tenantId,
+              campaign.workflowId,
+              session.sessionId,
+              recipient.phone,
+              undefined,
+              undefined,
+              { triggerType: 'CAMPAIGN' },
+            );
+          }
         } else {
           // Simple campaign: send messages directly
           for (const msg of campaign.messages) {

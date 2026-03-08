@@ -57,6 +57,12 @@ function WorkflowPageContent() {
   const [shareData, setShareData] = useState<any>(null)
   const [loadingShare, setLoadingShare] = useState(false)
 
+  // Duplicate modal states
+  const [showDupModal, setShowDupModal] = useState(false)
+  const [dupName, setDupName] = useState('')
+  const [dupTargetType, setDupTargetType] = useState<'campaign' | 'normal' | 'group'>('normal')
+  const [duplicating, setDuplicating] = useState(false)
+
   // Refs to keep track of latest nodes and edges
   const currentNodesRef = useRef<WorkflowNode[]>([])
   const currentEdgesRef = useRef<WorkflowEdge[]>([])
@@ -585,19 +591,33 @@ function WorkflowPageContent() {
     }
   }
 
-  const handleDuplicate = async () => {
+  const handleDuplicate = () => {
+    setDupName(`${workflow?.name ?? 'Fluxo'} (Cópia)`)
+    setDupTargetType('normal')
+    setShowDupModal(true)
+  }
+
+  const handleDuplicateConfirm = async () => {
+    if (!dupName.trim()) return
+    setDuplicating(true)
     try {
-      setSaveStatus('saving')
-      const duplicated = await apiClient.duplicateWorkflow(workflowId, tenantId || undefined)
-      setSaveStatus('saved')
-      // Redirect to the new workflow after a short delay
-      setTimeout(() => {
-        router.push(`/workflows/${duplicated.id}${tenantIdFromUrl ? `?tenantId=${tenantIdFromUrl}` : ''}`)
-      }, 500)
+      const result = await apiClient.duplicateWorkflowTo({
+        sourceId: workflowId,
+        sourceType: 'normal',
+        targetType: dupTargetType,
+        name: dupName.trim(),
+      })
+      setShowDupModal(false)
+      if (dupTargetType === 'campaign') {
+        router.push(`/campaigns/workflows/${result.id}`)
+      } else {
+        router.push(`/workflows/${result.id}${tenantIdFromUrl ? `?tenantId=${tenantIdFromUrl}` : ''}`)
+      }
     } catch (error) {
       console.error('Error duplicating workflow:', error)
-      setSaveStatus('error')
-      alert('Failed to duplicate workflow')
+      alert('Erro ao duplicar fluxo')
+    } finally {
+      setDuplicating(false)
     }
   }
 
@@ -865,6 +885,54 @@ function WorkflowPageContent() {
           onClose={() => setShowHistory(false)}
           onSelectExecution={handleViewHistoricalExecution}
         />
+      )}
+
+      {/* Duplicate Workflow Modal */}
+      {showDupModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1a1a] border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-white font-bold text-lg">Duplicar Fluxo</h2>
+              <button onClick={() => setShowDupModal(false)} className="text-gray-400 hover:text-white">✕</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Nome do novo fluxo:</label>
+                <input value={dupName} onChange={e => setDupName(e.target.value)}
+                  className="w-full bg-white/5 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-primary"
+                  autoFocus />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-2 block">Duplicar para:</label>
+                <div className="space-y-2">
+                  {([
+                    { value: 'normal', label: 'Fluxo Normal' },
+                    { value: 'campaign', label: 'Fluxo de Campanha' },
+                    { value: 'group', label: 'Fluxo de Grupo' },
+                  ] as const).map(opt => (
+                    <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
+                      <input type="radio" name="dupTargetEditor" value={opt.value}
+                        checked={dupTargetType === opt.value}
+                        onChange={() => setDupTargetType(opt.value)}
+                        className="accent-primary" />
+                      <span className={`text-sm ${dupTargetType === opt.value ? 'text-white' : 'text-gray-400'}`}>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setShowDupModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 hover:text-white text-sm transition">
+                Cancelar
+              </button>
+              <button onClick={handleDuplicateConfirm} disabled={duplicating || !dupName.trim()}
+                className="flex-1 px-4 py-2 bg-primary text-black font-bold rounded-lg text-sm hover:bg-primary/80 transition disabled:opacity-50">
+                {duplicating ? 'Duplicando...' : '✅ Duplicar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Share Workflow Modal */}

@@ -514,6 +514,68 @@ export class WorkflowService {
   }
 
   /**
+   * Duplicate workflow to a different target type (campaign / group / normal)
+   */
+  async duplicateWorkflowTo(
+    tenantId: string,
+    dto: { sourceId: string; sourceType: 'campaign' | 'group' | 'normal'; targetType: 'campaign' | 'group' | 'normal'; name: string },
+  ): Promise<{ id: string; type: string }> {
+    // 1. Load source nodes/edges
+    let nodes: any[] = [];
+    let edges: any[] = [];
+
+    if (dto.sourceType === 'campaign') {
+      const cw = await this.prisma.campaignWorkflow.findFirst({ where: { campaignId: dto.sourceId } });
+      if (!cw) throw new Error('Campaign workflow not found');
+      nodes = (cw.nodes as any[]) ?? [];
+      edges = (cw.edges as any[]) ?? [];
+    } else {
+      const wf = await this.prisma.workflow.findFirst({ where: { id: dto.sourceId, tenantId } });
+      if (!wf) throw new Error('Workflow not found');
+      nodes = (wf.nodes as any[]) ?? [];
+      edges = (wf.edges as any[]) ?? [];
+    }
+
+    // 2. Remap node IDs (new IDs for all nodes and updated edge references)
+    const { newNodes, newEdges } = this.remapNodeIds(nodes, edges);
+
+    // 3. Create in target
+    if (dto.targetType === 'campaign') {
+      const campaign = await this.prisma.campaign.create({
+        data: { tenantId, name: dto.name, type: 'WORKFLOW' as any },
+      });
+      await this.prisma.campaignWorkflow.create({
+        data: { campaignId: campaign.id, nodes: newNodes, edges: newEdges },
+      });
+      return { id: campaign.id, type: 'campaign' };
+    } else {
+      const wf = await this.prisma.workflow.create({
+        data: { tenantId, name: dto.name, nodes: newNodes, edges: newEdges, isActive: false },
+      });
+      return { id: wf.id, type: dto.targetType };
+    }
+  }
+
+  private remapNodeIds(nodes: any[], edges: any[]): { newNodes: any[]; newEdges: any[] } {
+    const idMap = new Map<string, string>();
+    // Use a simple timestamp+random ID since cuid is not imported
+    const newId = () => `node_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+    const newNodes = nodes.map(n => {
+      const id = newId();
+      idMap.set(n.id, id);
+      return { ...n, id };
+    });
+    const newEdges = edges.map(e => ({
+      ...e,
+      id: newId(),
+      source: idMap.get(e.source) ?? e.source,
+      target: idMap.get(e.target) ?? e.target,
+    }));
+    return { newNodes, newEdges };
+  }
+
+  /**
    * Share workflow
    */
   async shareWorkflow(workflowId: string, userId: string): Promise<any> {

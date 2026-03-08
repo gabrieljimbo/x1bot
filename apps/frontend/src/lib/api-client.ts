@@ -590,6 +590,16 @@ export const apiClient = {
     return data;
   },
 
+  getCampaignWorkflowsList: async () => {
+    const { data } = await client.get('/api/campaigns/workflows');
+    return data;
+  },
+
+  duplicateWorkflowTo: async (body: { sourceId: string; sourceType: string; targetType: string; name: string }) => {
+    const { data } = await client.post('/api/workflows/duplicate-to', body);
+    return data;
+  },
+
   getCampaignBlacklist: async () => {
     const { data } = await client.get('/api/campaigns/blacklist');
     return data;

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, Edit2, Play, Pause, GitBranch, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, Edit2, Play, Pause, GitBranch, ChevronRight, Copy, X } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { AuthGuard } from '@/components/AuthGuard'
 import AppHeader from '@/components/AppHeader'
@@ -31,12 +31,18 @@ const STATUS_COLORS: Record<CampaignStatus, string> = {
   FAILED: 'bg-red-500/20 text-red-400',
 }
 
+interface DuplicateTarget { id: string; name: string }
+
 function WorkflowsPageContent() {
   const router = useRouter()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
+  const [duplicateTarget, setDuplicateTarget] = useState<DuplicateTarget | null>(null)
+  const [dupName, setDupName] = useState('')
+  const [dupTargetType, setDupTargetType] = useState<'campaign' | 'normal' | 'group'>('campaign')
+  const [duplicating, setDuplicating] = useState(false)
 
   const load = async () => {
     try {
@@ -64,6 +70,35 @@ function WorkflowsPageContent() {
     if (!confirm('Excluir este fluxo?')) return
     await apiClient.deleteCampaign(id)
     await load()
+  }
+
+  const openDuplicate = (campaign: Campaign) => {
+    setDuplicateTarget({ id: campaign.id, name: campaign.name })
+    setDupName(`${campaign.name} (Cópia)`)
+    setDupTargetType('campaign')
+  }
+
+  const handleDuplicate = async () => {
+    if (!duplicateTarget || !dupName.trim()) return
+    setDuplicating(true)
+    try {
+      const result = await apiClient.duplicateWorkflowTo({
+        sourceId: duplicateTarget.id,
+        sourceType: 'campaign',
+        targetType: dupTargetType,
+        name: dupName.trim(),
+      })
+      setDuplicateTarget(null)
+      if (dupTargetType === 'campaign') {
+        router.push(`/campaigns/workflows/${result.id}`)
+      } else {
+        router.push(`/workflows/${result.id}`)
+      }
+    } catch (e: any) {
+      alert(e?.response?.data?.message || 'Erro ao duplicar')
+    } finally {
+      setDuplicating(false)
+    }
   }
 
   return (
@@ -137,11 +172,15 @@ function WorkflowsPageContent() {
                       </button>
                     )}
                     <button onClick={() => router.push(`/campaigns/workflows/${campaign.id}`)}
-                      className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition">
+                      className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition" title="Editar">
                       <Edit2 size={16} />
                     </button>
+                    <button onClick={() => openDuplicate(campaign)}
+                      className="p-2 text-gray-400 hover:text-[#00ff88] hover:bg-[#00ff88]/10 rounded-lg transition" title="Duplicar">
+                      <Copy size={16} />
+                    </button>
                     <button onClick={() => handleDelete(campaign.id)}
-                      className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition">
+                      className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition" title="Excluir">
                       <Trash2 size={16} />
                     </button>
                     <ChevronRight size={16} className="text-gray-600" />
@@ -152,6 +191,54 @@ function WorkflowsPageContent() {
           )}
         </div>
       </div>
+
+      {/* Duplicate Modal */}
+      {duplicateTarget && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-white font-bold text-lg">Duplicar Fluxo</h2>
+              <button onClick={() => setDuplicateTarget(null)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Nome do novo fluxo:</label>
+                <input value={dupName} onChange={e => setDupName(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50"
+                  autoFocus />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-2 block">Duplicar para:</label>
+                <div className="space-y-2">
+                  {([
+                    { value: 'campaign', label: 'Fluxo de Campanha' },
+                    { value: 'normal', label: 'Fluxo Normal' },
+                    { value: 'group', label: 'Fluxo de Grupo' },
+                  ] as const).map(opt => (
+                    <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
+                      <input type="radio" name="dupTarget" value={opt.value}
+                        checked={dupTargetType === opt.value}
+                        onChange={() => setDupTargetType(opt.value)}
+                        className="accent-[#00ff88]" />
+                      <span className={`text-sm ${dupTargetType === opt.value ? 'text-white' : 'text-gray-400'}`}>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setDuplicateTarget(null)}
+                className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white text-sm transition">
+                Cancelar
+              </button>
+              <button onClick={handleDuplicate} disabled={duplicating || !dupName.trim()}
+                className="flex-1 px-4 py-2 bg-[#00ff88] text-black font-bold rounded-lg text-sm hover:bg-[#00dd77] transition disabled:opacity-50">
+                {duplicating ? 'Duplicando...' : '✅ Duplicar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

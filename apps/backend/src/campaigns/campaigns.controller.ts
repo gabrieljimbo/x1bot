@@ -33,6 +33,11 @@ export class CampaignsController {
     return this.campaignsService.getBlacklist(req.user.tenantId);
   }
 
+  @Get('workflows')
+  getCampaignWorkflows(@Request() req: any) {
+    return this.campaignsService.getCampaignWorkflowsList(req.user.tenantId);
+  }
+
   @Get('tags')
   getCampaignTags(@Request() req: any) {
     return this.campaignsService.getCampaignTags(req.user.tenantId);

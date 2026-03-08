@@ -155,7 +155,7 @@ function CampaignDrawer({
   useEffect(() => {
     apiClient.getWhatsappSessions().then(setSessions).catch(() => {})
     apiClient.getContactLists().then(setContactLists).catch(() => {})
-    apiClient.getWorkflows().then(setWorkflows).catch(() => {})
+    apiClient.getCampaignWorkflowsList().then(setWorkflows).catch(() => {})
   }, [])
 
   useEffect(() => {

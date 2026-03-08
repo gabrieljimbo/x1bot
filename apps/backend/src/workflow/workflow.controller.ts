@@ -147,6 +147,14 @@ export class WorkflowController {
     return this.workflowService.duplicateWorkflow(tenantId, id);
   }
 
+  @Post('workflows/duplicate-to')
+  async duplicateWorkflowTo(
+    @Tenant() tenantId: string,
+    @Body() body: { sourceId: string; sourceType: 'campaign' | 'group' | 'normal'; targetType: 'campaign' | 'group' | 'normal'; name: string },
+  ) {
+    return this.workflowService.duplicateWorkflowTo(tenantId, body);
+  }
+
   @Get('workflows/:id/insights')
   async getWorkflowInsights(
     @Tenant() tenantId: string,
