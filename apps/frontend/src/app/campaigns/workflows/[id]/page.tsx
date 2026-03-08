@@ -255,10 +255,10 @@ function CampaignWorkflowEditorContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+    <div className="h-screen bg-[#0a0a0a] flex flex-col overflow-hidden">
       <AppHeader />
       {/* Editor header */}
-      <div className="flex items-center gap-4 px-6 py-3 bg-[#111] border-b border-white/10">
+      <div className="flex-none flex items-center gap-4 px-6 py-3 bg-[#111] border-b border-white/10">
         <button onClick={() => router.push('/campaigns/workflows')}
           className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition">
           <ArrowLeft size={16} /> Voltar
@@ -291,14 +291,14 @@ function CampaignWorkflowEditorContent() {
       </div>
 
       {/* Editor body */}
-      <div className="flex flex-1" style={{ height: 'calc(100vh - 128px)' }}>
+      <div className="flex flex-1 overflow-hidden">
         {showSidebar && (
           <CampaignNodesSidebar
             onAddNode={handleAddNode}
             onClose={() => setShowSidebar(false)}
           />
         )}
-        <div className="flex-1 relative">
+        <div className="flex-1 overflow-hidden relative">
           {!showSidebar && (
             <button onClick={() => setShowSidebar(true)}
               className="absolute top-4 left-4 z-10 px-3 py-1.5 bg-[#1a1a1a] border border-white/10 rounded-lg text-sm text-gray-400 hover:text-white transition flex items-center gap-2">
