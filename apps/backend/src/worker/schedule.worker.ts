@@ -19,6 +19,7 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
   private scheduledWorkflows: Map<string, ScheduledWorkflow> = new Map();
   private checkIntervalId: NodeJS.Timeout | null = null;
   private groupTriggerIntervalId: NodeJS.Timeout | null = null;
+  private isLoadingWorkflows = false;
 
   constructor(
     private prisma: PrismaService,
@@ -47,7 +48,8 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy() {
     console.log('[SCHEDULE WORKER] Shutting down...');
-    for (const key of this.scheduledWorkflows.keys()) {
+    // Collect keys before iterating — stopScheduledWorkflow deletes from the Map
+    for (const key of Array.from(this.scheduledWorkflows.keys())) {
       this.stopScheduledWorkflow(key);
     }
     if (this.checkIntervalId) clearInterval(this.checkIntervalId);
@@ -284,6 +286,8 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
    * Load all active workflows with TRIGGER_SCHEDULE and schedule them.
    */
   private async loadScheduledWorkflows(): Promise<void> {
+    if (this.isLoadingWorkflows) return;
+    this.isLoadingWorkflows = true;
     try {
       const workflows = await this.prisma.workflow.findMany({ where: { isActive: true } });
       const currentScheduledKeys = new Set<string>();
@@ -332,6 +336,8 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
       }
     } catch (error) {
       console.error('[SCHEDULE WORKER] Error loading scheduled workflows:', error);
+    } finally {
+      this.isLoadingWorkflows = false;
     }
   }
 
@@ -344,6 +350,11 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
     sessionId?: string,
   ): Promise<void> {
     const scheduleKey = `${tenantId}:${workflowId}`;
+    // Guard against duplicate registration (e.g. concurrent loadScheduledWorkflows calls)
+    if (this.scheduledWorkflows.has(scheduleKey)) {
+      console.warn(`[SCHEDULE WORKER] Duplicate schedule attempt for ${workflowId}, skipping.`);
+      return;
+    }
     try {
       if (scheduleType === 'cron' && cronExpression) {
         if (!cron.validate(cronExpression)) {

@@ -29,6 +29,9 @@ const edgeTypes: EdgeTypes = {
   custom: CustomEdge,
 }
 
+// Stable empty set — prevents infinite re-renders when parent doesn't pass these props
+const EMPTY_SET = new Set<string>()
+
 interface WorkflowCanvasProps {
   initialNodes: WorkflowNode[]
   initialEdges: WorkflowEdge[]
@@ -57,10 +60,10 @@ export default function WorkflowCanvas({
   onAddNode,
   onManualTrigger,
   onDuplicateNode,
-  executedNodes = new Set(),
-  failedNodes = new Set(),
-  executedEdges = new Set(),
-  failedEdges = new Set(),
+  executedNodes = EMPTY_SET,
+  failedNodes = EMPTY_SET,
+  executedEdges = EMPTY_SET,
+  failedEdges = EMPTY_SET,
 }: WorkflowCanvasProps) {
   // 1. STATE HOOKS (CRITICAL: Fixed order)
   const [nodes, setNodes, onNodesChange] = useNodesState([])
