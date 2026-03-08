@@ -80,13 +80,19 @@ function ProductCard({ product }: { product: Product }) {
   }
 
   const generatePost = () => {
-    const price = formatPrice(product.priceMin)
-    const disc = discount > 0 ? `\n🔥 *${Math.round(discount)}% OFF*` : ''
+    const currentPrice = formatPrice(product.priceMin)
+    const origPrice = originalPrice ? formatPrice(originalPrice) : null
+    const discLine = discount > 0 ? `${Math.round(discount)}% de desconto! 😱\n` : ''
+    const priceLine = origPrice
+      ? `De ${origPrice} por apenas ${currentPrice}\n`
+      : `Por apenas ${currentPrice}\n`
     const text =
-      `🛍️ *${product.productName}*${disc}\n` +
-      `💰 Por apenas *${price}*\n` +
-      `⭐ ${rating.toFixed(1)} | 📦 ${formatSales(product.sales)} vendidos\n\n` +
-      `🔗 ${product.offerLink}`
+      `🔥 ACHADO DO DIA!\n\n` +
+      `${product.productName}\n\n` +
+      priceLine +
+      discLine +
+      `\n✅ Link na bio para comprar\n\n` +
+      `#achados #promoção #desconto`
     navigator.clipboard.writeText(text)
     alert('Post copiado para a área de transferência!')
   }
