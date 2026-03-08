@@ -550,9 +550,19 @@ export const apiClient = {
     return data;
   },
 
-  addCampaignRecipientsFromContacts: async (id: string, tags?: string[]) => {
-    const { data } = await client.post(`/api/campaigns/${id}/recipients/contacts`, { tags });
+  addCampaignRecipientsFromContacts: async (id: string, tags?: string[], whatsappLabelIds?: string[]) => {
+    const { data } = await client.post(`/api/campaigns/${id}/recipients/contacts`, { tags, whatsappLabelIds });
     return data;
+  },
+
+  getCampaignTags: async () => {
+    const { data } = await client.get('/api/campaigns/tags');
+    return data as { tag: string; count: number }[];
+  },
+
+  getCampaignWhatsappLabels: async () => {
+    const { data } = await client.get('/api/campaigns/whatsapp-labels');
+    return data as { id: string; name: string; color: string; count: number }[];
   },
 
   addCampaignRecipientsFromCsv: async (id: string, csv: string) => {

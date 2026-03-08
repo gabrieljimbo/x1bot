@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, Play, Pause, Trash2, Edit2, BarChart2, X,
-  Send, Upload, Phone, List, RefreshCw, ChevronRight
+  Send, Upload, Phone, List, RefreshCw, ChevronRight, Tag, Smartphone, Shuffle, AlignJustify
 } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { AuthGuard } from '@/components/AuthGuard'
@@ -22,6 +22,7 @@ interface Campaign {
   limitPerSession: number
   delayMin: number
   delayMax: number
+  randomOrder: boolean
   excludeBlocked: boolean
   createdAt: string
   messages: { id: string; order: number; type: string; content?: string; mediaUrl?: string; caption?: string }[]
@@ -105,6 +106,9 @@ function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () =
   )
 }
 
+interface InternalTag { tag: string; count: number }
+interface WaLabel { id: string; name: string; color: string; count: number }
+
 function CampaignDrawer({
   initial, onSave, onClose,
 }: {
@@ -118,11 +122,19 @@ function CampaignDrawer({
   const [recipientResult, setRecipientResult] = useState<string | null>(null)
   const [recipientMode, setRecipientMode] = useState<'phones' | 'csv' | 'inbox' | 'list'>('phones')
 
+  // Tags/labels for inbox mode
+  const [internalTags, setInternalTags] = useState<InternalTag[]>([])
+  const [waLabels, setWaLabels] = useState<WaLabel[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([])
+  const [loadingTags, setLoadingTags] = useState(false)
+
   const [form, setForm] = useState({
     name: initial?.name ?? '',
     limitPerSession: initial?.limitPerSession ?? 50,
     delayMin: initial?.delayMin ?? 5,
     delayMax: initial?.delayMax ?? 30,
+    randomOrder: initial?.randomOrder ?? true,
     excludeBlocked: initial?.excludeBlocked ?? true,
     scheduledAt: initial?.scheduledAt ? initial.scheduledAt.slice(0, 16) : '',
     sessionIds: initial?.sessions?.map(s => s.sessionId) ?? [],
@@ -131,13 +143,35 @@ function CampaignDrawer({
 
   const [phonesText, setPhonesText] = useState('')
   const [csvText, setCsvText] = useState('')
-  const [tags, setTags] = useState('')
   const [selectedListId, setSelectedListId] = useState('')
 
   useEffect(() => {
     apiClient.getWhatsappSessions().then(setSessions).catch(() => {})
     apiClient.getContactLists().then(setContactLists).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (recipientMode !== 'inbox') return
+    setLoadingTags(true)
+    Promise.all([
+      apiClient.getCampaignTags().catch(() => [] as InternalTag[]),
+      apiClient.getCampaignWhatsappLabels().catch(() => [] as WaLabel[]),
+    ]).then(([tags, labels]) => {
+      setInternalTags(tags)
+      setWaLabels(labels)
+    }).finally(() => setLoadingTags(false))
+  }, [recipientMode])
+
+  const toggleTag = (tag: string) =>
+    setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
+
+  const toggleLabel = (id: string) =>
+    setSelectedLabelIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
+
+  const selectedTotal = [
+    ...internalTags.filter(t => selectedTags.includes(t.tag)).map(t => t.count),
+    ...waLabels.filter(l => selectedLabelIds.includes(l.id)).map(l => l.count),
+  ].reduce((a, b) => a + b, 0)
 
   const handleSave = async () => {
     if (!form.name.trim()) return alert('Nome é obrigatório')
@@ -168,7 +202,7 @@ function CampaignDrawer({
       } else if (recipientMode === 'csv') {
         result = await apiClient.addCampaignRecipientsFromCsv(id, csvText)
       } else if (recipientMode === 'inbox') {
-        result = await apiClient.addCampaignRecipientsFromContacts(id, tags.split(',').map(t => t.trim()).filter(Boolean))
+        result = await apiClient.addCampaignRecipientsFromContacts(id, selectedTags, selectedLabelIds)
       } else {
         if (!selectedListId) return alert('Selecione uma lista')
         result = await apiClient.addCampaignRecipientsFromList(id, selectedListId)
@@ -298,9 +332,72 @@ function CampaignDrawer({
                   placeholder={'5511999990000,João\n5521988880000,Maria'} />
               )}
               {recipientMode === 'inbox' && (
-                <input value={tags} onChange={e => setTags(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50"
-                  placeholder="Tags separadas por vírgula (vazio = todos)" />
+                <div className="space-y-4">
+                  {loadingTags ? (
+                    <p className="text-gray-500 text-sm text-center py-4">Carregando tags...</p>
+                  ) : (
+                    <>
+                      {internalTags.length > 0 && (
+                        <div>
+                          <p className="flex items-center gap-1.5 text-xs text-gray-400 font-medium mb-2">
+                            <Tag size={11} /> Tags Internas
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {internalTags.map(({ tag, count }) => {
+                              const active = selectedTags.includes(tag)
+                              return (
+                                <button key={tag} onClick={() => toggleTag(tag)}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+                                    active
+                                      ? 'bg-[#00ff88]/20 text-[#00ff88] border-[#00ff88]/40'
+                                      : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'
+                                  }`}>
+                                  {active ? '✅' : '☐'} {tag} <span className="opacity-60">• {count}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {waLabels.length > 0 && (
+                        <div>
+                          <p className="flex items-center gap-1.5 text-xs text-gray-400 font-medium mb-2">
+                            <Smartphone size={11} /> Etiquetas WhatsApp
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {waLabels.map(({ id, name, color, count }) => {
+                              const active = selectedLabelIds.includes(id)
+                              return (
+                                <button key={id} onClick={() => toggleLabel(id)}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+                                    active ? 'opacity-100' : 'opacity-60 hover:opacity-80'
+                                  }`}
+                                  style={{ backgroundColor: color + '22', borderColor: color + '55', color: active ? color : '#9ca3af' }}>
+                                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                                  {name} <span className="opacity-70">• {count}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {internalTags.length === 0 && waLabels.length === 0 && (
+                        <p className="text-gray-500 text-sm text-center py-4">Nenhuma tag ou etiqueta encontrada</p>
+                      )}
+
+                      {(selectedTags.length > 0 || selectedLabelIds.length > 0) && (
+                        <p className="text-xs text-[#00ff88] font-medium">
+                          Total selecionado: ~{selectedTotal} contatos
+                        </p>
+                      )}
+                      {selectedTags.length === 0 && selectedLabelIds.length === 0 && (
+                        <p className="text-xs text-gray-500">Nenhuma seleção = todos os contatos do inbox</p>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
               {recipientMode === 'list' && (
                 <select value={selectedListId} onChange={e => setSelectedListId(e.target.value)}
@@ -353,25 +450,63 @@ function CampaignDrawer({
                   onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))}
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Delay mínimo (seg)</label>
-                  <input type="number" min={1} value={form.delayMin}
-                    onChange={e => setForm(f => ({ ...f, delayMin: Number(e.target.value) }))}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Delay máximo (seg)</label>
-                  <input type="number" min={1} value={form.delayMax}
-                    onChange={e => setForm(f => ({ ...f, delayMax: Number(e.target.value) }))}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+
+              {/* Ordem de envio */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+                <p className="text-xs text-gray-400 font-medium flex items-center gap-1.5"><Shuffle size={12} /> Ordem de Envio</p>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="radio" name="randomOrder" checked={!form.randomOrder}
+                      onChange={() => setForm(f => ({ ...f, randomOrder: false }))} className="accent-[#00ff88]" />
+                    <div>
+                      <p className="text-white text-sm flex items-center gap-1.5"><AlignJustify size={13} /> Sequencial</p>
+                      <p className="text-gray-600 text-xs">Envia 1 a 1 na ordem da lista</p>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="radio" name="randomOrder" checked={form.randomOrder}
+                      onChange={() => setForm(f => ({ ...f, randomOrder: true }))} className="accent-[#00ff88]" />
+                    <div>
+                      <p className="text-white text-sm flex items-center gap-1.5"><Shuffle size={13} /> Aleatório</p>
+                      <p className="text-gray-600 text-xs">Embaralha a lista antes de enviar</p>
+                    </div>
+                  </label>
                 </div>
               </div>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={form.excludeBlocked}
-                  onChange={e => setForm(f => ({ ...f, excludeBlocked: e.target.checked }))} className="accent-[#00ff88]" />
-                <span className="text-gray-300 text-sm">Excluir números na blacklist</span>
-              </label>
+
+              {/* Delay */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+                <p className="text-xs text-gray-400 font-medium">⏱️ Delay entre envios</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Mínimo (seg)</label>
+                    <input type="number" min={1} value={form.delayMin}
+                      onChange={e => setForm(f => ({ ...f, delayMin: Number(e.target.value) }))}
+                      className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Máximo (seg)</label>
+                    <input type="number" min={1} value={form.delayMax}
+                      onChange={e => setForm(f => ({ ...f, delayMax: Number(e.target.value) }))}
+                      className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600">Um valor aleatório entre {form.delayMin}s e {form.delayMax}s será usado entre cada envio para simular comportamento humano.</p>
+              </div>
+
+              {/* Blacklist */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <div className={`w-10 h-6 rounded-full transition relative ${form.excludeBlocked ? 'bg-[#00ff88]' : 'bg-white/10'}`}
+                    onClick={() => setForm(f => ({ ...f, excludeBlocked: !f.excludeBlocked }))}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${form.excludeBlocked ? 'left-5' : 'left-1'}`} />
+                  </div>
+                  <div>
+                    <p className="text-white text-sm">🚫 Excluir bloqueados</p>
+                    <p className="text-gray-600 text-xs">Ignorar números na blacklist</p>
+                  </div>
+                </label>
+              </div>
             </>
           )}
         </div>

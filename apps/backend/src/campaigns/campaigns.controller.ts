@@ -33,6 +33,16 @@ export class CampaignsController {
     return this.campaignsService.getBlacklist(req.user.tenantId);
   }
 
+  @Get('tags')
+  getCampaignTags(@Request() req: any) {
+    return this.campaignsService.getCampaignTags(req.user.tenantId);
+  }
+
+  @Get('whatsapp-labels')
+  getCampaignWhatsappLabels(@Request() req: any) {
+    return this.campaignsService.getCampaignWhatsappLabels(req.user.tenantId);
+  }
+
   @Post('blacklist')
   addToBlacklist(@Request() req: any, @Body() body: { phone: string; reason?: string }) {
     return this.campaignsService.addToBlacklist(req.user.tenantId, body.phone, body.reason);
@@ -84,8 +94,8 @@ export class CampaignsController {
   // ─── RECIPIENTS ──────────────────────────────────────────────────────────────
 
   @Post(':id/recipients/contacts')
-  addFromContacts(@Request() req: any, @Param('id') id: string, @Body() body: { tags?: string[] }) {
-    return this.campaignsService.addRecipientsFromContacts(id, req.user.tenantId, { tags: body.tags });
+  addFromContacts(@Request() req: any, @Param('id') id: string, @Body() body: { tags?: string[]; whatsappLabelIds?: string[] }) {
+    return this.campaignsService.addRecipientsFromContacts(id, req.user.tenantId, { tags: body.tags, whatsappLabelIds: body.whatsappLabelIds });
   }
 
   @Post(':id/recipients/csv')

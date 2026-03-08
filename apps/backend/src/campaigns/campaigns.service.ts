@@ -19,6 +19,7 @@ export class CampaignsService {
     limitPerSession?: number;
     delayMin?: number;
     delayMax?: number;
+    randomOrder?: boolean;
     excludeBlocked?: boolean;
     sessionIds?: string[];
     messages?: { order: number; type: string; content?: string; mediaUrl?: string; caption?: string }[];
@@ -32,6 +33,7 @@ export class CampaignsService {
         limitPerSession: dto.limitPerSession ?? 50,
         delayMin: dto.delayMin ?? 5,
         delayMax: dto.delayMax ?? 30,
+        randomOrder: dto.randomOrder ?? true,
         excludeBlocked: dto.excludeBlocked ?? true,
       },
     });
@@ -57,6 +59,7 @@ export class CampaignsService {
     limitPerSession?: number;
     delayMin?: number;
     delayMax?: number;
+    randomOrder?: boolean;
     excludeBlocked?: boolean;
     sessionIds?: string[];
     messages?: { order: number; type: string; content?: string; mediaUrl?: string; caption?: string }[];
@@ -122,19 +125,45 @@ export class CampaignsService {
 
   // ─── RECIPIENTS ──────────────────────────────────────────────────────────────
 
-  async addRecipientsFromContacts(campaignId: string, tenantId: string, filters: { tags?: string[] }) {
+  async addRecipientsFromContacts(campaignId: string, tenantId: string, filters: { tags?: string[]; whatsappLabelIds?: string[] }) {
     const campaign = await this.prisma.campaign.findFirst({ where: { id: campaignId, tenantId } });
     if (!campaign) throw new NotFoundException('Campaign not found');
 
-    const contactTags = await this.prisma.contactTag.findMany({
-      where: {
-        tenantId,
-        ...(filters.tags && filters.tags.length > 0 ? { tags: { hasSome: filters.tags } } : {}),
-      },
-    });
+    const phoneSet = new Set<string>();
 
-    const phones = [...new Set(contactTags.map((c) => c.contactPhone))];
-    return this.addRecipientsFromPhones(campaignId, phones);
+    // Internal system tags
+    if (!filters.tags?.length && !filters.whatsappLabelIds?.length) {
+      // No filters → all inbox contacts
+      const all = await this.prisma.contactTag.findMany({ where: { tenantId }, select: { contactPhone: true } });
+      all.forEach((c) => phoneSet.add(c.contactPhone));
+    } else {
+      if (filters.tags && filters.tags.length > 0) {
+        const contactTags = await this.prisma.contactTag.findMany({
+          where: { tenantId, tags: { hasSome: filters.tags } },
+          select: { contactPhone: true },
+        });
+        contactTags.forEach((c) => phoneSet.add(c.contactPhone));
+      }
+
+      // WhatsApp label contacts
+      if (filters.whatsappLabelIds && filters.whatsappLabelIds.length > 0) {
+        const sessions = await this.prisma.whatsappSession.findMany({ where: { tenantId }, select: { id: true } });
+        const sessionIds = sessions.map((s) => s.id);
+        if (sessionIds.length > 0) {
+          const chatLabels = await this.prisma.whatsappChatLabel.findMany({
+            where: { sessionId: { in: sessionIds }, labelId: { in: filters.whatsappLabelIds } },
+            select: { chatId: true },
+          });
+          chatLabels.forEach((cl) => {
+            // chatId format: "5511999990000@s.whatsapp.net" or just phone
+            const phone = cl.chatId.split('@')[0];
+            if (phone) phoneSet.add(phone);
+          });
+        }
+      }
+    }
+
+    return this.addRecipientsFromPhones(campaignId, [...phoneSet]);
   }
 
   async addRecipientsFromCsv(campaignId: string, csvContent: string) {
@@ -289,7 +318,13 @@ export class CampaignsService {
     });
     if (!campaign) return;
 
-    const pendingRecipients = campaign.recipients.filter((r) => r.status === 'pending');
+    let pendingRecipients = campaign.recipients.filter((r) => r.status === 'pending');
+    if (campaign.randomOrder) {
+      for (let i = pendingRecipients.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pendingRecipients[i], pendingRecipients[j]] = [pendingRecipients[j], pendingRecipients[i]];
+      }
+    }
     let sessionIndex = 0;
 
     for (const recipient of pendingRecipients) {
@@ -352,6 +387,51 @@ export class CampaignsService {
     if (finalState && finalState.status === CampaignStatus.RUNNING) {
       await this.prisma.campaign.update({ where: { id: campaignId }, data: { status: CampaignStatus.COMPLETED, completedAt: new Date() } });
     }
+  }
+
+  // ─── TAGS & LABELS ────────────────────────────────────────────────────────────
+
+  async getCampaignTags(tenantId: string): Promise<{ tag: string; count: number }[]> {
+    const result = await this.prisma.$queryRaw<{ tag: string; count: bigint }[]>`
+      SELECT unnest(tags) as tag, COUNT(DISTINCT "contactPhone") as count
+      FROM contact_tags
+      WHERE "tenantId" = ${tenantId}
+      GROUP BY tag
+      ORDER BY count DESC
+    `;
+    return result.map((r) => ({ tag: r.tag, count: Number(r.count) }));
+  }
+
+  async getCampaignWhatsappLabels(tenantId: string): Promise<{ id: string; name: string; color: string; count: number }[]> {
+    const sessions = await this.prisma.whatsappSession.findMany({ where: { tenantId }, select: { id: true } });
+    const sessionIds = sessions.map((s) => s.id);
+    if (sessionIds.length === 0) return [];
+
+    const result = await this.prisma.$queryRaw<{ labelId: string; name: string; color: number | null; count: bigint }[]>`
+      SELECT wl."labelId", wl.name, wl.color, COUNT(DISTINCT wcl."chatId") as count
+      FROM whatsapp_labels wl
+      LEFT JOIN whatsapp_chat_labels wcl ON wcl."sessionId" = wl."sessionId" AND wcl."labelId" = wl."labelId"
+      WHERE wl."sessionId" = ANY(${sessionIds}::text[])
+      GROUP BY wl."labelId", wl.name, wl.color
+      ORDER BY count DESC
+    `;
+
+    return result.map((r) => ({
+      id: r.labelId,
+      name: r.name,
+      color: r.color !== null ? this.labelColorToHex(r.color) : '#888888',
+      count: Number(r.count),
+    }));
+  }
+
+  private labelColorToHex(color: number): string {
+    const palette: Record<number, string> = {
+      0: '#FF2400', 1: '#FF7300', 2: '#FFB900', 3: '#ABF5D1',
+      4: '#9CE4E9', 5: '#25D366', 6: '#00A3BF', 7: '#0052CC',
+      8: '#6554C0', 9: '#FF5630', 10: '#FF8B00', 11: '#36B37E',
+      12: '#00B8D9', 13: '#0065FF', 14: '#FF991F', 15: '#C0B6F2',
+    };
+    return palette[color] ?? '#888888';
   }
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────────
