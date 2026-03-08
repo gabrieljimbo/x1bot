@@ -20,6 +20,26 @@ export class ApiConfigsService {
         });
     }
 
+    async findByProviderFlexible(tenantId: string, provider: string) {
+        // 1. Try exact match first (standard)
+        const exact = await this.getByProvider(tenantId, provider);
+        if (exact) return exact;
+
+        // 2. Try case-insensitive search or partial match
+        const configs = await this.prisma.tenantApiConfig.findMany({
+            where: {
+                tenantId,
+                provider: {
+                    contains: provider,
+                    mode: 'insensitive',
+                },
+            },
+        });
+
+        // Return the first active one, or just the first one
+        return configs.find(c => c.isActive) || configs[0] || null;
+    }
+
     async upsert(tenantId: string, provider: string, appId: string, secret: string) {
         const keepSecret = secret === '__keep__';
         if (keepSecret) {

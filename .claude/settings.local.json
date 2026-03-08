@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit -p apps/backend/tsconfig.json)",
+      "Bash(npx prisma migrate dev --name add_workflow_id_to_campaign)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+    ]
+  }
+}

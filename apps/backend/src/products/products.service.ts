@@ -34,7 +34,7 @@ export class ProductsService {
   constructor(
     private readonly redis: RedisService,
     private readonly apiConfigsService: ApiConfigsService,
-  ) {}
+  ) { }
 
   async searchProducts(
     tenantId: string,
@@ -46,7 +46,7 @@ export class ProductsService {
       return { ...JSON.parse(cached), fromCache: true };
     }
 
-    const apiCreds = await this.apiConfigsService.getByProvider(tenantId, 'shopee');
+    const apiCreds = await this.apiConfigsService.findByProviderFlexible(tenantId, 'shopee');
     if (!apiCreds?.isActive) {
       throw new Error('Credenciais Shopee não configuradas. Acesse Configurações > APIs.');
     }

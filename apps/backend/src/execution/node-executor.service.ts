@@ -2370,7 +2370,10 @@ functions, etc.)
 
     // Fetch Shopee credentials from DB (tenant-level, configured in Settings > APIs)
     const tenantId = (context.variables as any)?._tenantId;
-    const apiCreds = tenantId ? await this.apiConfigsService.getByProvider(tenantId, 'shopee') : null;
+    console.log('[PROMO_SHOPEE] Buscando credenciais para tenant:', tenantId);
+    const apiCreds = tenantId ? await this.apiConfigsService.findByProviderFlexible(tenantId, 'shopee') : null;
+    console.log('[PROMO_SHOPEE] Credenciais encontradas:', apiCreds ? { ...apiCreds, secret: '***' } : 'null');
+
     if (!apiCreds?.isActive) {
       throw new Error('[PROMO_SHOPEE] Credenciais Shopee não configuradas. Acesse Configurações > APIs.');
     }
