@@ -276,6 +276,7 @@ export class ExecutionEngineService implements OnModuleInit {
         timestamp: Date.now(),
       };
       baseContext.variables.contactTags = contactTags; // Make tags available in all nodes
+      baseContext.variables._tenantId = tenantId; // Nodes like PROMO_SHOPEE need this
 
       // Create execution with normalized payload
       const execution = await this.prisma.workflowExecution.create({
@@ -294,9 +295,9 @@ export class ExecutionEngineService implements OnModuleInit {
         },
       }) as unknown as WorkflowExecution;
 
-      // Set metadata variables that nodes rely on (e.g. PROMO_SHOPEE needs _tenantId)
+      // Set _executionId (needs the DB-generated id) and sync in-memory context
       baseContext.variables._executionId = execution.id;
-      baseContext.variables._tenantId = tenantId;
+      execution.context = baseContext;
       await this.prisma.workflowExecution.update({
         where: { id: execution.id },
         data: { context: baseContext as any },
