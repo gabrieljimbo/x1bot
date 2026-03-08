@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappSessionManager } from '../whatsapp/whatsapp-session-manager.service';
+import { ExecutionEngineService } from '../execution/execution-engine.service';
 import { CampaignStatus, CampaignType } from '@prisma/client';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class CampaignsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsappSessionManager: WhatsappSessionManager,
+    private readonly executionEngine: ExecutionEngineService,
   ) {}
 
   // ─── CRUD ────────────────────────────────────────────────────────────────────
@@ -15,6 +17,7 @@ export class CampaignsService {
   async createCampaign(tenantId: string, dto: {
     name: string;
     type?: CampaignType;
+    workflowId?: string;
     scheduledAt?: Date;
     limitPerSession?: number;
     delayMin?: number;
@@ -29,6 +32,7 @@ export class CampaignsService {
         tenantId,
         name: dto.name,
         type: dto.type ?? CampaignType.SIMPLE,
+        workflowId: dto.workflowId ?? null,
         scheduledAt: dto.scheduledAt,
         limitPerSession: dto.limitPerSession ?? 50,
         delayMin: dto.delayMin ?? 5,
@@ -55,6 +59,7 @@ export class CampaignsService {
 
   async updateCampaign(tenantId: string, campaignId: string, dto: {
     name?: string;
+    workflowId?: string | null;
     scheduledAt?: Date | null;
     limitPerSession?: number;
     delayMin?: number;
@@ -316,6 +321,7 @@ export class CampaignsService {
       where: { id: campaignId },
       include: { recipients: true, sessions: true, messages: { orderBy: { order: 'asc' } } },
     });
+    // campaign.workflowId is now available directly from the model
     if (!campaign) return;
 
     let pendingRecipients = campaign.recipients.filter((r) => r.status === 'pending');
@@ -354,17 +360,31 @@ export class CampaignsService {
       }
 
       try {
-        for (const msg of campaign.messages) {
-          if (msg.mediaUrl && msg.type !== 'text') {
-            await this.whatsappSessionManager.sendMedia(
-              session.sessionId,
-              recipient.phone,
-              msg.type as 'image' | 'video' | 'audio' | 'document',
-              msg.mediaUrl,
-              { caption: msg.caption ?? undefined, bypassDelay: true },
-            );
-          } else if (msg.content) {
-            await this.whatsappSessionManager.sendMessage(session.sessionId, recipient.phone, msg.content, true);
+        if (campaign.workflowId) {
+          // Workflow campaign: trigger workflow per recipient
+          await this.executionEngine.startExecution(
+            campaign.tenantId,
+            campaign.workflowId,
+            session.sessionId,
+            recipient.phone,
+            undefined,
+            undefined,
+            { triggerType: 'CAMPAIGN' },
+          );
+        } else {
+          // Simple campaign: send messages directly
+          for (const msg of campaign.messages) {
+            if (msg.mediaUrl && msg.type !== 'text') {
+              await this.whatsappSessionManager.sendMedia(
+                session.sessionId,
+                recipient.phone,
+                msg.type as 'image' | 'video' | 'audio' | 'document',
+                msg.mediaUrl,
+                { caption: msg.caption ?? undefined, bypassDelay: true },
+              );
+            } else if (msg.content) {
+              await this.whatsappSessionManager.sendMessage(session.sessionId, recipient.phone, msg.content, true);
+            }
           }
         }
 

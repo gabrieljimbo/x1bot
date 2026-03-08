@@ -533,6 +533,7 @@ model Campaign {
   delayMax        Int                 @default(30)
   randomOrder     Boolean             @default(true)
   excludeBlocked  Boolean             @default(true)
+  workflowId      String?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 

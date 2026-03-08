@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, Play, Pause, Trash2, Edit2, BarChart2, X,
-  Send, Upload, Phone, List, RefreshCw, ChevronRight, Tag, Smartphone, Shuffle, AlignJustify
+  Send, Upload, Phone, List, RefreshCw, Tag, Smartphone, Shuffle, AlignJustify, GitBranch
 } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { AuthGuard } from '@/components/AuthGuard'
@@ -15,6 +15,8 @@ type CampaignStatus = 'DRAFT' | 'SCHEDULED' | 'RUNNING' | 'PAUSED' | 'COMPLETED'
 interface Campaign {
   id: string
   name: string
+  type: 'SIMPLE' | 'WORKFLOW'
+  workflowId?: string | null
   status: CampaignStatus
   scheduledAt?: string
   startedAt?: string
@@ -30,6 +32,8 @@ interface Campaign {
   contactLists: { id: string; contactList: { name: string } }[]
   _count: { recipients: number }
 }
+
+interface Workflow { id: string; name: string; isActive: boolean }
 
 interface Stats {
   total: number; sent: number; failed: number; blocked: number; pending: number; progress: number
@@ -117,6 +121,9 @@ function CampaignDrawer({
   const [tab, setTab] = useState<'content' | 'recipients' | 'sessions' | 'settings'>('content')
   const [sessions, setSessions] = useState<Session[]>([])
   const [contactLists, setContactLists] = useState<ContactList[]>([])
+  const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const [campaignType, setCampaignType] = useState<'SIMPLE' | 'WORKFLOW'>(initial?.type ?? 'SIMPLE')
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>(initial?.workflowId ?? '')
   const [saving, setSaving] = useState(false)
   const [campaignId, setCampaignId] = useState<string | null>(initial?.id ?? null)
   const [recipientResult, setRecipientResult] = useState<string | null>(null)
@@ -148,6 +155,7 @@ function CampaignDrawer({
   useEffect(() => {
     apiClient.getWhatsappSessions().then(setSessions).catch(() => {})
     apiClient.getContactLists().then(setContactLists).catch(() => {})
+    apiClient.getWorkflows().then(setWorkflows).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -175,13 +183,15 @@ function CampaignDrawer({
 
   const handleSave = async () => {
     if (!form.name.trim()) return alert('Nome é obrigatório')
+    if (campaignType === 'WORKFLOW' && !selectedWorkflowId) return alert('Selecione um fluxo')
     setSaving(true)
     try {
       const payload = {
         ...form,
-        type: 'SIMPLE',
+        type: campaignType,
+        workflowId: campaignType === 'WORKFLOW' ? selectedWorkflowId : null,
         scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : undefined,
-        messages: form.messages.filter(m => m.content || m.mediaUrl),
+        messages: campaignType === 'SIMPLE' ? form.messages.filter(m => m.content || m.mediaUrl) : [],
       }
       const result = await onSave(payload)
       if (result?.id) setCampaignId(result.id)
@@ -265,8 +275,34 @@ function CampaignDrawer({
                   placeholder="Ex: Promoção Black Friday" />
               </div>
 
-              <p className="text-xs text-gray-400 font-medium">Mensagens (sequenciais)</p>
-              {form.messages.map((msg, idx) => (
+              {/* Campaign type selector */}
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setCampaignType('SIMPLE')}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium transition ${campaignType === 'SIMPLE' ? 'bg-[#00ff88]/10 border-[#00ff88]/40 text-[#00ff88]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
+                  <Send size={15} /> Mensagem Única
+                </button>
+                <button onClick={() => setCampaignType('WORKFLOW')}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium transition ${campaignType === 'WORKFLOW' ? 'bg-[#00ff88]/10 border-[#00ff88]/40 text-[#00ff88]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
+                  <GitBranch size={15} /> Fluxo de Campanha
+                </button>
+              </div>
+
+              {campaignType === 'WORKFLOW' && (
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Fluxo a executar *</label>
+                  <select value={selectedWorkflowId} onChange={e => setSelectedWorkflowId(e.target.value)}
+                    className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50">
+                    <option value="">Selecione um fluxo...</option>
+                    {workflows.map(wf => (
+                      <option key={wf.id} value={wf.id}>{wf.name}{!wf.isActive ? ' (inativo)' : ''}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">O fluxo será disparado para cada destinatário individualmente.</p>
+                </div>
+              )}
+
+              {campaignType === 'SIMPLE' && (
+              <>{form.messages.map((msg, idx) => (
                 <div key={idx} className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">Mensagem {idx + 1}</span>
@@ -302,7 +338,9 @@ function CampaignDrawer({
                 className="w-full py-2 border border-dashed border-white/20 rounded-lg text-gray-400 text-sm hover:border-[#00ff88]/40 hover:text-[#00ff88] transition flex items-center justify-center gap-2">
                 <Plus size={14} /> Adicionar Mensagem
               </button>
-            </>
+              </>
+            )}
+          </>
           )}
 
           {tab === 'recipients' && (
@@ -533,7 +571,7 @@ function SimplePageContent() {
   const load = async () => {
     try {
       setLoading(true)
-      const data = await apiClient.getCampaigns('SIMPLE')
+      const data = await apiClient.getCampaigns()
       setCampaigns(data)
     } catch { /* noop */ } finally { setLoading(false) }
   }
@@ -564,8 +602,8 @@ function SimplePageContent() {
         <div className="flex-1 p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-white">Disparos Simples</h1>
-              <p className="text-gray-400 text-sm mt-1">Envie mensagens em massa para listas de contatos</p>
+              <h1 className="text-2xl font-bold text-white">Campanhas</h1>
+              <p className="text-gray-400 text-sm mt-1">Envie mensagens ou acione fluxos em massa para listas de contatos</p>
             </div>
             <button onClick={() => { setEditing(null); setShowDrawer(true) }}
               className="flex items-center gap-2 px-4 py-2 bg-[#00ff88] text-black font-bold rounded-lg text-sm hover:bg-[#00dd77] transition">
@@ -588,6 +626,9 @@ function SimplePageContent() {
                   className="bg-[#1a1a1a] border border-white/10 rounded-xl p-5 flex items-center gap-4 hover:border-white/20 transition">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-1">
+                      <span title={campaign.type === 'WORKFLOW' ? 'Fluxo de Campanha' : 'Mensagem Única'}>
+                        {campaign.type === 'WORKFLOW' ? <GitBranch size={15} className="text-[#00ff88] flex-shrink-0" /> : <Send size={15} className="text-gray-400 flex-shrink-0" />}
+                      </span>
                       <h3 className="text-white font-semibold truncate">{campaign.name}</h3>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[campaign.status]}`}>
                         {STATUS_LABELS[campaign.status]}
@@ -595,7 +636,10 @@ function SimplePageContent() {
                     </div>
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                       <span>{campaign._count.recipients} destinatários</span>
-                      <span>{campaign.messages.length} mensagem(ns)</span>
+                      {campaign.type === 'WORKFLOW'
+                        ? <span className="text-[#00ff88]/70">fluxo vinculado</span>
+                        : <span>{campaign.messages.length} mensagem(ns)</span>
+                      }
                       <span>{campaign.delayMin}–{campaign.delayMax}s delay</span>
                     </div>
                   </div>
