@@ -57,6 +57,7 @@ import { ApiConfigsService } from '../api-configs/api-configs.service';
 
 export interface NodeExecutionResult {
   nextNodeId: string | null;
+  outputHandle?: string | null;
   shouldWait: boolean;
   waitTimeoutSeconds?: number;
   [key: string]: any;
@@ -3547,21 +3548,17 @@ ${config.footerText || ''}`;
       }
     }
 
-    // 5. Routing - Find edge matching selected saida ID
-    const nextEdge = edges.find(
-      (e) => e.source === node.id && (e.condition === selectedSaida?.id || e.label === selectedSaida?.nome),
-    );
-
-    const nextNodeId = nextEdge ? nextEdge.target : null;
-
     this.contextService.setOutput(context, {
       selectedSaidaId: selectedSaida?.id,
       selectedSaidaNome: selectedSaida?.nome,
       porcentagem: selectedSaida?.porcentagem,
     });
 
+    // 5. Return the winning output's handle ID — the execution engine will
+    //    resolve the next node by finding the edge where condition === outputHandle
     return {
-      nextNodeId,
+      nextNodeId: null,
+      outputHandle: selectedSaida?.id != null ? String(selectedSaida.id) : null,
       shouldWait: false,
     };
   }

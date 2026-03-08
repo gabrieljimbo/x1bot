@@ -841,6 +841,18 @@ export class ExecutionEngineService implements OnModuleInit {
         timestamp: new Date(),
       });
 
+      // Resolve nextNodeId from outputHandle (for multi-output nodes like RANDOMIZER)
+      // The node returns which handle won; the engine finds the matching edge by condition
+      if (result.outputHandle != null && !result.nextNodeId) {
+        const outputEdge = workflow.edges.find(
+          (e: any) => e.source === currentNode.id && e.condition === result.outputHandle,
+        );
+        result.nextNodeId = outputEdge ? outputEdge.target : null;
+        if (!outputEdge) {
+          console.warn(`[ENGINE] No edge found for outputHandle="${result.outputHandle}" from node ${currentNode.id} (${currentNode.type})`);
+        }
+      }
+
       // Handle wait
       if (result.shouldWait) {
         execution.status = ExecutionStatus.WAITING;
