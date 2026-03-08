@@ -294,6 +294,14 @@ export class ExecutionEngineService implements OnModuleInit {
         },
       }) as unknown as WorkflowExecution;
 
+      // Set metadata variables that nodes rely on (e.g. PROMO_SHOPEE needs _tenantId)
+      baseContext.variables._executionId = execution.id;
+      baseContext.variables._tenantId = tenantId;
+      await this.prisma.workflowExecution.update({
+        where: { id: execution.id },
+        data: { context: baseContext as any },
+      });
+
       // Emit started event
       await this.eventBus.emit({
         type: EventType.EXECUTION_STARTED,
