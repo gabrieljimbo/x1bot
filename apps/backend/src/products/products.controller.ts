@@ -51,6 +51,7 @@ export class ProductsController {
     @Query('minCommission') minCommission?: string,
     @Query('extraCommissionOnly') extraCommissionOnly?: string,
     @Query('sortBy') sortBy?: string,
+    @Query('period') period?: string,
   ) {
     const tenantId: string = req.user.tenantId;
     return this.productsService.searchTrendingProducts(tenantId, {
@@ -60,6 +61,7 @@ export class ProductsController {
       minCommission: minCommission ? parseFloat(minCommission) : undefined,
       extraCommissionOnly: extraCommissionOnly === 'true',
       sortBy,
+      period,
     });
   }
 
@@ -79,6 +81,10 @@ export class ProductsController {
     @Query('minCommission') minCommission?: string,
     @Query('extraCommissionOnly') extraCommissionOnly?: string,
     @Query('sortBy') sortBy?: string,
+    @Query('period') period?: string,
+    @Query('minSales') minSales?: string,
+    @Query('maxAffiliates') maxAffiliates?: string,
+    @Query('catId') catId?: string,
   ) {
     const tenantId: string = req.user.tenantId;
     return this.productsService.searchVideoProducts(tenantId, {
@@ -88,6 +94,10 @@ export class ProductsController {
       minCommission: minCommission ? parseFloat(minCommission) : undefined,
       extraCommissionOnly: extraCommissionOnly === 'true',
       sortBy,
+      period,
+      minSales: minSales ? parseInt(minSales, 10) : undefined,
+      maxAffiliates: maxAffiliates ? parseInt(maxAffiliates, 10) : undefined,
+      catId: catId ? parseInt(catId, 10) : undefined,
     });
   }
 

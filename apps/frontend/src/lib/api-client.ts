@@ -681,6 +681,7 @@ export const apiClient = {
   searchTrendingProducts: async (params: {
     niche?: string; limit?: number; page?: number;
     minCommission?: number; extraCommissionOnly?: boolean; sortBy?: string;
+    period?: string;
   }) => {
     const { data } = await client.get('/api/products/trending', { params });
     return data as { products: any[]; fromCache: boolean };
@@ -694,6 +695,7 @@ export const apiClient = {
   searchVideoProducts: async (params: {
     niche?: string; limit?: number; page?: number;
     minCommission?: number; extraCommissionOnly?: boolean; sortBy?: string;
+    period?: string; minSales?: number; maxAffiliates?: number; catId?: number;
   }) => {
     const { data } = await client.get('/api/products/videos', { params });
     return data as { products: any[]; fromCache: boolean };

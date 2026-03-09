@@ -237,7 +237,8 @@ interface VideoProduct {
   itemId: string; title: string; price: string; originalPrice: string | null
   discount: number; imageUrl: string; productUrl: string
   commissionRate: number; commissionPerSale: number; isExtraCommission: boolean
-  affiliateCount: number; videoCount: number
+  affiliateCount: number; salesVolume: number; videoCount: number
+  opportunityScore: 'alta' | 'media' | 'baixa'
   creatorVideos: { thumbnailUrl: string; videoUrl: string; creatorName: string; views: number }[]
 }
 
@@ -319,17 +320,25 @@ function TrendingCard({ product }: { product: TrendingProduct }) {
   )
 }
 
+const OPP_BADGE: Record<string, { label: string; cls: string }> = {
+  alta:  { label: '🏆 ALTA',  cls: 'bg-green-500/20 text-green-400 border-green-500/40' },
+  media: { label: '⚡ MÉDIA', cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40' },
+  baixa: { label: '📉 BAIXA', cls: 'bg-red-500/20 text-red-400 border-red-500/40' },
+}
+
 function VideoCard({ product }: { product: VideoProduct }) {
   const [copied, setCopied] = useState(false)
   const [imgError, setImgError] = useState(false)
   const [showCreators, setShowCreators] = useState(false)
+
+  const opp = OPP_BADGE[product.opportunityScore] ?? OPP_BADGE.baixa
 
   const copyLink = () => {
     navigator.clipboard.writeText(product.productUrl)
     setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
   const generatePost = () => {
-    const text = `🎬 PRODUTO COM VÍDEOS!\n\n${product.title}\n\nPor apenas ${formatPrice(product.price)}\n` +
+    const text = `🎬 PRODUTO EM ALTA!\n\n${product.title}\n\nPor apenas ${formatPrice(product.price)}\n` +
       (product.discount > 0 ? `${Math.round(product.discount)}% de desconto! 😱\n` : '') +
       `\n✅ Link na bio para comprar\n\n#shopee #promoção`
     navigator.clipboard.writeText(text)
@@ -349,6 +358,10 @@ function VideoCard({ product }: { product: VideoProduct }) {
               -{Math.round(product.discount)}% OFF
             </span>
           )}
+          {/* Opportunity badge */}
+          <span className={`absolute top-2 right-2 text-[9px] font-black px-1.5 py-0.5 rounded border ${opp.cls}`}>
+            {opp.label}
+          </span>
           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
             <a href={product.productUrl} target="_blank" rel="noopener noreferrer" className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition text-white"><Send size={16} /></a>
           </div>
@@ -361,12 +374,16 @@ function VideoCard({ product }: { product: VideoProduct }) {
           </div>
           {product.commissionRate > 0 && (
             <p className="text-amber-400 text-[10px] font-medium flex items-center gap-1 flex-wrap">
-              💵 {product.commissionRate.toFixed(1)}%
+              💵 Comissão: {product.commissionRate.toFixed(1)}%
               {product.commissionPerSale > 0 && <span className="text-gray-500">· R$ {product.commissionPerSale.toFixed(2)}/venda</span>}
               {product.isExtraCommission && <span className="px-1 py-0.5 bg-orange-500/20 text-orange-400 border border-orange-500/40 rounded text-[9px] font-bold">EXTRA</span>}
             </p>
           )}
-          {product.affiliateCount > 0 && <p className="text-gray-500 text-[10px]">👥 {product.affiliateCount.toLocaleString('pt-BR')} afiliados</p>}
+          {product.salesVolume > 0 && <p className="text-orange-400 text-[10px]">🔥 {formatSales(String(product.salesVolume))} vendas</p>}
+          {product.affiliateCount > 0
+            ? <p className="text-gray-500 text-[10px]">👥 apenas {product.affiliateCount.toLocaleString('pt-BR')} afiliados</p>
+            : <p className="text-gray-600 text-[10px]">👥 afiliados: —</p>
+          }
           {product.videoCount > 0 && <p className="text-purple-400 text-[10px]">🎬 {product.videoCount.toLocaleString('pt-BR')} vídeos criados</p>}
           <div className="flex gap-1.5 mt-1 flex-col">
             <div className="flex gap-1.5">
@@ -377,11 +394,9 @@ function VideoCard({ product }: { product: VideoProduct }) {
                 <FileText size={10} />Post
               </button>
             </div>
-            {product.creatorVideos && product.creatorVideos.length > 0 && (
-              <button onClick={() => setShowCreators(true)} className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg text-[10px] font-medium transition">
-                <Play size={10} />Ver Vídeos de Criadores
-              </button>
-            )}
+            <button onClick={() => setShowCreators(true)} className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg text-[10px] font-medium transition">
+              <Play size={10} />🎬 Ver Vídeos
+            </button>
           </div>
         </div>
       </div>
@@ -391,28 +406,35 @@ function VideoCard({ product }: { product: VideoProduct }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setShowCreators(false)}>
           <div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-semibold flex items-center gap-2"><Video size={16} className="text-purple-400" />Vídeos de Criadores</h3>
+              <h3 className="text-white font-semibold flex items-center gap-2"><Video size={16} className="text-purple-400" />Vídeos de Criadores — {product.title.slice(0, 40)}...</h3>
               <button onClick={() => setShowCreators(false)} className="text-gray-400 hover:text-white"><X size={20} /></button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {product.creatorVideos.map((v, i) => (
-                <a key={i} href={v.videoUrl} target="_blank" rel="noopener noreferrer" className="bg-[#111] rounded-lg overflow-hidden hover:ring-1 hover:ring-purple-500 transition group">
-                  <div className="relative aspect-video bg-[#0a0a0a] flex items-center justify-center">
-                    {v.thumbnailUrl
-                      ? <img src={v.thumbnailUrl} alt={v.creatorName} className="w-full h-full object-cover" />
-                      : <Play size={24} className="text-gray-600" />
-                    }
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                      <Play size={20} className="text-white" fill="white" />
+            {product.creatorVideos && product.creatorVideos.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {product.creatorVideos.map((v, i) => (
+                  <a key={i} href={v.videoUrl} target="_blank" rel="noopener noreferrer" className="bg-[#111] rounded-lg overflow-hidden hover:ring-1 hover:ring-purple-500 transition group">
+                    <div className="relative aspect-video bg-[#0a0a0a] flex items-center justify-center">
+                      {v.thumbnailUrl
+                        ? <img src={v.thumbnailUrl} alt={v.creatorName} className="w-full h-full object-cover" />
+                        : <Play size={24} className="text-gray-600" />
+                      }
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                        <Play size={20} className="text-white" fill="white" />
+                      </div>
                     </div>
-                  </div>
-                  <div className="p-2">
-                    <p className="text-white text-[10px] font-medium truncate">{v.creatorName}</p>
-                    {v.views > 0 && <p className="text-gray-500 text-[9px]">👁 {v.views >= 1000 ? `${(v.views / 1000).toFixed(1)}k` : v.views} views</p>}
-                  </div>
-                </a>
-              ))}
-            </div>
+                    <div className="p-2">
+                      <p className="text-white text-[10px] font-medium truncate">{v.creatorName}</p>
+                      {v.views > 0 && <p className="text-gray-500 text-[9px]">👁 {v.views >= 1000 ? `${(v.views / 1000).toFixed(1)}k` : v.views} views</p>}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500">
+                <Play size={32} className="mx-auto mb-3 text-gray-700" />
+                <p className="text-sm">Vídeos não disponíveis para este produto ainda.</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -446,8 +468,33 @@ const COMMISSION_OPTIONS = [
 
 // ─── Em Alta tab ──────────────────────────────────────────────────────────────
 
+const PERIOD_OPTIONS = [
+  { value: 'today', label: '📅 Hoje', ttlLabel: '1h' },
+  { value: 'week',  label: '📅 Esta Semana', ttlLabel: '6h' },
+  { value: 'month', label: '📅 Este Mês', ttlLabel: '12h' },
+]
+
+const MIN_SALES_OPTIONS = [
+  { value: 0, label: 'Qualquer' },
+  { value: 100, label: '100+' },
+  { value: 500, label: '500+' },
+  { value: 1000, label: '1k+' },
+  { value: 5000, label: '5k+' },
+  { value: 10000, label: '10k+' },
+]
+
+const MAX_AFFILIATES_OPTIONS = [
+  { value: 0, label: 'Qualquer' },
+  { value: 50, label: 'até 50' },
+  { value: 100, label: 'até 100' },
+  { value: 500, label: 'até 500' },
+  { value: 1000, label: 'até 1k' },
+  { value: 5000, label: 'até 5k' },
+]
+
 function EmAltaTab() {
   const [niche, setNiche] = useState('')
+  const [period, setPeriod] = useState('today')
   const [minCommission, setMinCommission] = useState(0)
   const [extraOnly, setExtraOnly] = useState(false)
   const [sortBy, setSortBy] = useState('rank')
@@ -465,6 +512,7 @@ function EmAltaTab() {
         minCommission: minCommission > 0 ? minCommission : undefined,
         extraCommissionOnly: extraOnly || undefined,
         sortBy: sortBy !== 'rank' ? sortBy : undefined,
+        period,
         limit: 30,
       })
       setProducts(res.products as TrendingProduct[])
@@ -475,17 +523,29 @@ function EmAltaTab() {
     } finally {
       setLoading(false)
     }
-  }, [niche, minCommission, extraOnly, sortBy])
+  }, [niche, period, minCommission, extraOnly, sortBy])
 
   useEffect(() => {
     if (searched) doSearch()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [niche, minCommission, extraOnly, sortBy])
+  }, [niche, period, minCommission, extraOnly, sortBy])
 
   return (
     <div className="space-y-4">
       {/* Filters */}
       <div className="flex flex-wrap gap-4 bg-[#111] border border-white/5 rounded-xl p-4">
+        {/* Period selector */}
+        <div className="flex flex-col gap-1 w-full">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Período</label>
+          <div className="flex gap-2">
+            {PERIOD_OPTIONS.map(o => (
+              <button key={o.value} onClick={() => setPeriod(o.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${period === o.value ? 'bg-[#00ff88]/20 text-[#00ff88] border border-[#00ff88]/30' : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'}`}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-col gap-1 min-w-[160px]">
           <label className="text-[10px] text-gray-500 uppercase tracking-wider">Nicho</label>
           <select value={niche} onChange={e => setNiche(e.target.value)} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
@@ -557,11 +617,28 @@ function EmAltaTab() {
 
 // ─── Shopee Vídeos tab ────────────────────────────────────────────────────────
 
+const VIDEO_CAT_OPTIONS = [
+  { value: 0, label: '📂 Todas as categorias' },
+  { value: 100013, label: '📱 Celulares' },
+  { value: 11000582, label: '💻 Eletrônicos' },
+  { value: 100015, label: '🏠 Casa e Decoração' },
+  { value: 100006, label: '💄 Beleza' },
+  { value: 100008, label: '👗 Moda Feminina' },
+  { value: 100019, label: '⚽ Esportes' },
+  { value: 100007, label: '🧸 Brinquedos' },
+  { value: 100003, label: '🍕 Alimentos' },
+  { value: 100017, label: '🐾 Pet Shop' },
+]
+
 function VideosTab() {
   const [niche, setNiche] = useState('')
+  const [period, setPeriod] = useState('today')
+  const [catId, setCatId] = useState(0)
+  const [minSales, setMinSales] = useState(0)
+  const [maxAffiliates, setMaxAffiliates] = useState(0)
   const [minCommission, setMinCommission] = useState(0)
   const [extraOnly, setExtraOnly] = useState(false)
-  const [sortBy, setSortBy] = useState('videos')
+  const [sortBy, setSortBy] = useState('opportunity')
   const [products, setProducts] = useState<VideoProduct[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -576,6 +653,10 @@ function VideosTab() {
         minCommission: minCommission > 0 ? minCommission : undefined,
         extraCommissionOnly: extraOnly || undefined,
         sortBy,
+        period,
+        minSales: minSales > 0 ? minSales : undefined,
+        maxAffiliates: maxAffiliates > 0 ? maxAffiliates : undefined,
+        catId: catId > 0 ? catId : undefined,
         limit: 30,
       })
       setProducts(res.products as VideoProduct[])
@@ -586,35 +667,68 @@ function VideosTab() {
     } finally {
       setLoading(false)
     }
-  }, [niche, minCommission, extraOnly, sortBy])
+  }, [niche, period, catId, minSales, maxAffiliates, minCommission, extraOnly, sortBy])
 
   useEffect(() => {
     if (searched) doSearch()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [niche, minCommission, extraOnly, sortBy])
+  }, [niche, period, catId, minSales, maxAffiliates, minCommission, extraOnly, sortBy])
+
+  const periodTtlLabel = PERIOD_OPTIONS.find(p => p.value === period)?.ttlLabel ?? '1h'
 
   return (
     <div className="space-y-4">
       {/* Filters */}
       <div className="flex flex-wrap gap-4 bg-[#111] border border-white/5 rounded-xl p-4">
+        {/* Period */}
+        <div className="flex flex-col gap-1 w-full">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Período (cache: {periodTtlLabel})</label>
+          <div className="flex gap-2">
+            {PERIOD_OPTIONS.map(o => (
+              <button key={o.value} onClick={() => setPeriod(o.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${period === o.value ? 'bg-[#00ff88]/20 text-[#00ff88] border border-[#00ff88]/30' : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'}`}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-col gap-1 min-w-[160px]">
-          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Nicho</label>
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Nicho / Termo</label>
           <select value={niche} onChange={e => setNiche(e.target.value)} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
             {NICHE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
+        <div className="flex flex-col gap-1 min-w-[160px]">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Categoria</label>
+          <select value={catId} onChange={e => setCatId(Number(e.target.value))} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
+            {VIDEO_CAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
         <div className="flex flex-col gap-1 min-w-[130px]">
-          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Comissão mín.</label>
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">🔥 Vendas mín.</label>
+          <select value={minSales} onChange={e => setMinSales(Number(e.target.value))} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
+            {MIN_SALES_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1 min-w-[130px]">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">👥 Máx. afiliados</label>
+          <select value={maxAffiliates} onChange={e => setMaxAffiliates(Number(e.target.value))} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
+            {MAX_AFFILIATES_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1 min-w-[130px]">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">💵 Comissão mín.</label>
           <select value={minCommission} onChange={e => setMinCommission(Number(e.target.value))} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
             {COMMISSION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
-        <div className="flex flex-col gap-1 min-w-[150px]">
-          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Ordenar por</label>
+        <div className="flex flex-col gap-1 min-w-[170px]">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">📊 Ordenar por</label>
           <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
-            <option value="videos">🎬 Mais Vídeos</option>
+            <option value="opportunity">🏆 Melhor Oportunidade</option>
+            <option value="sales">🔥 Mais Vendidos</option>
             <option value="commission">💵 Maior Comissão</option>
-            <option value="affiliates">👥 Mais Afiliados</option>
+            <option value="affiliates">👥 Menos Afiliados</option>
             <option value="price_asc">💰 Menor Preço</option>
           </select>
         </div>

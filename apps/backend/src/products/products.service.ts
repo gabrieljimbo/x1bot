@@ -12,7 +12,8 @@ export interface TrendingFilters {
   page?: number;
   minCommission?: number;
   extraCommissionOnly?: boolean;
-  sortBy?: string; // 'rank'|'commission'|'affiliates'|'sales'
+  sortBy?: string;   // 'rank'|'commission'|'affiliates'|'sales'
+  period?: string;   // 'today'|'week'|'month'
 }
 
 export interface VideoFilters {
@@ -21,7 +22,11 @@ export interface VideoFilters {
   page?: number;
   minCommission?: number;
   extraCommissionOnly?: boolean;
-  sortBy?: string; // 'videos'|'commission'|'affiliates'|'price_asc'
+  sortBy?: string;         // 'opportunity'|'sales'|'commission'|'affiliates'|'price_asc'
+  period?: string;         // 'today'|'week'|'month'
+  minSales?: number;       // min sales volume filter
+  maxAffiliates?: number;  // max affiliate count filter
+  catId?: number;          // Shopee category ID
 }
 
 export interface ProductSearchFilters {
@@ -190,7 +195,10 @@ export class ProductsService {
     tenantId: string,
     filters: TrendingFilters,
   ): Promise<{ products: any[]; fromCache: boolean }> {
-    const cacheKey = `products:trending:${tenantId}:${filters.niche || '_'}:${filters.page || 1}`;
+    const period = filters.period || 'today';
+    const periodTtl: Record<string, number> = { today: 3600, week: 21600, month: 43200 };
+    const ttl = periodTtl[period] ?? 3600;
+    const cacheKey = `products:trending:${tenantId}:${filters.niche || '_'}:${period}:${filters.page || 1}`;
     const cached = await this.redis.get(cacheKey);
     if (cached) return { ...JSON.parse(cached), fromCache: true };
 
@@ -279,7 +287,7 @@ export class ProductsService {
     // default: rank order (already sorted by rankPosition)
 
     const result = { products };
-    await this.redis.setWithTTL(cacheKey, JSON.stringify(result), 1800); // 30 min
+    await this.redis.setWithTTL(cacheKey, JSON.stringify(result), ttl);
     return { ...result, fromCache: false };
   }
 
@@ -343,7 +351,10 @@ export class ProductsService {
     tenantId: string,
     filters: VideoFilters,
   ): Promise<{ products: any[]; fromCache: boolean }> {
-    const cacheKey = `products:videos:${tenantId}:${filters.niche || '_'}:${filters.page || 1}`;
+    const period = filters.period || 'today';
+    const periodTtl: Record<string, number> = { today: 3600, week: 21600, month: 43200 };
+    const ttl = periodTtl[period] ?? 3600;
+    const cacheKey = `products:videos:${tenantId}:${filters.niche || '_'}:${period}:${filters.catId || '0'}:${filters.page || 1}`;
     const cached = await this.redis.get(cacheKey);
     if (cached) return { ...JSON.parse(cached), fromCache: true };
 
@@ -353,10 +364,11 @@ export class ProductsService {
     const keyword = filters.niche || '';
     const limit = Math.min(filters.limit ?? 30, 100);
     const page = filters.page ?? 1;
+    const catArg = filters.catId && filters.catId > 0 ? `, catId: ${filters.catId}` : '';
 
     const payload = JSON.stringify({
       query: `{
-  productOfferV2(keyword: ${JSON.stringify(keyword)}, sortType: 2, page: ${page}, limit: ${limit}) {
+  productOfferV2(keyword: ${JSON.stringify(keyword)}, sortType: 2, page: ${page}, limit: ${limit}${catArg}) {
     nodes {
       itemId productName priceMin priceMax imageUrl offerLink
       ratingStar priceDiscountRate sales commissionRate
@@ -391,6 +403,12 @@ export class ProductsService {
       const commissionPerSale = p.commissionPerSale ? parseFloat(p.commissionPerSale) : (price * commission / 100);
       const discount = parseFloat(p.priceDiscountRate || '0');
       const originalPrice = discount > 0 && discount < 100 ? String(price / (1 - discount / 100)) : null;
+      const salesVolume = parseInt(p.sales || '0', 10);
+      const affiliateCount = p.affiliateCount ? parseInt(p.affiliateCount, 10) : 0;
+
+      // Opportunity score: high sales / few affiliates = good opportunity
+      const ratio = salesVolume / (affiliateCount + 1);
+      const opportunityScore: 'alta' | 'media' | 'baixa' = ratio > 50 ? 'alta' : ratio > 10 ? 'media' : 'baixa';
 
       return {
         itemId: String(p.itemId),
@@ -403,8 +421,10 @@ export class ProductsService {
         commissionRate: commission,
         commissionPerSale,
         isExtraCommission: p.is_extra_commission === true || p.extra_commission === true || p.commission_type === 'extra',
-        affiliateCount: p.affiliateCount ? parseInt(p.affiliateCount, 10) : 0,
+        affiliateCount,
+        salesVolume,
         videoCount: p.videoCount ? parseInt(p.videoCount, 10) : 0,
+        opportunityScore,
         creatorVideos: [],
       };
     });
@@ -414,14 +434,21 @@ export class ProductsService {
       products = products.filter(p => p.commissionRate >= filters.minCommission!);
     if (filters.extraCommissionOnly)
       products = products.filter(p => p.isExtraCommission);
+    if (filters.minSales && filters.minSales > 0)
+      products = products.filter(p => p.salesVolume >= filters.minSales!);
+    if (filters.maxAffiliates && filters.maxAffiliates > 0)
+      products = products.filter(p => p.affiliateCount <= filters.maxAffiliates!);
 
-    if (filters.sortBy === 'videos') products.sort((a, b) => b.videoCount - a.videoCount);
+    const oppOrder: Record<string, number> = { alta: 0, media: 1, baixa: 2 };
+    if (!filters.sortBy || filters.sortBy === 'opportunity')
+      products.sort((a, b) => oppOrder[a.opportunityScore] - oppOrder[b.opportunityScore]);
+    else if (filters.sortBy === 'sales') products.sort((a, b) => b.salesVolume - a.salesVolume);
     else if (filters.sortBy === 'commission') products.sort((a, b) => b.commissionRate - a.commissionRate);
-    else if (filters.sortBy === 'affiliates') products.sort((a, b) => b.affiliateCount - a.affiliateCount);
+    else if (filters.sortBy === 'affiliates') products.sort((a, b) => a.affiliateCount - b.affiliateCount); // fewer = better
     else if (filters.sortBy === 'price_asc') products.sort((a, b) => parseFloat(a.price || '0') - parseFloat(b.price || '0'));
 
     const result = { products };
-    await this.redis.setWithTTL(cacheKey, JSON.stringify(result), 1800); // 30 min
+    await this.redis.setWithTTL(cacheKey, JSON.stringify(result), ttl);
     return { ...result, fromCache: false };
   }
 
