@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Star, Tag, RefreshCw, Download, Copy, Send, FileText, ChevronLeft, ChevronRight, AlertCircle, ShoppingBag, Loader2, X } from 'lucide-react'
+import { Search, Star, Tag, RefreshCw, Download, Copy, Send, FileText, ChevronLeft, ChevronRight, AlertCircle, ShoppingBag, Loader2, X, TrendingUp, TrendingDown, Minus, Video, Users, Play } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { AuthGuard } from '@/components/AuthGuard'
 import AppHeader from '@/components/AppHeader'
@@ -222,7 +222,467 @@ function ProductCard({ product }: { product: Product }) {
   )
 }
 
+// ─── Trending interfaces & components ────────────────────────────────────────
+
+interface TrendingProduct {
+  itemId: string; title: string; price: string; originalPrice: string | null
+  discount: number; imageUrl: string; productUrl: string
+  commissionRate: number; commissionPerSale: number; isExtraCommission: boolean
+  affiliateCount: number; salesVolume: string; rating: number
+  rankPosition: number; previousPosition: number | null
+  positionChange: number; trend: 'rising' | 'stable' | 'falling'
+}
+
+interface VideoProduct {
+  itemId: string; title: string; price: string; originalPrice: string | null
+  discount: number; imageUrl: string; productUrl: string
+  commissionRate: number; commissionPerSale: number; isExtraCommission: boolean
+  affiliateCount: number; videoCount: number
+  creatorVideos: { thumbnailUrl: string; videoUrl: string; creatorName: string; views: number }[]
+}
+
+function TrendBadge({ trend, positionChange, previousPosition }: Pick<TrendingProduct, 'trend' | 'positionChange' | 'previousPosition'>) {
+  if (previousPosition === null)
+    return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">🆕 NOVO</span>
+  if (trend === 'rising')
+    return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30 flex items-center gap-0.5"><TrendingUp size={10} />+{positionChange}</span>
+  if (trend === 'falling')
+    return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-0.5"><TrendingDown size={10} />-{positionChange}</span>
+  return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/5 text-gray-500 border border-white/10 flex items-center gap-0.5"><Minus size={10} />Estável</span>
+}
+
+function TrendingCard({ product }: { product: TrendingProduct }) {
+  const [copied, setCopied] = useState(false)
+  const [imgError, setImgError] = useState(false)
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(product.productUrl)
+    setCopied(true); setTimeout(() => setCopied(false), 2000)
+  }
+  const generatePost = () => {
+    const text = `🔥 EM ALTA AGORA!\n\n${product.title}\n\nPor apenas ${formatPrice(product.price)}\n` +
+      (product.discount > 0 ? `${Math.round(product.discount)}% de desconto! 😱\n` : '') +
+      `\n✅ Link na bio para comprar\n\n#emalta #shopee #promoção`
+    navigator.clipboard.writeText(text)
+    alert('Post copiado!')
+  }
+
+  return (
+    <div className="bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition flex flex-col">
+      <div className="relative aspect-square bg-[#111] overflow-hidden group">
+        {!imgError
+          ? <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover" onError={() => setImgError(true)} />
+          : <div className="w-full h-full flex items-center justify-center"><ShoppingBag size={40} className="text-gray-700" /></div>
+        }
+        {/* Position badge */}
+        <span className="absolute top-2 left-2 bg-amber-500 text-black text-xs font-black px-2 py-0.5 rounded-full shadow">
+          #{product.rankPosition}
+        </span>
+        {product.discount > 0 && (
+          <span className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+            -{Math.round(product.discount)}% OFF
+          </span>
+        )}
+        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+          <a href={product.productUrl} target="_blank" rel="noopener noreferrer" className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition text-white"><Send size={16} /></a>
+        </div>
+      </div>
+      <div className="p-3 flex-1 flex flex-col gap-1.5">
+        {/* Trend badge */}
+        <div className="flex items-center gap-1.5">
+          <TrendBadge trend={product.trend} positionChange={product.positionChange} previousPosition={product.previousPosition} />
+        </div>
+        <p className="text-white text-xs font-medium line-clamp-2 leading-snug">{product.title}</p>
+        <div className="mt-auto">
+          {product.originalPrice && <p className="text-gray-500 text-[10px] line-through">{formatPrice(product.originalPrice)}</p>}
+          <p className="text-[#00ff88] font-bold text-base leading-tight">{formatPrice(product.price)}</p>
+        </div>
+        {product.commissionRate > 0 && (
+          <p className="text-amber-400 text-[10px] font-medium flex items-center gap-1 flex-wrap">
+            💵 {product.commissionRate.toFixed(1)}%
+            {product.commissionPerSale > 0 && <span className="text-gray-500">· R$ {product.commissionPerSale.toFixed(2)}/venda</span>}
+            {product.isExtraCommission && <span className="px-1 py-0.5 bg-orange-500/20 text-orange-400 border border-orange-500/40 rounded text-[9px] font-bold">EXTRA</span>}
+          </p>
+        )}
+        {product.affiliateCount > 0 && <p className="text-gray-500 text-[10px]">👥 {product.affiliateCount.toLocaleString('pt-BR')} afiliados</p>}
+        {product.rating > 0 && <p className="text-gray-500 text-[10px]">⭐ {product.rating.toFixed(1)} · {formatSales(product.salesVolume)} vendidos</p>}
+        <div className="flex gap-1.5 mt-1">
+          <button onClick={copyLink} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-medium transition ${copied ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 border border-white/10'}`}>
+            <Copy size={10} />{copied ? 'Copiado!' : 'Copiar'}
+          </button>
+          <button onClick={generatePost} className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-[#00ff88]/10 text-[#00ff88] hover:bg-[#00ff88]/20 border border-[#00ff88]/20 rounded-lg text-[10px] font-medium transition">
+            <FileText size={10} />Post
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function VideoCard({ product }: { product: VideoProduct }) {
+  const [copied, setCopied] = useState(false)
+  const [imgError, setImgError] = useState(false)
+  const [showCreators, setShowCreators] = useState(false)
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(product.productUrl)
+    setCopied(true); setTimeout(() => setCopied(false), 2000)
+  }
+  const generatePost = () => {
+    const text = `🎬 PRODUTO COM VÍDEOS!\n\n${product.title}\n\nPor apenas ${formatPrice(product.price)}\n` +
+      (product.discount > 0 ? `${Math.round(product.discount)}% de desconto! 😱\n` : '') +
+      `\n✅ Link na bio para comprar\n\n#shopee #promoção`
+    navigator.clipboard.writeText(text)
+    alert('Post copiado!')
+  }
+
+  return (
+    <>
+      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition flex flex-col">
+        <div className="relative aspect-square bg-[#111] overflow-hidden group">
+          {!imgError
+            ? <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover" onError={() => setImgError(true)} />
+            : <div className="w-full h-full flex items-center justify-center"><ShoppingBag size={40} className="text-gray-700" /></div>
+          }
+          {product.discount > 0 && (
+            <span className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              -{Math.round(product.discount)}% OFF
+            </span>
+          )}
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+            <a href={product.productUrl} target="_blank" rel="noopener noreferrer" className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition text-white"><Send size={16} /></a>
+          </div>
+        </div>
+        <div className="p-3 flex-1 flex flex-col gap-1.5">
+          <p className="text-white text-xs font-medium line-clamp-2 leading-snug">{product.title}</p>
+          <div className="mt-auto">
+            {product.originalPrice && <p className="text-gray-500 text-[10px] line-through">{formatPrice(product.originalPrice)}</p>}
+            <p className="text-[#00ff88] font-bold text-base leading-tight">{formatPrice(product.price)}</p>
+          </div>
+          {product.commissionRate > 0 && (
+            <p className="text-amber-400 text-[10px] font-medium flex items-center gap-1 flex-wrap">
+              💵 {product.commissionRate.toFixed(1)}%
+              {product.commissionPerSale > 0 && <span className="text-gray-500">· R$ {product.commissionPerSale.toFixed(2)}/venda</span>}
+              {product.isExtraCommission && <span className="px-1 py-0.5 bg-orange-500/20 text-orange-400 border border-orange-500/40 rounded text-[9px] font-bold">EXTRA</span>}
+            </p>
+          )}
+          {product.affiliateCount > 0 && <p className="text-gray-500 text-[10px]">👥 {product.affiliateCount.toLocaleString('pt-BR')} afiliados</p>}
+          {product.videoCount > 0 && <p className="text-purple-400 text-[10px]">🎬 {product.videoCount.toLocaleString('pt-BR')} vídeos criados</p>}
+          <div className="flex gap-1.5 mt-1 flex-col">
+            <div className="flex gap-1.5">
+              <button onClick={copyLink} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-medium transition ${copied ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 border border-white/10'}`}>
+                <Copy size={10} />{copied ? 'Copiado!' : 'Copiar'}
+              </button>
+              <button onClick={generatePost} className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-[#00ff88]/10 text-[#00ff88] hover:bg-[#00ff88]/20 border border-[#00ff88]/20 rounded-lg text-[10px] font-medium transition">
+                <FileText size={10} />Post
+              </button>
+            </div>
+            {product.creatorVideos && product.creatorVideos.length > 0 && (
+              <button onClick={() => setShowCreators(true)} className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg text-[10px] font-medium transition">
+                <Play size={10} />Ver Vídeos de Criadores
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Creators modal */}
+      {showCreators && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setShowCreators(false)}>
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold flex items-center gap-2"><Video size={16} className="text-purple-400" />Vídeos de Criadores</h3>
+              <button onClick={() => setShowCreators(false)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {product.creatorVideos.map((v, i) => (
+                <a key={i} href={v.videoUrl} target="_blank" rel="noopener noreferrer" className="bg-[#111] rounded-lg overflow-hidden hover:ring-1 hover:ring-purple-500 transition group">
+                  <div className="relative aspect-video bg-[#0a0a0a] flex items-center justify-center">
+                    {v.thumbnailUrl
+                      ? <img src={v.thumbnailUrl} alt={v.creatorName} className="w-full h-full object-cover" />
+                      : <Play size={24} className="text-gray-600" />
+                    }
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                      <Play size={20} className="text-white" fill="white" />
+                    </div>
+                  </div>
+                  <div className="p-2">
+                    <p className="text-white text-[10px] font-medium truncate">{v.creatorName}</p>
+                    {v.views > 0 && <p className="text-gray-500 text-[9px]">👁 {v.views >= 1000 ? `${(v.views / 1000).toFixed(1)}k` : v.views} views</p>}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ─── Niche options shared by both new tabs ────────────────────────────────────
+const NICHE_OPTIONS = [
+  { value: '', label: 'Todos os nichos' },
+  { value: 'confeitaria', label: '🎂 Confeitaria' },
+  { value: 'beleza', label: '💄 Beleza' },
+  { value: 'fitness', label: '🏋️ Fitness' },
+  { value: 'cozinha', label: '🍳 Cozinha' },
+  { value: 'celular', label: '📱 Celular' },
+  { value: 'informatica', label: '💻 Informática' },
+  { value: 'pet', label: '🐾 Pet Shop' },
+  { value: 'moda', label: '👗 Moda' },
+  { value: 'casa', label: '🏠 Casa e Decoração' },
+  { value: 'bebe', label: '🧸 Bebê' },
+]
+
+const COMMISSION_OPTIONS = [
+  { value: 0, label: 'Qualquer' },
+  { value: 5, label: '5%+' },
+  { value: 8, label: '8%+' },
+  { value: 10, label: '10%+' },
+  { value: 15, label: '15%+' },
+  { value: 20, label: '20%+' },
+]
+
+// ─── Em Alta tab ──────────────────────────────────────────────────────────────
+
+function EmAltaTab() {
+  const [niche, setNiche] = useState('')
+  const [minCommission, setMinCommission] = useState(0)
+  const [extraOnly, setExtraOnly] = useState(false)
+  const [sortBy, setSortBy] = useState('rank')
+  const [products, setProducts] = useState<TrendingProduct[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [fromCache, setFromCache] = useState(false)
+  const [searched, setSearched] = useState(false)
+
+  const doSearch = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const res = await apiClient.searchTrendingProducts({
+        niche: niche || undefined,
+        minCommission: minCommission > 0 ? minCommission : undefined,
+        extraCommissionOnly: extraOnly || undefined,
+        sortBy: sortBy !== 'rank' ? sortBy : undefined,
+        limit: 30,
+      })
+      setProducts(res.products as TrendingProduct[])
+      setFromCache(res.fromCache)
+      setSearched(true)
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || 'Erro ao buscar Em Alta')
+    } finally {
+      setLoading(false)
+    }
+  }, [niche, minCommission, extraOnly, sortBy])
+
+  useEffect(() => {
+    if (searched) doSearch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [niche, minCommission, extraOnly, sortBy])
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 bg-[#111] border border-white/5 rounded-xl p-4">
+        <div className="flex flex-col gap-1 min-w-[160px]">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Nicho</label>
+          <select value={niche} onChange={e => setNiche(e.target.value)} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
+            {NICHE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1 min-w-[130px]">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Comissão mín.</label>
+          <select value={minCommission} onChange={e => setMinCommission(Number(e.target.value))} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
+            {COMMISSION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1 min-w-[130px]">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Ordenar por</label>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
+            <option value="rank">📊 Posição no Ranking</option>
+            <option value="commission">💵 Maior Comissão</option>
+            <option value="affiliates">👥 Mais Afiliados</option>
+            <option value="sales">🔥 Mais Vendidos</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1 justify-end">
+          <button onClick={() => setExtraOnly(p => !p)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ${extraOnly ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'}`}>
+            🏅 Apenas Comissão Extra
+          </button>
+        </div>
+        <div className="flex flex-col gap-1 justify-end">
+          <button onClick={doSearch} disabled={loading} className="px-4 py-1.5 bg-[#00ff88] text-black font-bold rounded-lg text-xs hover:bg-[#00dd77] transition disabled:opacity-50 flex items-center gap-1.5">
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}Buscar
+          </button>
+        </div>
+      </div>
+
+      {fromCache && searched && !loading && (
+        <p className="text-xs text-gray-600 flex items-center gap-1"><RefreshCw size={10} />Resultados do cache (30 min)</p>
+      )}
+      {error && (
+        <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm">
+          <AlertCircle size={16} />{error}
+        </div>
+      )}
+      {loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      )}
+      {!loading && searched && products.length === 0 && !error && (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <TrendingUp size={48} className="text-gray-700 mb-4" />
+          <p className="text-gray-400 font-medium">Nenhum produto em alta encontrado</p>
+          <p className="text-gray-600 text-sm mt-1">Tente outro nicho ou ajuste os filtros</p>
+        </div>
+      )}
+      {!loading && !searched && !error && (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <TrendingUp size={48} className="text-gray-700 mb-4" />
+          <p className="text-gray-400 font-medium">Produtos em alta na Shopee</p>
+          <p className="text-gray-600 text-sm mt-1">Selecione um nicho e clique em Buscar</p>
+        </div>
+      )}
+      {!loading && products.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {products.map(p => <TrendingCard key={p.itemId} product={p} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Shopee Vídeos tab ────────────────────────────────────────────────────────
+
+function VideosTab() {
+  const [niche, setNiche] = useState('')
+  const [minCommission, setMinCommission] = useState(0)
+  const [extraOnly, setExtraOnly] = useState(false)
+  const [sortBy, setSortBy] = useState('videos')
+  const [products, setProducts] = useState<VideoProduct[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [fromCache, setFromCache] = useState(false)
+  const [searched, setSearched] = useState(false)
+
+  const doSearch = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const res = await apiClient.searchVideoProducts({
+        niche: niche || undefined,
+        minCommission: minCommission > 0 ? minCommission : undefined,
+        extraCommissionOnly: extraOnly || undefined,
+        sortBy,
+        limit: 30,
+      })
+      setProducts(res.products as VideoProduct[])
+      setFromCache(res.fromCache)
+      setSearched(true)
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || 'Erro ao buscar Shopee Vídeos')
+    } finally {
+      setLoading(false)
+    }
+  }, [niche, minCommission, extraOnly, sortBy])
+
+  useEffect(() => {
+    if (searched) doSearch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [niche, minCommission, extraOnly, sortBy])
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 bg-[#111] border border-white/5 rounded-xl p-4">
+        <div className="flex flex-col gap-1 min-w-[160px]">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Nicho</label>
+          <select value={niche} onChange={e => setNiche(e.target.value)} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
+            {NICHE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1 min-w-[130px]">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Comissão mín.</label>
+          <select value={minCommission} onChange={e => setMinCommission(Number(e.target.value))} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
+            {COMMISSION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1 min-w-[150px]">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider">Ordenar por</label>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#00ff88]/50">
+            <option value="videos">🎬 Mais Vídeos</option>
+            <option value="commission">💵 Maior Comissão</option>
+            <option value="affiliates">👥 Mais Afiliados</option>
+            <option value="price_asc">💰 Menor Preço</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1 justify-end">
+          <button onClick={() => setExtraOnly(p => !p)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ${extraOnly ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'}`}>
+            🏅 Apenas Comissão Extra
+          </button>
+        </div>
+        <div className="flex flex-col gap-1 justify-end">
+          <button onClick={doSearch} disabled={loading} className="px-4 py-1.5 bg-[#00ff88] text-black font-bold rounded-lg text-xs hover:bg-[#00dd77] transition disabled:opacity-50 flex items-center gap-1.5">
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}Buscar
+          </button>
+        </div>
+      </div>
+
+      {fromCache && searched && !loading && (
+        <p className="text-xs text-gray-600 flex items-center gap-1"><RefreshCw size={10} />Resultados do cache (30 min)</p>
+      )}
+      {error && (
+        <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm">
+          <AlertCircle size={16} />{error}
+        </div>
+      )}
+      {loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      )}
+      {!loading && searched && products.length === 0 && !error && (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <Video size={48} className="text-gray-700 mb-4" />
+          <p className="text-gray-400 font-medium">Nenhum produto com vídeos encontrado</p>
+          <p className="text-gray-600 text-sm mt-1">Tente outro nicho ou ajuste os filtros</p>
+        </div>
+      )}
+      {!loading && !searched && !error && (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <Video size={48} className="text-gray-700 mb-4" />
+          <p className="text-gray-400 font-medium">Produtos com conteúdo de vídeo</p>
+          <p className="text-gray-600 text-sm mt-1">Selecione um nicho e clique em Buscar</p>
+        </div>
+      )}
+      {!loading && products.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {products.map(p => <VideoCard key={p.itemId} product={p} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Main page content ────────────────────────────────────────────────────────
+
 function ProductsPageContent() {
+  const [tab, setTab] = useState<'produtos' | 'emalta' | 'videos'>('produtos')
+
+  // Cleanup: clear all caches on unmount
+  useEffect(() => {
+    return () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('n9n_token') : null
+      if (!token) return
+      const headers = { Authorization: `Bearer ${token}` }
+      fetch('/api/products/cache', { method: 'DELETE', headers })
+      fetch('/api/products/trending/cache', { method: 'DELETE', headers })
+      fetch('/api/products/videos/cache', { method: 'DELETE', headers })
+    }
+  }, [])
+
   const [keyword, setKeyword] = useState('')
   const [commissionActive, setCommissionActive] = useState(false)
   const [extraCommissionOnly, setExtraCommissionOnly] = useState(false)
@@ -331,6 +791,27 @@ function ProductsPageContent() {
           </button>
         </div>
 
+        {/* Tab navigation */}
+        <div className="flex border-b border-white/10 mb-6">
+          {[
+            { id: 'produtos', label: '🛍️ Produtos' },
+            { id: 'emalta', label: '🔥 Em Alta' },
+            { id: 'videos', label: '🎬 Shopee Vídeos' },
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id as any)}
+              className={`px-5 py-2.5 text-sm font-medium transition whitespace-nowrap ${tab === t.id ? 'text-[#00ff88] border-b-2 border-[#00ff88]' : 'text-gray-400 hover:text-gray-200'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'emalta' && <EmAltaTab />}
+        {tab === 'videos' && <VideosTab />}
+
+        {tab === 'produtos' && (<>
         {/* Search bar */}
         <div className="flex gap-3 mb-4">
           <div className="flex-1 relative">
@@ -529,6 +1010,7 @@ function ProductsPageContent() {
             </div>
           </>
         )}
+        </>)}
       </div>
     </div>
   )

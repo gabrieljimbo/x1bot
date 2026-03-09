@@ -2,6 +2,7 @@ import { Controller, Get, Delete, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProductsService } from './products.service';
 
+
 @Controller('api/products')
 @UseGuards(JwtAuthGuard)
 export class ProductsController {
@@ -38,6 +39,62 @@ export class ProductsController {
   async clearCache(@Req() req: any) {
     const tenantId: string = req.user.tenantId;
     const deleted = await this.productsService.clearCache(tenantId);
+    return { deleted };
+  }
+
+  @Get('trending')
+  async trending(
+    @Req() req: any,
+    @Query('niche') niche?: string,
+    @Query('limit') limit?: string,
+    @Query('page') page?: string,
+    @Query('minCommission') minCommission?: string,
+    @Query('extraCommissionOnly') extraCommissionOnly?: string,
+    @Query('sortBy') sortBy?: string,
+  ) {
+    const tenantId: string = req.user.tenantId;
+    return this.productsService.searchTrendingProducts(tenantId, {
+      niche,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      page: page ? parseInt(page, 10) : undefined,
+      minCommission: minCommission ? parseFloat(minCommission) : undefined,
+      extraCommissionOnly: extraCommissionOnly === 'true',
+      sortBy,
+    });
+  }
+
+  @Delete('trending/cache')
+  async clearTrendingCache(@Req() req: any) {
+    const tenantId: string = req.user.tenantId;
+    const deleted = await this.productsService.clearTrendingCache(tenantId);
+    return { deleted };
+  }
+
+  @Get('videos')
+  async videos(
+    @Req() req: any,
+    @Query('niche') niche?: string,
+    @Query('limit') limit?: string,
+    @Query('page') page?: string,
+    @Query('minCommission') minCommission?: string,
+    @Query('extraCommissionOnly') extraCommissionOnly?: string,
+    @Query('sortBy') sortBy?: string,
+  ) {
+    const tenantId: string = req.user.tenantId;
+    return this.productsService.searchVideoProducts(tenantId, {
+      niche,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      page: page ? parseInt(page, 10) : undefined,
+      minCommission: minCommission ? parseFloat(minCommission) : undefined,
+      extraCommissionOnly: extraCommissionOnly === 'true',
+      sortBy,
+    });
+  }
+
+  @Delete('videos/cache')
+  async clearVideosCache(@Req() req: any) {
+    const tenantId: string = req.user.tenantId;
+    const deleted = await this.productsService.clearVideosCache(tenantId);
     return { deleted };
   }
 }

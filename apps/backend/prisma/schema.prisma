@@ -233,6 +233,7 @@ model Tenant {
   campaignBlacklist   CampaignBlacklist[]
   contactLists        ContactList[]
   sentProducts        SentProduct[]
+  productRankings     ProductRanking[]
   @@map("tenants")
 }
 
@@ -695,6 +696,22 @@ model SentProduct {
   @@index([tenantId, source])
   @@index([expiresAt])
   @@map("sent_products")
+}
+
+model ProductRanking {
+  id         String   @id @default(cuid())
+  tenantId   String
+  productId  String
+  source     String
+  niche      String
+  position   Int
+  recordedAt DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, productId, source, niche])
+  @@index([recordedAt])
+  @@map("product_rankings")
 }
 
 model MlDailyOffer {

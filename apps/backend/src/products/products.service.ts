@@ -2,8 +2,27 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { RedisService } from '../redis/redis.service';
 import { ApiConfigsService } from '../api-configs/api-configs.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 const CACHE_TTL = 600; // 10 minutes
+
+export interface TrendingFilters {
+  niche?: string;
+  limit?: number;
+  page?: number;
+  minCommission?: number;
+  extraCommissionOnly?: boolean;
+  sortBy?: string; // 'rank'|'commission'|'affiliates'|'sales'
+}
+
+export interface VideoFilters {
+  niche?: string;
+  limit?: number;
+  page?: number;
+  minCommission?: number;
+  extraCommissionOnly?: boolean;
+  sortBy?: string; // 'videos'|'commission'|'affiliates'|'price_asc'
+}
 
 export interface ProductSearchFilters {
   keyword?: string;
@@ -38,6 +57,7 @@ export class ProductsService {
   constructor(
     private readonly redis: RedisService,
     private readonly apiConfigsService: ApiConfigsService,
+    private readonly prisma: PrismaService,
   ) { }
 
   async searchProducts(
@@ -163,6 +183,262 @@ export class ProductsService {
 
     return { ...result, fromCache: false };
   }
+
+  // ─── Trending ────────────────────────────────────────────────────────────
+
+  async searchTrendingProducts(
+    tenantId: string,
+    filters: TrendingFilters,
+  ): Promise<{ products: any[]; fromCache: boolean }> {
+    const cacheKey = `products:trending:${tenantId}:${filters.niche || '_'}:${filters.page || 1}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) return { ...JSON.parse(cached), fromCache: true };
+
+    const apiCreds = await this.apiConfigsService.findByProviderFlexible(tenantId, 'shopee');
+    if (!apiCreds?.isActive) throw new Error('Credenciais Shopee não configuradas.');
+
+    const keyword = filters.niche || '';
+    const limit = Math.min(filters.limit ?? 30, 100);
+    const page = filters.page ?? 1;
+
+    const payload = JSON.stringify({
+      query: `{
+  productOfferV2(keyword: ${JSON.stringify(keyword)}, sortType: 2, page: ${page}, limit: ${limit}) {
+    nodes {
+      itemId productName priceMin priceMax imageUrl offerLink
+      ratingStar priceDiscountRate sales commissionRate
+      is_extra_commission extra_commission commission_type
+      affiliateCount commissionPerSale
+    }
+  }
+}`,
+    });
+
+    const appId = apiCreds.appId;
+    const secret = apiCreds.secret;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = createHash('sha256').update(`${appId}${timestamp}${payload}${secret}`).digest('hex');
+    const authHeader = `SHA256 Credential=${appId}, Timestamp=${timestamp}, Signature=${signature}`;
+
+    const response = await fetch('https://open-api.affiliate.shopee.com.br/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+      body: payload,
+    });
+    if (!response.ok) throw new Error(`Shopee API error: ${response.status}`);
+    const json = (await response.json()) as any;
+    if (json.errors?.length) throw new Error(`Shopee API: ${json.errors[0].message}`);
+
+    const nodes: any[] = json.data?.productOfferV2?.nodes || [];
+
+    // Map nodes → trending products with rankPosition + trend
+    const trendingRaw = await Promise.all(
+      nodes.map(async (p: any, idx: number) => {
+        const commissionRaw = parseFloat(p.commissionRate || '0');
+        const commission = commissionRaw < 1 ? commissionRaw * 100 : commissionRaw;
+        const price = parseFloat(p.priceMin || '0');
+        const commissionPerSale = p.commissionPerSale ? parseFloat(p.commissionPerSale) : (price * commission / 100);
+        const discount = parseFloat(p.priceDiscountRate || '0');
+        const originalPrice = discount > 0 && discount < 100 ? String(price / (1 - discount / 100)) : null;
+
+        const rankResult = await this.calculateTrend(tenantId, String(p.itemId), 'shopee', keyword, idx + 1);
+
+        return {
+          itemId: String(p.itemId),
+          title: p.productName,
+          price: p.priceMin,
+          originalPrice,
+          discount,
+          imageUrl: p.imageUrl,
+          productUrl: p.offerLink,
+          commissionRate: commission,
+          commissionPerSale,
+          isExtraCommission: p.is_extra_commission === true || p.extra_commission === true || p.commission_type === 'extra',
+          affiliateCount: p.affiliateCount ? parseInt(p.affiliateCount, 10) : 0,
+          salesVolume: p.sales,
+          rating: parseFloat(p.ratingStar || '0'),
+          rankPosition: idx + 1,
+          previousPosition: rankResult.previousPosition,
+          positionChange: rankResult.positionChange,
+          trend: rankResult.trend,
+        };
+      }),
+    );
+
+    // Apply client-side filters
+    let products = trendingRaw;
+    if (filters.minCommission && filters.minCommission > 0)
+      products = products.filter(p => p.commissionRate >= filters.minCommission!);
+    if (filters.extraCommissionOnly)
+      products = products.filter(p => p.isExtraCommission);
+
+    // Apply sort
+    if (filters.sortBy === 'commission') products.sort((a, b) => b.commissionRate - a.commissionRate);
+    else if (filters.sortBy === 'affiliates') products.sort((a, b) => b.affiliateCount - a.affiliateCount);
+    else if (filters.sortBy === 'sales') products.sort((a, b) => parseInt(b.salesVolume || '0', 10) - parseInt(a.salesVolume || '0', 10));
+    // default: rank order (already sorted by rankPosition)
+
+    const result = { products };
+    await this.redis.setWithTTL(cacheKey, JSON.stringify(result), 1800); // 30 min
+    return { ...result, fromCache: false };
+  }
+
+  async calculateTrend(
+    tenantId: string,
+    productId: string,
+    source: string,
+    niche: string,
+    currentPosition: number,
+  ): Promise<{ trend: 'rising' | 'stable' | 'falling'; previousPosition: number | null; positionChange: number }> {
+    try {
+      const previous = await this.prisma.productRanking.findFirst({
+        where: {
+          tenantId,
+          productId,
+          source,
+          niche,
+          recordedAt: { lt: new Date(Date.now() - 30 * 60 * 1000) },
+        },
+        orderBy: { recordedAt: 'desc' },
+      });
+
+      await this.prisma.productRanking.create({
+        data: { tenantId, productId, source, niche, position: currentPosition },
+      });
+
+      // Prune history older than 7 days
+      await this.prisma.productRanking.deleteMany({
+        where: { tenantId, productId, recordedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+      });
+
+      if (!previous) return { trend: 'stable', previousPosition: null, positionChange: 0 };
+
+      const change = previous.position - currentPosition;
+      return {
+        trend: change > 0 ? 'rising' : change < 0 ? 'falling' : 'stable',
+        previousPosition: previous.position,
+        positionChange: Math.abs(change),
+      };
+    } catch {
+      return { trend: 'stable', previousPosition: null, positionChange: 0 };
+    }
+  }
+
+  async clearTrendingCache(tenantId: string): Promise<number> {
+    const pattern = `products:trending:${tenantId}:*`;
+    const client = this.redis.getClient();
+    const keys: string[] = [];
+    let cursor = '0';
+    do {
+      const [next, batch] = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      cursor = next; keys.push(...batch);
+    } while (cursor !== '0');
+    if (keys.length > 0) await client.del(...keys);
+    return keys.length;
+  }
+
+  // ─── Videos ──────────────────────────────────────────────────────────────
+
+  async searchVideoProducts(
+    tenantId: string,
+    filters: VideoFilters,
+  ): Promise<{ products: any[]; fromCache: boolean }> {
+    const cacheKey = `products:videos:${tenantId}:${filters.niche || '_'}:${filters.page || 1}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) return { ...JSON.parse(cached), fromCache: true };
+
+    const apiCreds = await this.apiConfigsService.findByProviderFlexible(tenantId, 'shopee');
+    if (!apiCreds?.isActive) throw new Error('Credenciais Shopee não configuradas.');
+
+    const keyword = filters.niche || '';
+    const limit = Math.min(filters.limit ?? 30, 100);
+    const page = filters.page ?? 1;
+
+    const payload = JSON.stringify({
+      query: `{
+  productOfferV2(keyword: ${JSON.stringify(keyword)}, sortType: 2, page: ${page}, limit: ${limit}) {
+    nodes {
+      itemId productName priceMin priceMax imageUrl offerLink
+      ratingStar priceDiscountRate sales commissionRate
+      is_extra_commission extra_commission commission_type
+      affiliateCount videoCount
+    }
+  }
+}`,
+    });
+
+    const appId = apiCreds.appId;
+    const secret = apiCreds.secret;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = createHash('sha256').update(`${appId}${timestamp}${payload}${secret}`).digest('hex');
+    const authHeader = `SHA256 Credential=${appId}, Timestamp=${timestamp}, Signature=${signature}`;
+
+    const response = await fetch('https://open-api.affiliate.shopee.com.br/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+      body: payload,
+    });
+    if (!response.ok) throw new Error(`Shopee API error: ${response.status}`);
+    const json = (await response.json()) as any;
+    if (json.errors?.length) throw new Error(`Shopee API: ${json.errors[0].message}`);
+
+    const nodes: any[] = json.data?.productOfferV2?.nodes || [];
+
+    const mapped = nodes.map((p: any) => {
+      const commissionRaw = parseFloat(p.commissionRate || '0');
+      const commission = commissionRaw < 1 ? commissionRaw * 100 : commissionRaw;
+      const price = parseFloat(p.priceMin || '0');
+      const commissionPerSale = p.commissionPerSale ? parseFloat(p.commissionPerSale) : (price * commission / 100);
+      const discount = parseFloat(p.priceDiscountRate || '0');
+      const originalPrice = discount > 0 && discount < 100 ? String(price / (1 - discount / 100)) : null;
+
+      return {
+        itemId: String(p.itemId),
+        title: p.productName,
+        price: p.priceMin,
+        originalPrice,
+        discount,
+        imageUrl: p.imageUrl,
+        productUrl: p.offerLink,
+        commissionRate: commission,
+        commissionPerSale,
+        isExtraCommission: p.is_extra_commission === true || p.extra_commission === true || p.commission_type === 'extra',
+        affiliateCount: p.affiliateCount ? parseInt(p.affiliateCount, 10) : 0,
+        videoCount: p.videoCount ? parseInt(p.videoCount, 10) : 0,
+        creatorVideos: [],
+      };
+    });
+
+    let products = mapped;
+    if (filters.minCommission && filters.minCommission > 0)
+      products = products.filter(p => p.commissionRate >= filters.minCommission!);
+    if (filters.extraCommissionOnly)
+      products = products.filter(p => p.isExtraCommission);
+
+    if (filters.sortBy === 'videos') products.sort((a, b) => b.videoCount - a.videoCount);
+    else if (filters.sortBy === 'commission') products.sort((a, b) => b.commissionRate - a.commissionRate);
+    else if (filters.sortBy === 'affiliates') products.sort((a, b) => b.affiliateCount - a.affiliateCount);
+    else if (filters.sortBy === 'price_asc') products.sort((a, b) => parseFloat(a.price || '0') - parseFloat(b.price || '0'));
+
+    const result = { products };
+    await this.redis.setWithTTL(cacheKey, JSON.stringify(result), 1800); // 30 min
+    return { ...result, fromCache: false };
+  }
+
+  async clearVideosCache(tenantId: string): Promise<number> {
+    const pattern = `products:videos:${tenantId}:*`;
+    const client = this.redis.getClient();
+    const keys: string[] = [];
+    let cursor = '0';
+    do {
+      const [next, batch] = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      cursor = next; keys.push(...batch);
+    } while (cursor !== '0');
+    if (keys.length > 0) await client.del(...keys);
+    return keys.length;
+  }
+
+  // ─── Cache (regular search) ───────────────────────────────────────────────
 
   async clearCache(tenantId: string): Promise<number> {
     const pattern = `products:search:${tenantId}:*`;
