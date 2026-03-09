@@ -202,9 +202,16 @@ export class ProductsService {
       query: `{
   productOfferV2(keyword: ${JSON.stringify(keyword)}, sortType: 2, page: ${page}, limit: ${limit}) {
     nodes {
-      itemId productName priceMin priceMax imageUrl offerLink
-      ratingStar priceDiscountRate sales commissionRate
-      affiliateCount commissionPerSale
+      itemId
+      productName
+      priceMin
+      priceMax
+      imageUrl
+      offerLink
+      ratingStar
+      priceDiscountRate
+      sales
+      commissionRate
     }
   }
 }`,
@@ -227,14 +234,21 @@ export class ProductsService {
 
     const nodes: any[] = json.data?.productOfferV2?.nodes || [];
 
+    // DEBUG: dump raw first product to identify all available API fields
+    if (nodes.length > 0) {
+      console.log('[SHOPEE DEBUG] ProductOfferV2 raw (trending):', JSON.stringify(nodes[0], null, 2));
+    }
+
+    const safe = (val: any, fallback: any = 0) => val ?? fallback;
+
     // Map nodes → trending products with rankPosition + trend
     const trendingRaw = await Promise.all(
       nodes.map(async (p: any, idx: number) => {
-        const commissionRaw = parseFloat(p.commissionRate || '0');
+        const commissionRaw = parseFloat(safe(p.commissionRate, '0'));
         const commission = commissionRaw < 1 ? commissionRaw * 100 : commissionRaw;
-        const price = parseFloat(p.priceMin || '0');
-        const commissionPerSale = p.commissionPerSale ? parseFloat(p.commissionPerSale) : (price * commission / 100);
-        const discount = parseFloat(p.priceDiscountRate || '0');
+        const price = parseFloat(safe(p.priceMin, '0'));
+        const commissionPerSale = price * commission / 100;
+        const discount = parseFloat(safe(p.priceDiscountRate, '0'));
         const originalPrice = discount > 0 && discount < 100 ? String(price / (1 - discount / 100)) : null;
 
         const rankResult = await this.calculateTrend(tenantId, String(p.itemId), 'shopee', keyword, idx + 1);
@@ -249,10 +263,10 @@ export class ProductsService {
           productUrl: p.offerLink,
           commissionRate: commission,
           commissionPerSale,
-          isExtraCommission: commission >= 15, // fallback heuristic
-          affiliateCount: p.affiliateCount ? parseInt(p.affiliateCount, 10) : 0,
-          salesVolume: p.sales,
-          rating: parseFloat(p.ratingStar || '0'),
+          isExtraCommission: commission >= 15, // fallback heuristic (affiliateCount field doesn't exist in API)
+          affiliateCount: 0,                   // field doesn't exist in ProductOfferV2 API
+          salesVolume: safe(p.sales ?? p.sold ?? p.item_sold ?? p.salesCount, 0),
+          rating: parseFloat(safe(p.ratingStar, '0')),
           rankPosition: idx + 1,
           previousPosition: rankResult.previousPosition,
           positionChange: rankResult.positionChange,
@@ -358,9 +372,16 @@ export class ProductsService {
       query: `{
   productOfferV2(keyword: ${JSON.stringify(keyword)}, sortType: 2, page: ${page}, limit: ${limit}${catArg}) {
     nodes {
-      itemId productName priceMin priceMax imageUrl offerLink
-      ratingStar priceDiscountRate sales commissionRate
-      affiliateCount videoCount
+      itemId
+      productName
+      priceMin
+      priceMax
+      imageUrl
+      offerLink
+      ratingStar
+      priceDiscountRate
+      sales
+      commissionRate
     }
   }
 }`,
@@ -383,19 +404,25 @@ export class ProductsService {
 
     const nodes: any[] = json.data?.productOfferV2?.nodes || [];
 
-    const mapped = nodes.map((p: any) => {
-      const commissionRaw = parseFloat(p.commissionRate || '0');
-      const commission = commissionRaw < 1 ? commissionRaw * 100 : commissionRaw;
-      const price = parseFloat(p.priceMin || '0');
-      const commissionPerSale = p.commissionPerSale ? parseFloat(p.commissionPerSale) : (price * commission / 100);
-      const discount = parseFloat(p.priceDiscountRate || '0');
-      const originalPrice = discount > 0 && discount < 100 ? String(price / (1 - discount / 100)) : null;
-      const salesVolume = parseInt(p.sales || '0', 10);
-      const affiliateCount = p.affiliateCount ? parseInt(p.affiliateCount, 10) : 0;
+    // DEBUG: dump raw first product to identify all available API fields
+    if (nodes.length > 0) {
+      console.log('[SHOPEE DEBUG] ProductOfferV2 raw (videos):', JSON.stringify(nodes[0], null, 2));
+    }
 
-      // Opportunity score: high sales / few affiliates = good opportunity
-      const ratio = salesVolume / (affiliateCount + 1);
-      const opportunityScore: 'alta' | 'media' | 'baixa' = ratio > 50 ? 'alta' : ratio > 10 ? 'media' : 'baixa';
+    const safe = (val: any, fallback: any = 0) => val ?? fallback;
+
+    const mapped = nodes.map((p: any) => {
+      const commissionRaw = parseFloat(safe(p.commissionRate, '0'));
+      const commission = commissionRaw < 1 ? commissionRaw * 100 : commissionRaw;
+      const price = parseFloat(safe(p.priceMin, '0'));
+      const commissionPerSale = price * commission / 100;
+      const discount = parseFloat(safe(p.priceDiscountRate, '0'));
+      const originalPrice = discount > 0 && discount < 100 ? String(price / (1 - discount / 100)) : null;
+      const salesVolume = parseInt(safe(p.sales ?? p.sold ?? p.item_sold ?? p.salesCount, '0'), 10);
+      const affiliateCount = 0; // field doesn't exist in ProductOfferV2 API
+
+      // Opportunity score: high sales = good opportunity (affiliateCount not available from API)
+      const opportunityScore: 'alta' | 'media' | 'baixa' = salesVolume > 50 ? 'alta' : salesVolume > 10 ? 'media' : 'baixa';
 
       return {
         itemId: String(p.itemId),
@@ -407,10 +434,10 @@ export class ProductsService {
         productUrl: p.offerLink,
         commissionRate: commission,
         commissionPerSale,
-        isExtraCommission: commission >= 15, // fallback heuristic
-        affiliateCount,
+        isExtraCommission: commission >= 15, // fallback heuristic (is_extra_commission field doesn't exist in API)
+        affiliateCount,                       // field doesn't exist in ProductOfferV2 API
         salesVolume,
-        videoCount: p.videoCount ? parseInt(p.videoCount, 10) : 0,
+        videoCount: 0,                        // field doesn't exist in ProductOfferV2 API
         opportunityScore,
         creatorVideos: [],
       };
