@@ -2242,42 +2242,37 @@ function PromoShopeeConfig({ config, setConfig }: any) {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5 text-gray-200">Desconto Mín. %</label>
-              <input
-                type="number"
-                value={config.minDiscount || 0}
-                onChange={(e) => setConfig({ ...config, minDiscount: parseInt(e.target.value) || 0 })}
-                min={0}
-                max={99}
-                placeholder="0 = sem filtro"
-                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1.5 text-gray-200">Nota Mín. ⭐</label>
-              <input
-                type="number"
-                step="0.5"
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">Avaliação mínima</label>
+              <select
                 value={config.minRating || 0}
-                onChange={(e) => setConfig({ ...config, minRating: parseFloat(e.target.value) || 0 })}
-                min={0}
-                max={5}
-                placeholder="0 = sem filtro"
+                onChange={(e) => setConfig({ ...config, minRating: parseFloat(e.target.value) })}
                 className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
-              />
+              >
+                <option value={0}>Qualquer</option>
+                <option value={3.0}>⭐ 3.0+</option>
+                <option value={3.5}>⭐ 3.5+</option>
+                <option value={4.0}>⭐ 4.0+</option>
+                <option value={4.5}>⭐ 4.5+</option>
+                <option value={4.8}>⭐ 4.8+</option>
+              </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5 text-gray-200">Mín. vendidos 🛒</label>
-              <input
-                type="number"
-                value={config.minSales || 0}
-                onChange={(e) => setConfig({ ...config, minSales: parseInt(e.target.value) || 0 })}
-                min={0}
-                placeholder="0 = sem filtro"
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">Desconto mínimo</label>
+              <select
+                value={config.minDiscount || 0}
+                onChange={(e) => setConfig({ ...config, minDiscount: parseInt(e.target.value) })}
                 className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
-              />
+              >
+                <option value={0}>Qualquer</option>
+                <option value={10}>10%+</option>
+                <option value={20}>20%+</option>
+                <option value={30}>30%+</option>
+                <option value={50}>50%+</option>
+                <option value={70}>70%+</option>
+              </select>
             </div>
           </div>
+
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-200">Faixa de Preço R$</label>
             <div className="grid grid-cols-2 gap-3">
@@ -2285,7 +2280,7 @@ function PromoShopeeConfig({ config, setConfig }: any) {
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">R$</span>
                 <input
                   type="number"
-                  value={config.minPrice || 0}
+                  value={config.minPrice || ''}
                   onChange={(e) => setConfig({ ...config, minPrice: parseFloat(e.target.value) || 0 })}
                   min={0}
                   placeholder="Mín."
@@ -2296,7 +2291,7 @@ function PromoShopeeConfig({ config, setConfig }: any) {
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">R$</span>
                 <input
                   type="number"
-                  value={config.maxPrice || 0}
+                  value={config.maxPrice || ''}
                   onChange={(e) => setConfig({ ...config, maxPrice: parseFloat(e.target.value) || 0 })}
                   min={0}
                   placeholder="Máx."
@@ -2304,8 +2299,25 @@ function PromoShopeeConfig({ config, setConfig }: any) {
                 />
               </div>
             </div>
-            <p className="text-[10px] text-gray-500">Valor 0 = sem limite de preço.</p>
+            <p className="text-[10px] text-gray-500">Deixe em branco = sem limite de preço.</p>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">Comissão mínima</label>
+            <select
+              value={config.minCommission || 0}
+              onChange={(e) => setConfig({ ...config, minCommission: parseInt(e.target.value) })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+            >
+              <option value={0}>Qualquer</option>
+              <option value={5}>5%+</option>
+              <option value={8}>8%+</option>
+              <option value={10}>10%+</option>
+              <option value={15}>15%+</option>
+              <option value={20}>20%+</option>
+            </select>
+          </div>
+
           <p className="text-xs text-gray-500">Todos os filtros são aplicados após a busca na API.</p>
         </div>
       )}

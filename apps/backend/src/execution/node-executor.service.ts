@@ -2362,6 +2362,7 @@ functions, etc.)
       ratingStar
       priceDiscountRate
       sales
+      commissionRate
     }
     pageInfo { hasNextPage }
   }
@@ -2427,12 +2428,14 @@ functions, etc.)
           const rating = parseFloat(p.ratingStar || '0');
           const sales = parseInt(p.sales || '0', 10);
           const price = parseFloat(p.priceMin || '0');
+          const commission = parseFloat(p.commissionRate || '0');
           if (config.requireImage && !p.imageUrl?.startsWith('https')) return false;
           if (config.minDiscount > 0 && discount < config.minDiscount) return false;
           if (config.minRating > 0 && rating < config.minRating) return false;
           if ((config.minSales || 0) > 0 && sales < (config.minSales || 0)) return false;
           if ((config.minPrice || 0) > 0 && price < (config.minPrice || 0)) return false;
           if ((config.maxPrice || 0) > 0 && price > (config.maxPrice || 0)) return false;
+          if ((config.minCommission || 0) > 0 && commission < (config.minCommission || 0)) return false;
           if (config.antiRepeat && sentIds.has(String(p.itemId))) return false;
           return true;
         })

@@ -423,6 +423,7 @@ export interface PromoShopeeConfig {
   minSales?: number;
   minPrice?: number;        // min price R$ filter (0 = off)
   maxPrice?: number;        // max price R$ filter (0 = off)
+  minCommission?: number;   // min commission % filter (0 = off)
   requireImage?: boolean;   // skip products without image
   antiRepeat?: boolean;     // don't resend already-sent products
   antiRepeatScope?: 'contact' | 'global';
