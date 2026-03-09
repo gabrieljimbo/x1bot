@@ -41,7 +41,7 @@ function NewWorkflowPageContent() {
       <div className="max-w-2xl mx-auto">
         <div className="mb-8">
           <button
-            onClick={() => router.push('/')}
+            onClick={() => router.push('/workspaces')}
             className="px-4 py-2 bg-surface border border-border rounded hover:border-primary transition mb-4"
           >
             ← Back
@@ -97,7 +97,7 @@ function NewWorkflowPageContent() {
               </button>
               <button
                 type="button"
-                onClick={() => router.push('/')}
+                onClick={() => router.push('/workspaces')}
                 className="px-6 py-3 bg-surface border border-border rounded hover:border-primary transition"
               >
                 Cancel

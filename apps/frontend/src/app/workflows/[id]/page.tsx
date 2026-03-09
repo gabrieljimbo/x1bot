@@ -657,7 +657,7 @@ function WorkflowPageContent() {
               if (tenantIdFromUrl) {
                 router.push(`/workspaces/${tenantIdFromUrl}?tab=workflows`)
               } else {
-                router.push('/workflows')
+                router.push('/workspaces')
               }
             }}
             className="px-4 py-2 bg-primary text-black rounded hover:bg-primary/80 transition"
@@ -680,7 +680,7 @@ function WorkflowPageContent() {
               if (tenantIdFromUrl) {
                 router.push(`/workspaces/${tenantIdFromUrl}?tab=workflows`)
               } else {
-                router.push('/workflows')
+                router.push('/workspaces')
               }
             }}
             className="px-4 py-2 bg-surface border border-border rounded hover:border-primary transition"

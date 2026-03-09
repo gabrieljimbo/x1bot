@@ -45,7 +45,7 @@ export default function AppHeader() {
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-8">
           <Link
-            href="/sessions"
+            href="/workspaces"
             className="flex items-center"
           >
             <img src="/logo-escrita.png" alt="X1Bot" className="h-9 w-auto object-contain" />
@@ -226,7 +226,7 @@ export default function AppHeader() {
           <div className="space-y-1 mb-8">
             <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest pl-3 mb-2">Principal</p>
             <Link
-              href="/sessions"
+              href="/workspaces"
               onClick={() => setIsMenuOpen(false)}
               className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-[#00ff88] hover:bg-white/5 rounded-xl transition"
             >
