@@ -124,6 +124,14 @@ export default async function ({ page }) {
         }
     }
 
+    @Cron('0 3 * * *') // 03:00 UTC = 00:00 America/Sao_Paulo (UTC-3)
+    async cleanExpiredSentProducts() {
+        const result = await this.prisma.sentProduct.deleteMany({
+            where: { expiresAt: { lt: new Date() } },
+        });
+        this.logger.log(`[SENT_PRODUCTS] Limpeza: ${result.count} registros expirados removidos.`);
+    }
+
     async searchOffers(keywords: string[], minDiscount = 0, minRating = 0, limit = 5, minReviews = 0): Promise<any[]> {
         const now = new Date();
 

@@ -232,6 +232,7 @@ model Tenant {
   campaigns           Campaign[]
   campaignBlacklist   CampaignBlacklist[]
   contactLists        ContactList[]
+  sentProducts        SentProduct[]
   @@map("tenants")
 }
 
@@ -676,6 +677,24 @@ model CampaignContactList {
   contactList   ContactList @relation(fields: [contactListId], references: [id], onDelete: Cascade)
 
   @@unique([campaignId, contactListId])
+}
+
+model SentProduct {
+  id        String   @id @default(cuid())
+  tenantId  String
+  sessionId String
+  groupId   String?
+  productId String
+  source    String   // 'shopee' | 'ml'
+  sentAt    DateTime @default(now())
+  expiresAt DateTime
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, groupId, productId, source])
+  @@index([tenantId, source])
+  @@index([expiresAt])
+  @@map("sent_products")
 }
 
 model MlDailyOffer {

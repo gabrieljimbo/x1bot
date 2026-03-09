@@ -2387,6 +2387,7 @@ functions, etc.)
     const signature = createHash('sha256').update(signatureFactor).digest('hex');
     const authHeader = `SHA256 Credential=${appId}, Timestamp=${timestamp}, Signature=${signature}`;
 
+    const groupJid = (context.variables as any)?.groupJid || null;
     let products: any[] = [];
     try {
       const response = await fetch('https://open-api.affiliate.shopee.com.br/graphql', {
@@ -2405,17 +2406,19 @@ functions, etc.)
 
       const nodes = json.data?.productOfferV2?.nodes || [];
 
-      // Load already-sent product URLs for anti-repeat
-      let sentUrls = new Set<string>();
+      // Load already-sent product IDs for anti-repeat (using SentProduct table, scoped by group)
+      let sentIds = new Set<string>();
       if (config.antiRepeat && tenantId) {
-        const sentRecords = await this.prisma.promoMLSent.findMany({
+        const sentRecords = await this.prisma.sentProduct.findMany({
           where: {
             tenantId,
-            ...(config.antiRepeatScope !== 'global' && destination ? { contactPhone: destination } : {}),
+            source: 'shopee',
+            expiresAt: { gt: new Date() },
+            ...(config.antiRepeatScope !== 'global' && groupJid ? { groupId: groupJid } : {}),
           },
-          select: { productUrl: true },
+          select: { productId: true },
         });
-        sentUrls = new Set(sentRecords.map((r: any) => r.productUrl));
+        sentIds = new Set(sentRecords.map((r: any) => r.productId));
       }
 
       products = nodes
@@ -2430,7 +2433,7 @@ functions, etc.)
           if ((config.minSales || 0) > 0 && sales < (config.minSales || 0)) return false;
           if ((config.minPrice || 0) > 0 && price < (config.minPrice || 0)) return false;
           if ((config.maxPrice || 0) > 0 && price > (config.maxPrice || 0)) return false;
-          if (config.antiRepeat && sentUrls.has(p.offerLink)) return false;
+          if (config.antiRepeat && sentIds.has(String(p.itemId))) return false;
           return true;
         })
         .slice(0, sendLimit);
@@ -2486,16 +2489,31 @@ functions, etc.)
           await this.whatsappSessionManager.sendMessage(finalSessionId, destination, config.footerText);
         }
 
-        // Record sent products for anti-repeat
+        // Record sent products for anti-repeat (SentProduct table, 24h expiry)
         if (config.antiRepeat && tenantId && products.length > 0) {
-          await this.prisma.promoMLSent.createMany({
-            data: products.map((p: any) => ({
-              productUrl: p.offerLink,
-              tenantId,
-              contactPhone: config.antiRepeatScope !== 'global' && destination ? destination : '',
-            })),
-            skipDuplicates: true,
-          });
+          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          const recordGroupId = config.antiRepeatScope !== 'global' && groupJid ? groupJid : null;
+          for (const p of products) {
+            await this.prisma.sentProduct.upsert({
+              where: {
+                tenantId_groupId_productId_source: {
+                  tenantId,
+                  groupId: recordGroupId ?? '',
+                  productId: String(p.itemId),
+                  source: 'shopee',
+                },
+              },
+              create: {
+                tenantId,
+                sessionId: finalSessionId!,
+                groupId: recordGroupId,
+                productId: String(p.itemId),
+                source: 'shopee',
+                expiresAt,
+              },
+              update: { sentAt: new Date(), expiresAt },
+            });
+          }
         }
       } else {
         await this.whatsappSessionManager.sendMessage(
@@ -2553,23 +2571,19 @@ functions, etc.)
     console.log(`[PROMO_ML] Encontrados ${filteredProducts.length} produtos no cache para keywords: ${keywords.join(', ')}`);
 
     // Pre-filter already sent products so we can report accurate count
-    if (config.ignoreAlreadySent && tenantId && finalContactPhone) {
-      const startOfDay = new Date();
-      startOfDay.setUTCHours(3, 0, 0, 0);
-      if (new Date().getUTCHours() < 3) startOfDay.setUTCDate(startOfDay.getUTCDate() - 1);
-
-      const cleanUrls = filteredProducts.map(p => p.productUrl.split('?')[0].split('#')[0]);
-      const alreadySentRecords = await this.prisma.promoMLSent.findMany({
+    const mlGroupJid = (context.variables as any)?.groupJid || null;
+    if (config.ignoreAlreadySent && tenantId) {
+      const alreadySentRecords = await this.prisma.sentProduct.findMany({
         where: {
-          productUrl: { in: cleanUrls },
           tenantId,
-          contactPhone: finalContactPhone,
-          sentAt: { gte: startOfDay },
+          source: 'ml',
+          expiresAt: { gt: new Date() },
+          ...(mlGroupJid ? { groupId: mlGroupJid } : {}),
         },
-        select: { productUrl: true },
+        select: { productId: true },
       });
-      const sentUrls = new Set(alreadySentRecords.map(r => r.productUrl));
-      filteredProducts = filteredProducts.filter(p => !sentUrls.has(p.productUrl.split('?')[0].split('#')[0]));
+      const sentIds = new Set(alreadySentRecords.map(r => r.productId));
+      filteredProducts = filteredProducts.filter(p => !sentIds.has(p.productUrl.split('?')[0].split('#')[0]));
       console.log(`[PROMO_ML] Após ignorar já enviados: ${filteredProducts.length} produtos disponíveis`);
     }
 
@@ -2607,14 +2621,27 @@ ${config.footerText || ''}`;
               await this.whatsappSessionManager.sendMessage(sessionId, finalContactPhone, caption);
             }
 
-            // Track as sent por destino (cleanUrl + tenantId + contactPhone)
+            // Track as sent (SentProduct table, 24h expiry)
             if (tenantId) {
-              await this.prisma.promoMLSent.create({
-                data: {
-                  productUrl: cleanUrl,
+              const mlExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+              await this.prisma.sentProduct.upsert({
+                where: {
+                  tenantId_groupId_productId_source: {
+                    tenantId,
+                    groupId: mlGroupJid ?? '',
+                    productId: cleanUrl,
+                    source: 'ml',
+                  },
+                },
+                create: {
                   tenantId,
-                  contactPhone: finalContactPhone || '',
-                }
+                  sessionId: sessionId!,
+                  groupId: mlGroupJid,
+                  productId: cleanUrl,
+                  source: 'ml',
+                  expiresAt: mlExpiresAt,
+                },
+                update: { sentAt: new Date(), expiresAt: mlExpiresAt },
               });
             }
           } catch (err) {
