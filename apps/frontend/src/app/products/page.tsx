@@ -17,6 +17,9 @@ interface Product {
   priceDiscountRate: string
   sales: string
   commissionRate: string
+  is_extra_commission?: boolean
+  extra_commission?: boolean
+  commission_type?: string
 }
 
 // Regular sort options (mutually exclusive among themselves)
@@ -75,6 +78,10 @@ function ProductCard({ product }: { product: Product }) {
   const commission = !isNaN(commissionRaw) && commissionRaw > 0
     ? (commissionRaw < 1 ? commissionRaw * 100 : commissionRaw)
     : 0
+  const isExtraCommission =
+    product.is_extra_commission === true ||
+    product.extra_commission === true ||
+    product.commission_type === 'extra'
   const originalPrice = calcOriginalPrice(product.priceMin, product.priceDiscountRate)
 
   const copyLink = () => {
@@ -180,8 +187,13 @@ function ProductCard({ product }: { product: Product }) {
 
         {/* Commission */}
         {commission > 0 && (
-          <p className="text-amber-400 text-xs font-medium flex items-center gap-1">
+          <p className="text-amber-400 text-xs font-medium flex items-center gap-1 flex-wrap">
             💵 Comissão: {commission.toFixed(1)}%
+            {isExtraCommission && (
+              <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 border border-orange-500/40 rounded text-[10px] font-bold tracking-wide">
+                EXTRA
+              </span>
+            )}
           </p>
         )}
 
@@ -213,6 +225,7 @@ function ProductCard({ product }: { product: Product }) {
 function ProductsPageContent() {
   const [keyword, setKeyword] = useState('')
   const [commissionActive, setCommissionActive] = useState(false)
+  const [extraCommissionOnly, setExtraCommissionOnly] = useState(false)
   const [baseSort, setBaseSort] = useState<string | null>(null)
   const [minDiscount, setMinDiscount] = useState(0)
   const [minRating, setMinRating] = useState(0)
@@ -246,6 +259,7 @@ function ProductsPageContent() {
         limit: 30,
         minDiscount: minDiscount > 0 ? minDiscount : undefined,
         minRating: minRating > 0 ? minRating : undefined,
+        extraCommissionOnly: extraCommissionOnly || undefined,
       })
       setProducts(res.products)
       setHasNextPage(res.hasNextPage)
@@ -257,7 +271,7 @@ function ProductsPageContent() {
     } finally {
       setLoading(false)
     }
-  }, [keyword, commissionActive, baseSort, minDiscount, minRating])
+  }, [keyword, commissionActive, extraCommissionOnly, baseSort, minDiscount, minRating])
 
   const handleClearCache = async () => {
     setClearingCache(true)
@@ -289,7 +303,7 @@ function ProductsPageContent() {
   useEffect(() => {
     if (searched) doSearch(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commissionActive, baseSort, minDiscount, minRating])
+  }, [commissionActive, extraCommissionOnly, baseSort, minDiscount, minRating])
 
   const showComboBadge = commissionActive && baseSort !== null
 
@@ -419,6 +433,21 @@ function ProductsPageContent() {
               onChange={e => setMinRating(Number(e.target.value))}
               className="accent-[#00ff88] w-full"
             />
+          </div>
+
+          {/* Extra Commission toggle */}
+          <div className="flex flex-col gap-1 justify-center">
+            <label className="text-[10px] text-gray-500 uppercase tracking-wider">Tipo de comissão</label>
+            <button
+              onClick={() => setExtraCommissionOnly(prev => !prev)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ${
+                extraCommissionOnly
+                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40'
+                  : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'
+              }`}
+            >
+              🏅 Apenas Comissão Extra
+            </button>
           </div>
 
           {/* Active sort indicator */}

@@ -667,6 +667,7 @@ export const apiClient = {
     minDiscount?: number;
     minRating?: number;
     catId?: number;
+    extraCommissionOnly?: boolean;
   }) => {
     const { data } = await client.get('/api/products/search', { params });
     return data as { products: any[]; fromCache: boolean; hasNextPage: boolean };

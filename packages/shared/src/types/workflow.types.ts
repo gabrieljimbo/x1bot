@@ -426,6 +426,7 @@ export interface PromoShopeeConfig {
   minPrice?: number;        // min price R$ filter (0 = off)
   maxPrice?: number;        // max price R$ filter (0 = off)
   minCommission?: number;   // min commission % filter (0 = off)
+  extraCommissionOnly?: boolean; // only products with extra commission flag
   relevance?: string;       // 'baixa'|'media'|'alta'|'muito_alta'|'' (relevance filter vs search term)
   requireImage?: boolean;   // skip products without image
   antiRepeat?: boolean;     // don't resend already-sent products

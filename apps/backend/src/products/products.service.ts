@@ -14,6 +14,7 @@ export interface ProductSearchFilters {
   minDiscount?: number;
   minRating?: number;
   catId?: number;
+  extraCommissionOnly?: boolean;
 }
 
 export interface ShopeeProduct {
@@ -27,6 +28,9 @@ export interface ShopeeProduct {
   priceDiscountRate: string;
   sales: string;
   commissionRate: string;
+  is_extra_commission?: boolean;
+  extra_commission?: boolean;
+  commission_type?: string;
 }
 
 @Injectable()
@@ -79,6 +83,9 @@ export class ProductsService {
       priceDiscountRate
       sales
       commissionRate
+      is_extra_commission
+      extra_commission
+      commission_type
     }
     pageInfo { hasNextPage }
   }
@@ -113,9 +120,13 @@ export class ProductsService {
     let products: ShopeeProduct[] = json.data?.productOfferV2?.nodes || [];
     const hasNextPage: boolean = json.data?.productOfferV2?.pageInfo?.hasNextPage ?? false;
 
-    // DEBUG: log raw commissionRate of first product to confirm API field format
+    // DEBUG: log commission fields of first product to identify extra commission flag
     if (products.length > 0) {
-      console.log('[SHOPEE DEBUG] Primeiro produto raw:', JSON.stringify(products[0], null, 2));
+      console.log('[SHOPEE DEBUG] Commission fields:', {
+        is_extra_commission: (products[0] as any).is_extra_commission,
+        extra_commission: (products[0] as any).extra_commission,
+        commission_type: (products[0] as any).commission_type,
+      });
     }
 
     // Apply client-side filters
@@ -127,6 +138,16 @@ export class ProductsService {
     if (filters.minRating && filters.minRating > 0) {
       products = products.filter(
         (p) => parseFloat(p.ratingStar || '0') >= filters.minRating!,
+      );
+    }
+
+    // Extra commission filter
+    if (filters.extraCommissionOnly) {
+      products = products.filter(
+        (p) =>
+          (p as any).is_extra_commission === true ||
+          (p as any).extra_commission === true ||
+          (p as any).commission_type === 'extra',
       );
     }
 

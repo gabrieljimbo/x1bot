@@ -2335,6 +2335,19 @@ function PromoShopeeConfig({ config, setConfig }: any) {
             </select>
           </div>
 
+          <label className="flex items-center gap-3 p-3 bg-[#1a1a1a] border border-gray-700 rounded-lg cursor-pointer hover:border-orange-500/50 transition">
+            <input
+              type="checkbox"
+              checked={config.extraCommissionOnly || false}
+              onChange={(e) => setConfig({ ...config, extraCommissionOnly: e.target.checked })}
+              className="w-4 h-4 accent-orange-500"
+            />
+            <div>
+              <p className="text-sm text-white font-medium">🏅 Apenas Comissão Extra</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">Filtra somente produtos com comissão extra ativa</p>
+            </div>
+          </label>
+
           <div>
             <label className="block text-sm font-medium mb-1.5 text-gray-200">Relevância mínima</label>
             <select

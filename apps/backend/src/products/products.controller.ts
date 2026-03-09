@@ -18,6 +18,7 @@ export class ProductsController {
     @Query('minDiscount') minDiscount?: string,
     @Query('minRating') minRating?: string,
     @Query('catId') catId?: string,
+    @Query('extraCommissionOnly') extraCommissionOnly?: string,
   ) {
     const tenantId: string = req.user.tenantId;
     return this.productsService.searchProducts(tenantId, {
@@ -29,6 +30,7 @@ export class ProductsController {
       minDiscount: minDiscount ? parseFloat(minDiscount) : undefined,
       minRating: minRating ? parseFloat(minRating) : undefined,
       catId: catId ? parseInt(catId, 10) : undefined,
+      extraCommissionOnly: extraCommissionOnly === 'true',
     });
   }
 
