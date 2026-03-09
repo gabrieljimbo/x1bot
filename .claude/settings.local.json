@@ -3,7 +3,14 @@
     "allow": [
       "Bash(npx tsc --noEmit -p apps/backend/tsconfig.json)",
       "Bash(npx prisma migrate dev --name add_workflow_id_to_campaign)",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(npx prisma migrate dev --name add_sent_products)",
+      "Bash(npx prisma migrate deploy)",
+      "Bash(npx prisma db push --accept-data-loss)",
+      "Bash(git add apps/backend/prisma/schema.prisma apps/backend/prisma/migrations/20260308_add_sent_products/migration.sql apps/backend/src/execution/node-executor.service.ts apps/backend/src/execution/ml-offers.service.ts)",
+      "Bash(git commit:*)",
+      "Bash(git push origin main)",
+      "Bash(git add apps/frontend/src/app/workflows/[id]/page.tsx apps/frontend/src/app/workflows/groups/page.tsx)"
     ]
   }
 }
