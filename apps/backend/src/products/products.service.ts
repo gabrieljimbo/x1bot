@@ -113,6 +113,11 @@ export class ProductsService {
     let products: ShopeeProduct[] = json.data?.productOfferV2?.nodes || [];
     const hasNextPage: boolean = json.data?.productOfferV2?.pageInfo?.hasNextPage ?? false;
 
+    // DEBUG: log raw commissionRate of first product to confirm API field format
+    if (products.length > 0) {
+      console.log('[SHOPEE DEBUG] Primeiro produto raw:', JSON.stringify(products[0], null, 2));
+    }
+
     // Apply client-side filters
     if (filters.minDiscount && filters.minDiscount > 0) {
       products = products.filter(

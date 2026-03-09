@@ -70,7 +70,11 @@ function ProductCard({ product }: { product: Product }) {
 
   const discount = parseFloat(product.priceDiscountRate || '0')
   const rating = parseFloat(product.ratingStar || '0')
-  const commission = parseFloat(product.commissionRate || '0')
+  const commissionRaw = parseFloat(product.commissionRate || '0')
+  // API may return decimal (0.08) or percent (8) — normalize to percent
+  const commission = !isNaN(commissionRaw) && commissionRaw > 0
+    ? (commissionRaw < 1 ? commissionRaw * 100 : commissionRaw)
+    : 0
   const originalPrice = calcOriginalPrice(product.priceMin, product.priceDiscountRate)
 
   const copyLink = () => {
