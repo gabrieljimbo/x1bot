@@ -654,11 +654,10 @@ function WorkflowPageContent() {
           <p className="text-gray-400 mb-4">{error || 'The workflow you are looking for does not exist or you do not have permission to access it.'}</p>
           <button
             onClick={() => {
-              // If came from workspace, go back to workspace, otherwise go to home
               if (tenantIdFromUrl) {
                 router.push(`/workspaces/${tenantIdFromUrl}?tab=workflows`)
               } else {
-                router.push('/')
+                router.push('/workflows')
               }
             }}
             className="px-4 py-2 bg-primary text-black rounded hover:bg-primary/80 transition"
@@ -678,11 +677,10 @@ function WorkflowPageContent() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => {
-              // If came from workspace, go back to workspace, otherwise go to home
               if (tenantIdFromUrl) {
                 router.push(`/workspaces/${tenantIdFromUrl}?tab=workflows`)
               } else {
-                router.push('/')
+                router.push('/workflows')
               }
             }}
             className="px-4 py-2 bg-surface border border-border rounded hover:border-primary transition"

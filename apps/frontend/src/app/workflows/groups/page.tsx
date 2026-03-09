@@ -287,7 +287,7 @@ export default function GroupWorkflowsPage() {
 
                 <main className="max-w-7xl mx-auto p-8">
                     <button
-                        onClick={() => router.back()}
+                        onClick={() => router.push('/workflows')}
                         className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition mb-6"
                     >
                         <ArrowLeft size={16} /> Voltar
