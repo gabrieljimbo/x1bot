@@ -414,7 +414,9 @@ export interface SendContactConfig {
 
 export interface PromoShopeeConfig {
   searchTerm: string;
-  sortType: number;
+  sortType?: number;        // legacy — derived from sortBy when present
+  sortBy?: string;          // primary sort: 'vendidos'|'comissao'|'desconto'|'avaliacao'|'menor_preco'|'maior_preco'
+  sortBy2?: string;         // secondary sort (same options, '' = none)
   catId?: number;           // Shopee category ID filter (0 = all)
   fetchLimit?: number;      // how many to request from API (default 30)
   maxQuantity: number;      // how many to actually send
@@ -424,6 +426,7 @@ export interface PromoShopeeConfig {
   minPrice?: number;        // min price R$ filter (0 = off)
   maxPrice?: number;        // max price R$ filter (0 = off)
   minCommission?: number;   // min commission % filter (0 = off)
+  relevance?: string;       // 'baixa'|'media'|'alta'|'muito_alta'|'' (relevance filter vs search term)
   requireImage?: boolean;   // skip products without image
   antiRepeat?: boolean;     // don't resend already-sent products
   antiRepeatScope?: 'contact' | 'global';

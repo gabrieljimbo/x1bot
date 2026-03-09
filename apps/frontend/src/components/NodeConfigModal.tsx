@@ -2196,18 +2196,35 @@ function PromoShopeeConfig({ config, setConfig }: any) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5 text-gray-200">Ordenar por</label>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">Ordenar por (primário)</label>
               <select
-                value={config.sortType || 2}
-                onChange={(e) => setConfig({ ...config, sortType: parseInt(e.target.value) })}
+                value={config.sortBy || 'vendidos'}
+                onChange={(e) => setConfig({ ...config, sortBy: e.target.value })}
                 className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
               >
-                <option value={2}>🔥 Mais Vendidos</option>
-                <option value={6}>💸 Maior Desconto</option>
-                <option value={5}>⭐ Maior Comissão</option>
-                <option value={4}>💰 Menor Preço</option>
-                <option value={3}>💰 Maior Preço</option>
-                <option value={1}>🆕 Mais Recentes</option>
+                <option value="">Nenhum</option>
+                <option value="vendidos">🔥 Mais Vendidos</option>
+                <option value="comissao">💵 Maior Comissão</option>
+                <option value="desconto">🏷️ Maior Desconto</option>
+                <option value="avaliacao">⭐ Melhor Avaliação</option>
+                <option value="menor_preco">💰 Menor Preço</option>
+                <option value="maior_preco">💸 Maior Preço</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5 text-gray-200">Ordenar por (secundário)</label>
+              <select
+                value={config.sortBy2 || ''}
+                onChange={(e) => setConfig({ ...config, sortBy2: e.target.value })}
+                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+              >
+                <option value="">Nenhum</option>
+                <option value="vendidos">🔥 Mais Vendidos</option>
+                <option value="comissao">💵 Maior Comissão</option>
+                <option value="desconto">🏷️ Maior Desconto</option>
+                <option value="avaliacao">⭐ Melhor Avaliação</option>
+                <option value="menor_preco">💰 Menor Preço</option>
+                <option value="maior_preco">💸 Maior Preço</option>
               </select>
             </div>
             <div>
@@ -2316,6 +2333,22 @@ function PromoShopeeConfig({ config, setConfig }: any) {
               <option value={15}>15%+</option>
               <option value={20}>20%+</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-gray-200">Relevância mínima</label>
+            <select
+              value={config.relevance || 'media'}
+              onChange={(e) => setConfig({ ...config, relevance: e.target.value })}
+              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-orange-500 text-white"
+            >
+              <option value="">Sem filtro</option>
+              <option value="baixa">Baixa — ao menos 1 palavra do termo</option>
+              <option value="media">Média — ao menos 2 palavras do termo</option>
+              <option value="alta">Alta — ao menos 3 palavras do termo</option>
+              <option value="muito_alta">Muito Alta — ao menos 4 palavras do termo</option>
+            </select>
+            <p className="text-[10px] text-gray-500 mt-1">Filtra produtos sem relação com o termo buscado.</p>
           </div>
 
           <p className="text-xs text-gray-500">Todos os filtros são aplicados após a busca na API.</p>

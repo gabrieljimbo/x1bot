@@ -2344,7 +2344,8 @@ functions, etc.)
     const searchTerm = this.contextService.interpolate(config.searchTerm || '', context);
     const sendLimit = config.maxQuantity || 5;
     const fetchLimit = config.fetchLimit && config.fetchLimit > 0 ? Math.min(config.fetchLimit, 100) : Math.max(sendLimit * 4, 30);
-    const sortType = config.sortType || 2; // default: sold desc
+    const sortByToApiType: Record<string, number> = { vendidos: 2, comissao: 5, desconto: 6, menor_preco: 4, maior_preco: 3 };
+    const sortType = config.sortBy ? (sortByToApiType[config.sortBy] || 2) : (config.sortType || 2);
     const catId = config.catId && config.catId > 0 ? config.catId : null;
 
     // Build GraphQL query
@@ -2422,25 +2423,70 @@ functions, etc.)
         sentIds = new Set(sentRecords.map((r: any) => r.productId));
       }
 
-      products = nodes
-        .filter((p: any) => {
-          const discount = parseFloat(p.priceDiscountRate || '0');
-          const rating = parseFloat(p.ratingStar || '0');
-          const sales = parseInt(p.sales || '0', 10);
-          const price = parseFloat(p.priceMin || '0');
-          const commission = parseFloat(p.commissionRate || '0');
-          if (config.requireImage && !p.imageUrl?.startsWith('https')) return false;
-          if (config.minDiscount > 0 && discount < config.minDiscount) return false;
-          if (config.minRating > 0 && rating < config.minRating) return false;
-          if ((config.minSales || 0) > 0 && sales < (config.minSales || 0)) return false;
-          if ((config.minPrice || 0) > 0 && price < (config.minPrice || 0)) return false;
-          if ((config.maxPrice || 0) > 0 && price > (config.maxPrice || 0)) return false;
-          if ((config.minCommission || 0) > 0 && commission < (config.minCommission || 0)) return false;
-          if (config.antiRepeat && sentIds.has(String(p.itemId))) return false;
-          return true;
-        })
-        .slice(0, sendLimit);
+      // Helper: calculate relevance score of a product title vs the search term
+      const calcRelevance = (product: any, keyword: string): number => {
+        const title = (product.productName || '').toLowerCase();
+        const words = keyword.toLowerCase().split(/\s+/);
+        let score = 0;
+        for (const word of words) {
+          if (word.length < 3) continue;
+          if (title.includes(word)) score += 2;
+          if (title.startsWith(word)) score += 1;
+        }
+        const titleWords = title.split(/\s+/).length;
+        if (titleWords > 15) score -= 1;
+        return score;
+      };
 
+      // Helper: compare two products by a named sort criterion
+      const compareBy = (a: any, b: any, criterion: string): number => {
+        switch (criterion) {
+          case 'vendidos':    return parseInt(b.sales || '0', 10) - parseInt(a.sales || '0', 10);
+          case 'comissao':    return parseFloat(b.commissionRate || '0') - parseFloat(a.commissionRate || '0');
+          case 'desconto':    return parseFloat(b.priceDiscountRate || '0') - parseFloat(a.priceDiscountRate || '0');
+          case 'avaliacao':   return parseFloat(b.ratingStar || '0') - parseFloat(a.ratingStar || '0');
+          case 'menor_preco': return parseFloat(a.priceMin || '0') - parseFloat(b.priceMin || '0');
+          case 'maior_preco': return parseFloat(b.priceMin || '0') - parseFloat(a.priceMin || '0');
+          default:            return 0;
+        }
+      };
+
+      const minScoreMap: Record<string, number> = { baixa: 1, media: 2, alta: 3, muito_alta: 4 };
+      const minRelevanceScore = config.relevance ? (minScoreMap[config.relevance] ?? 0) : 0;
+
+      let filtered = nodes.filter((p: any) => {
+        const discount = parseFloat(p.priceDiscountRate || '0');
+        const rating = parseFloat(p.ratingStar || '0');
+        const sales = parseInt(p.sales || '0', 10);
+        const price = parseFloat(p.priceMin || '0');
+        const commission = parseFloat(p.commissionRate || '0');
+        if (config.requireImage && !p.imageUrl?.startsWith('https')) return false;
+        if (config.minDiscount > 0 && discount < config.minDiscount) return false;
+        if (config.minRating > 0 && rating < config.minRating) return false;
+        if ((config.minSales || 0) > 0 && sales < (config.minSales || 0)) return false;
+        if ((config.minPrice || 0) > 0 && price < (config.minPrice || 0)) return false;
+        if ((config.maxPrice || 0) > 0 && price > (config.maxPrice || 0)) return false;
+        if ((config.minCommission || 0) > 0 && commission < (config.minCommission || 0)) return false;
+        if (config.antiRepeat && sentIds.has(String(p.itemId))) return false;
+        return true;
+      });
+
+      // Relevance filter
+      if (minRelevanceScore > 0) {
+        filtered = filtered.filter((p: any) => calcRelevance(p, searchTerm) >= minRelevanceScore);
+      }
+
+      // Dual sort (primary then secondary)
+      const primary = config.sortBy || '';
+      const secondary = config.sortBy2 || '';
+      if (primary || secondary) {
+        filtered.sort((a: any, b: any) => {
+          const p = primary ? compareBy(a, b, primary) : 0;
+          return p !== 0 ? p : compareBy(a, b, secondary);
+        });
+      }
+
+      products = filtered.slice(0, sendLimit);
       console.log(`[PROMO_SHOPEE] Buscados ${nodes.length}, após filtros: ${products.length}`);
     } catch (err: any) {
       console.error('[PROMO_SHOPEE] Erro na API:', err.message);
