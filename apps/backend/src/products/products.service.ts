@@ -52,9 +52,6 @@ export interface ShopeeProduct {
   priceDiscountRate: string;
   sales: string;
   commissionRate: string;
-  is_extra_commission?: boolean;
-  extra_commission?: boolean;
-  commission_type?: string;
 }
 
 @Injectable()
@@ -108,9 +105,6 @@ export class ProductsService {
       priceDiscountRate
       sales
       commissionRate
-      is_extra_commission
-      extra_commission
-      commission_type
     }
     pageInfo { hasNextPage }
   }
@@ -145,13 +139,9 @@ export class ProductsService {
     let products: ShopeeProduct[] = json.data?.productOfferV2?.nodes || [];
     const hasNextPage: boolean = json.data?.productOfferV2?.pageInfo?.hasNextPage ?? false;
 
-    // DEBUG: log commission fields of first product to identify extra commission flag
+    // DEBUG: log real available fields from ProductOfferV2 to identify extra commission flag
     if (products.length > 0) {
-      console.log('[SHOPEE DEBUG] Commission fields:', {
-        is_extra_commission: (products[0] as any).is_extra_commission,
-        extra_commission: (products[0] as any).extra_commission,
-        commission_type: (products[0] as any).commission_type,
-      });
+      console.log('[SHOPEE DEBUG] ProductOfferV2 sample fields:', Object.keys(products[0] || {}));
     }
 
     // Apply client-side filters
@@ -166,14 +156,13 @@ export class ProductsService {
       );
     }
 
-    // Extra commission filter
+    // Extra commission filter (heuristic: commission >= 15% as fallback)
     if (filters.extraCommissionOnly) {
-      products = products.filter(
-        (p) =>
-          (p as any).is_extra_commission === true ||
-          (p as any).extra_commission === true ||
-          (p as any).commission_type === 'extra',
-      );
+      products = products.filter((p) => {
+        const commissionRate = parseFloat(p.commissionRate || '0');
+        const isExtraCommission = commissionRate >= 15; // fallback heuristic
+        return isExtraCommission;
+      });
     }
 
     // Apply commission sort if requested (secondary sort — Shopee handled primary)
@@ -215,7 +204,6 @@ export class ProductsService {
     nodes {
       itemId productName priceMin priceMax imageUrl offerLink
       ratingStar priceDiscountRate sales commissionRate
-      is_extra_commission extra_commission commission_type
       affiliateCount commissionPerSale
     }
   }
@@ -261,7 +249,7 @@ export class ProductsService {
           productUrl: p.offerLink,
           commissionRate: commission,
           commissionPerSale,
-          isExtraCommission: p.is_extra_commission === true || p.extra_commission === true || p.commission_type === 'extra',
+          isExtraCommission: commission >= 15, // fallback heuristic
           affiliateCount: p.affiliateCount ? parseInt(p.affiliateCount, 10) : 0,
           salesVolume: p.sales,
           rating: parseFloat(p.ratingStar || '0'),
@@ -372,7 +360,6 @@ export class ProductsService {
     nodes {
       itemId productName priceMin priceMax imageUrl offerLink
       ratingStar priceDiscountRate sales commissionRate
-      is_extra_commission extra_commission commission_type
       affiliateCount videoCount
     }
   }
@@ -420,7 +407,7 @@ export class ProductsService {
         productUrl: p.offerLink,
         commissionRate: commission,
         commissionPerSale,
-        isExtraCommission: p.is_extra_commission === true || p.extra_commission === true || p.commission_type === 'extra',
+        isExtraCommission: commission >= 15, // fallback heuristic
         affiliateCount,
         salesVolume,
         videoCount: p.videoCount ? parseInt(p.videoCount, 10) : 0,

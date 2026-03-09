@@ -2364,9 +2364,6 @@ functions, etc.)
       priceDiscountRate
       sales
       commissionRate
-      is_extra_commission
-      extra_commission
-      commission_type
     }
     pageInfo { hasNextPage }
   }
@@ -2411,13 +2408,9 @@ functions, etc.)
 
       const nodes = json.data?.productOfferV2?.nodes || [];
 
-      // DEBUG: log commission fields of first product to identify extra commission flag
+      // DEBUG: log real available fields from ProductOfferV2 to identify extra commission flag
       if (nodes.length > 0) {
-        console.log('[SHOPEE DEBUG] Commission fields:', {
-          is_extra_commission: nodes[0].is_extra_commission,
-          extra_commission: nodes[0].extra_commission,
-          commission_type: nodes[0].commission_type,
-        });
+        console.log('[SHOPEE DEBUG] ProductOfferV2 sample fields:', Object.keys(nodes[0] || {}));
       }
 
       // Load already-sent product IDs for anti-repeat (using SentProduct table, scoped by group)
@@ -2479,7 +2472,7 @@ functions, etc.)
         if ((config.minPrice || 0) > 0 && price < (config.minPrice || 0)) return false;
         if ((config.maxPrice || 0) > 0 && price > (config.maxPrice || 0)) return false;
         if ((config.minCommission || 0) > 0 && commission < (config.minCommission || 0)) return false;
-        if (config.extraCommissionOnly && !(p.is_extra_commission === true || p.extra_commission === true || p.commission_type === 'extra')) return false;
+        if (config.extraCommissionOnly && !(commission >= 15)) return false; // fallback heuristic
         if (config.antiRepeat && sentIds.has(String(p.itemId))) return false;
         return true;
       });
