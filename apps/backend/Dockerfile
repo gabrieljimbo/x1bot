@@ -1,13 +1,10 @@
-############################
-# Base / Build stage
-############################
-FROM node:20-slim AS base
+# Stage 1: Base & Build
+FROM node:20-slim AS builder
 
-# Install pnpm and build-time dependencies
-RUN npm install -g pnpm@10 --registry=https://registry.npmjs.org/
 WORKDIR /app
 
-# Install native build tools for canvas and puppeteer
+# Install pnpm and build dependencies
+RUN npm install -g pnpm@10
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libcairo2-dev \
@@ -16,39 +13,49 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgif-dev \
     librsvg2-dev \
     python3 \
+    openssl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY .npmrc ./
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/shared ./packages/shared
-COPY apps/backend ./apps/backend
+# Copy configuration and workspace files
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
+COPY apps/backend/package.json ./apps/backend/
+COPY packages/shared/package.json ./packages/shared/
 
-# Force development mode for build deps
-ENV NODE_ENV=development
+# Install ALL dependencies (including devDeps for building)
 RUN pnpm install --frozen-lockfile
 
-# Prisma generate
-WORKDIR /app/apps/backend
-RUN pnpm db:generate
+# Copy source code
+COPY apps/backend ./apps/backend
+COPY packages/shared ./packages/shared
 
-# Build shared & backend
-WORKDIR /app/packages/shared
-RUN pnpm build
+# Generate Prisma Client (needed for build)
 WORKDIR /app/apps/backend
 RUN npx prisma generate --schema=prisma/schema.prisma
+
+# Build shared library then backend
+WORKDIR /app/packages/shared
 RUN pnpm build
 
-############################
-# Production stage
-############################
-FROM node:20-slim AS production
+WORKDIR /app/apps/backend
+RUN pnpm build
 
-# Install pnpm in production stage as well
-RUN npm install -g pnpm@10 --registry=https://registry.npmjs.org/
+# Stage 2: Production Dependencies (Minimal)
+FROM node:20-slim AS runner-deps
+WORKDIR /app
+RUN npm install -g pnpm@10
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
+COPY apps/backend/package.json ./apps/backend/
+COPY packages/shared/package.json ./packages/shared/
+
+# Install only production dependencies
+RUN pnpm install --prod --frozen-lockfile
+
+# Stage 3: Runtime image
+FROM node:20-slim AS production
 
 WORKDIR /app
 
-# Install runtime libraries only
+# Install runtime-only system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     fonts-liberation \
@@ -76,32 +83,33 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tzdata \
     && rm -rf /var/lib/apt/lists/*
 
-# Set timezone
+# Environment setup
 ENV TZ=America/Sao_Paulo
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV NODE_ENV=production
 
 # Create non-root user and set permissions
-# Note: user 'node' (uid 1000) already exists in node images
 RUN mkdir -p /app/data /app/logs /app/apps/backend/.wwebjs_auth /app/apps/backend/.wwebjs_cache \
     && chown -R node:node /app
 
-# Copy dependencies and build artifacts from base
-COPY --from=base --chown=node:node /app/node_modules ./node_modules
-COPY --from=base --chown=node:node /app/apps/backend/node_modules ./apps/backend/node_modules
-COPY --from=base --chown=node:node /app/packages/shared/node_modules ./packages/shared/node_modules
+# Copy production node_modules from runner-deps
+COPY --from=runner-deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=runner-deps --chown=node:node /app/apps/backend/node_modules ./apps/backend/node_modules
+COPY --from=runner-deps --chown=node:node /app/packages/shared/node_modules ./packages/shared/node_modules
 
-# Copy app source and build artifacts
-COPY --chown=node:node . .
-COPY --from=base --chown=node:node /app/packages/shared/dist ./packages/shared/dist
-COPY --from=base --chown=node:node /app/apps/backend/dist ./apps/backend/dist
+# Copy built code from builder
+COPY --from=builder --chown=node:node /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder --chown=node:node /app/apps/backend/dist ./apps/backend/dist
 
-# Entrypoint setup
+# Copy static assets and config
+COPY --chown=node:node apps/backend/prisma ./apps/backend/prisma
+COPY --chown=node:node apps/backend/package.json ./apps/backend/package.json
 COPY --chown=node:node apps/backend/docker-entrypoint.sh /app/apps/backend/docker-entrypoint.sh
 RUN chmod +x /app/apps/backend/docker-entrypoint.sh
 
-# Use non-root user
 USER node
+WORKDIR /app/apps/backend
 
 EXPOSE 3041
 ENTRYPOINT ["/app/apps/backend/docker-entrypoint.sh"]
