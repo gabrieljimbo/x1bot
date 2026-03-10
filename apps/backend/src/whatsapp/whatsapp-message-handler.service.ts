@@ -186,6 +186,28 @@ export class WhatsappMessageHandler {
       },
     });
 
+    // Sort workflows to prioritize specific patterns over catch-alls
+    workflows.sort((a, b) => {
+      const getPattern = (w: any) => {
+        const nodes = w.nodes as any[];
+        if (!Array.isArray(nodes)) return '';
+        const trigger = nodes.find((n: any) =>
+          n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
+          n.type === WorkflowNodeType.TRIGGER_KEYWORD ||
+          n.type === WorkflowNodeType.TRIGGER_MESSAGE
+        );
+        return trigger?.config?.pattern?.trim() || '';
+      };
+
+      const hasPatternA = !!getPattern(a);
+      const hasPatternB = !!getPattern(b);
+
+      if (hasPatternA && !hasPatternB) return -1;
+      if (!hasPatternA && hasPatternB) return 1;
+
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+
     console.log('[TRIGGER] Found active workflows:', workflows.length);
 
     for (const workflowData of workflows) {
