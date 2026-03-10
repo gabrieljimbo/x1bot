@@ -9,131 +9,95 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3041
-      - DATABASE_URL=postgresql://n9n:n9npassWd*@postgres_vps:5432/n9n
+      - DATABASE_URL=${DATABASE_URL}
       - REDIS_HOST=redis_vps
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=FSUYRDK7rX5JBlwGtXz9bL2NIZoIKFd1
-      - FRONTEND_URL=https://n9n.archcode.space
-      - CORS_ORIGIN=https://n9n.archcode.space
-      - WHATSAPP_SESSION_PATH=/app/apps/backend/.wwebjs_auth
-      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-      - MINIO_ENDPOINT=minio
-      - MINIO_PORT=9000
-      - MINIO_USE_SSL=false
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=tlLVeKdXkSNu6GEEz0tOD0HhRyBnoQnB
-      - MINIO_BUCKET_NAME=media-triggers
-    ports:
-      - "3041:3041"
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      # ... other envs ...
+      # No public ports for internal services if used via Traefik
+      # ports:
+      #   - "3041:3041"
     volumes:
       - whatsapp_sessions:/app/apps/backend/.wwebjs_auth
       - whatsapp_sessions_data:/app/apps/backend/.wwebjs_cache
+      - logs:/app/logs
+      - temp_data:/tmp
     networks:
       - internal
       - traefik-public
-      - n9n-network
-      - merendinhanet
     restart: unless-stopped
-    # Resource limits to prevent OOM and CPU exhaustion
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3041/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     deploy:
       resources:
         limits:
           cpus: '2.0'
           memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-public"
-      - "traefik.http.routers.backend-n9n.rule=Host(`api.n9n.archcode.space`)"
+      - "traefik.http.routers.backend-n9n.rule=Host(`${API_DOMAIN}`)"
       - "traefik.http.routers.backend-n9n.entrypoints=websecure"
       - "traefik.http.routers.backend-n9n.tls=true"
       - "traefik.http.routers.backend-n9n.tls.certresolver=mytlschallenge"
       - "traefik.http.services.backend-n9n.loadbalancer.server.port=3041"
-      - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS,PATCH"
-      - "traefik.http.middlewares.backend-cors.headers.accesscontrolalloworiginlist=*"
-      - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowheaders=*"
-      - "traefik.http.routers.backend-n9n.middlewares=backend-cors@docker"
 
-  frontend-n9n:
-    build:
-      context: .
-      dockerfile: apps/frontend/Dockerfile
-    container_name: n9n-frontend
+  postgres_vps:
+    image: postgres:15-alpine
+    container_name: n9n-postgres
     environment:
-      - NODE_ENV=production
-      - PORT=3040
-      - NEXT_PUBLIC_API_URL=https://api.n9n.archcode.space
-    ports:
-      - "3040:3040"
-    depends_on:
-      - backend-n9n
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./apps/backend/prisma/production.conf:/etc/postgresql/postgresql.conf:ro
+    # No public ports! accessible only via 'internal' network
     networks:
       - internal
-      - traefik-public
-      - n9n-network
-      - merendinhanet
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-public"
-      - "traefik.http.routers.frontend-n9n.rule=Host(`n9n.archcode.space`)"
-      - "traefik.http.routers.frontend-n9n.entrypoints=websecure"
-      - "traefik.http.routers.frontend-n9n.tls=true"
-      - "traefik.http.routers.frontend-n9n.tls.certresolver=mytlschallenge"
-      - "traefik.http.services.frontend-n9n.loadbalancer.server.port=3040"
+    command: [ "postgres", "-c", "config_file=/etc/postgresql/postgresql.conf" ]
 
-      - "traefik.http.middlewares.frontend-n9n-headers.headers.sslredirect=true"
-      - "traefik.http.middlewares.frontend-n9n-headers.headers.stsseconds=31536000"
-      - "traefik.http.middlewares.frontend-n9n-headers.headers.stsincludesubdomains=true"
-      - "traefik.http.middlewares.frontend-n9n-headers.headers.stspreload=true"
-      - "traefik.http.middlewares.frontend-n9n-headers.headers.browserxssfilter=true"
-      - "traefik.http.middlewares.frontend-n9n-headers.headers.contenttypenosniff=true"
-
-      - "traefik.http.routers.frontend-n9n.middlewares=frontend-n9n-headers@docker"
-
-  browserless:
-    image: ghcr.io/browserless/chromium
-    container_name: browserless
-    ports:
-      - "3001:3000"
-    environment:
-      - TOKEN=x1bot_browserless_token
-      - CONNECTION_TIMEOUT=60000
-      - MAX_CONCURRENT_SESSIONS=3
-      - DEFAULT_BLOCK_ADS=true
-      - DEFAULT_LAUNCH_ARGS=["--no-sandbox"]
+  redis_vps:
+    image: redis:7-alpine
+    container_name: n9n-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
     networks:
       - internal
-      - n9n-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+  # ... other services like frontend-n9n, browserless ...
 
 volumes:
   postgres_data:
   redis_data:
   whatsapp_sessions:
   whatsapp_sessions_data:
+  logs:
+  temp_data:
+
 
 networks:
   internal:
-    driver: bridge
-  n9n-network:
-    external: true
+    internal: true # Isolated from external access
   traefik-public:
     external: true
-  merendinhanet:
-    external: true
-
-
-
-

@@ -8,8 +8,13 @@ if (!globalThis.crypto) {
 
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -18,11 +23,51 @@ async function bootstrap() {
       ? ['error', 'warn']
       : ['log', 'error', 'warn', 'debug', 'verbose'],
   });
+
   const reflector = app.get(Reflector);
+  const configService = app.get('ConfigService');
 
+  // Trust Proxy for Traefik/Reverse Proxy
+  // Essential for correct IP detection and secure cookies
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+
+  // Security Middlewares
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Calibrate based on frontend requirements
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", "https:", "wss:"],
+        fontSrc: ["'self'", "https:", "data:"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
+    },
+  }));
+  app.use(cookieParser());
+
+  // Capture Raw Body for HMAC validation (e.g. webhooks)
+  app.use(json({
+    limit: '10mb',
+    verify: (req: any, res, buf) => {
+      if (req.url.includes('/webhook')) {
+        req.rawBody = buf;
+      }
+    },
+  }));
+  app.use(urlencoded({ extended: true, limit: '10mb' }));
+
+  // Global Middlewares
+  app.use(new RequestIdMiddleware().use);
+
+  // Global Guards & Interceptors
   app.useGlobalGuards(new JwtAuthGuard(reflector));
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
-  // CORS configuration to allow localhost and ngrok
+  // CORS configuration with Environment Allowlist
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
@@ -32,24 +77,8 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Reduce logging in production
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('🔍 CORS Request from origin:', origin);
-      }
-
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      // Allow localhost and ngrok domains
-      if (
-        origin.includes('localhost') ||
-        origin.includes('ngrok-free.app') ||
-        origin.includes('ngrok.io') ||
-        origin.includes('ngrok.app') ||
-        allowedOrigins.includes(origin)
-      ) {
+      if (!origin || allowedOrigins.includes(origin) ||
+        (process.env.NODE_ENV !== 'production' && (origin.includes('localhost') || origin.includes('ngrok')))) {
         callback(null, true);
       } else {
         console.warn('❌ CORS: Blocking origin:', origin);
@@ -58,7 +87,7 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-hmac-signature', 'x-timestamp'],
   });
 
   app.useGlobalPipes(
@@ -72,7 +101,7 @@ async function bootstrap() {
   const port = process.env.PORT || 3001;
   await app.listen(port, '0.0.0.0');
 
-  console.log(`🚀 N9N Backend running on http://localhost:${port}`);
+  console.log(`🚀 X1Bot Backend running on http://localhost:${port}`);
 }
 
 bootstrap();

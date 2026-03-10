@@ -1,124 +1,103 @@
 ############################
 # Base / Build stage
 ############################
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 
+# Install pnpm and build-time dependencies
 RUN npm install -g pnpm@10 --registry=https://registry.npmjs.org/
 WORKDIR /app
-COPY .npmrc ./
-ENV PUPPETEER_SKIP_DOWNLOAD=true
-ENV npm_config_ignore_scripts=false
 
 # Install native build tools for canvas and puppeteer
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    font-noto-emoji \
-    udev \
-    ttf-liberation \
-    build-base \
-    g++ \
-    cairo-dev \
-    pango-dev \
-    giflib-dev \
-    librsvg-dev \
-    pixman-dev \
-    glib-dev \
-    python3
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libjpeg-dev \
+    libgif-dev \
+    librsvg2-dev \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
 
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
+COPY .npmrc ./
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared ./packages/shared
 COPY apps/backend ./apps/backend
 
-# Force development mode so pnpm installs devDependencies (TypeScript, NestJS CLI, etc.)
-# even when Coolify passes NODE_ENV=production as build arg
+# Force development mode for build deps
 ENV NODE_ENV=development
-# Install all deps (build + prisma)
 RUN pnpm install --frozen-lockfile
 
-# Prisma generate (types + client)
+# Prisma generate
 WORKDIR /app/apps/backend
 RUN pnpm db:generate
 
-# Build shared
+# Build shared & backend
 WORKDIR /app/packages/shared
 RUN pnpm build
-
-# Build backend
 WORKDIR /app/apps/backend
 RUN npx prisma generate --schema=prisma/schema.prisma
 RUN pnpm build
 
-
 ############################
 # Production stage
 ############################
-FROM node:20-alpine AS production
+FROM node:20-slim AS production
 
 WORKDIR /app
-RUN npm install -g pnpm@10 --registry=https://registry.npmjs.org/
-COPY .npmrc ./
 
-# Avoid redundant apk updates and keep only runtime libraries
-RUN apk add --no-cache \
+# Install runtime libraries only
+RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
-    nss \
-    freetype \
-    harfbuzz \
+    fonts-liberation \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpangocairo-1.0-0 \
+    libcairo2 \
+    libpango-1.0-0 \
+    libjpeg62-turbo \
+    libgif7 \
+    librsvg2-2 \
     ca-certificates \
-    ttf-freefont \
-    font-noto-emoji \
-    udev \
-    ttf-liberation \
     postgresql-client \
     openssl \
     ffmpeg \
-    cairo \
-    pango \
-    giflib \
-    librsvg \
-    pixman \
     tzdata \
-    && rm -rf /var/cache/apk/*
+    && rm -rf /var/lib/apt/lists/*
 
-# Set timezone to Brazil (Brasília, UTC-3, no DST since 2019)
+# Set timezone
 ENV TZ=America/Sao_Paulo
-
-# Use direct chromium path to avoid symlink issues
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Copy all pre-compiled node_modules from base stage
-# This avoids running pnpm install --prod in production (which would try to recompiling canvas)
-COPY --from=base /app/node_modules ./node_modules
-COPY --from=base /app/apps/backend/node_modules ./apps/backend/node_modules
-COPY --from=base /app/packages/shared/node_modules ./packages/shared/node_modules
+# Create non-root user and set permissions
+# Note: user 'node' (uid 1000) already exists in node images
+RUN mkdir -p /app/data /app/logs /app/apps/backend/.wwebjs_auth /app/apps/backend/.wwebjs_cache \
+    && chown -R node:node /app
 
-# Copy app code and artifacts
-COPY . .
-COPY --from=base /app/packages/shared/dist ./packages/shared/dist
-COPY --from=base /app/apps/backend/dist ./apps/backend/dist
+# Copy dependencies and build artifacts from base
+COPY --from=base --chown=node:node /app/node_modules ./node_modules
+COPY --from=base --chown=node:node /app/apps/backend/node_modules ./apps/backend/node_modules
+COPY --from=base --chown=node:node /app/packages/shared/node_modules ./packages/shared/node_modules
 
-# Prisma CLI (needed for migrate deploy in entrypoint)
-RUN npm install -g prisma@^5.8.0
+COPY --chown=node:node . .
+COPY --from=base --chown=node:node /app/packages/shared/dist ./packages/shared/dist
+COPY --from=base --chown=node:node /app/apps/backend/dist ./apps/backend/dist
 
-# Generate Prisma Client (uses the binaries already present in node_modules)
-WORKDIR /app/apps/backend
-COPY .npmrc /app/
-RUN npx prisma generate
+# Entrypoint setup
+COPY --chown=node:node apps/backend/docker-entrypoint.sh /app/apps/backend/docker-entrypoint.sh
+RUN chmod +x /app/apps/backend/docker-entrypoint.sh
 
-RUN mkdir -p /app/data /app/logs
-
-# Entrypoint (ensure LF line endings for Alpine)
-COPY apps/backend/docker-entrypoint.sh /app/apps/backend/docker-entrypoint.sh
-RUN sed -i 's/\r$//' /app/apps/backend/docker-entrypoint.sh && chmod +x /app/apps/backend/docker-entrypoint.sh
+# Use non-root user
+USER node
 
 EXPOSE 3041
 ENTRYPOINT ["/app/apps/backend/docker-entrypoint.sh"]

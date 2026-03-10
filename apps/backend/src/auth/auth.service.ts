@@ -1,7 +1,10 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UserRole } from './types/roles.enum';
@@ -11,6 +14,8 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private redisService: RedisService,
+    private configService: ConfigService,
   ) { }
 
   async register(registerDto: RegisterDto) {
@@ -21,17 +26,14 @@ export class AuthService {
       where: { email },
     });
 
-    if (existingTenant) {
-      throw new ConflictException('Tenant with this email already exists');
-    }
-
     // Check if user already exists
     const existingUser = await this.prisma.user.findFirst({
       where: { email },
     });
 
-    if (existingUser) {
-      throw new ConflictException('User with this email already exists');
+    if (existingTenant || existingUser) {
+      // Use generic error message to prevent user enumeration
+      throw new ConflictException('Registration failed. Please try again later or use different credentials.');
     }
 
     // Hash password
@@ -66,18 +68,11 @@ export class AuthService {
       return { tenant, user };
     });
 
-    // Generate JWT token
-    const payload = {
-      sub: result.user.id,
-      email: result.user.email,
-      tenantId: result.tenant.id,
-      role: (result.user as any).role || UserRole.ADMIN,
-    };
-
-    const accessToken = this.jwtService.sign(payload);
+    // Generate tokens
+    const tokens = await this.generateTokens(result.user.id, result.tenant.id, result.user.email, (result.user as any).role || UserRole.ADMIN);
 
     return {
-      accessToken,
+      ...tokens,
       user: {
         id: result.user.id,
         email: result.user.email,
@@ -144,18 +139,11 @@ export class AuthService {
       (user as any).licenseStatus = 'TRIAL';
     }
 
-    // Generate JWT token
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      tenantId: user.tenantId,
-      role: (user as any).role || UserRole.ADMIN,
-    };
-
-    const accessToken = this.jwtService.sign(payload);
+    // Generate tokens
+    const tokens = await this.generateTokens(user.id, user.tenantId, user.email, (user as any).role || UserRole.ADMIN);
 
     return {
-      accessToken,
+      ...tokens,
       user: {
         id: user.id,
         email: user.email,
@@ -171,32 +159,82 @@ export class AuthService {
     };
   }
 
-  async validateUser(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { tenant: true },
-    });
+  /**
+   * Generates Access and Refresh tokens with rotation strategy
+   */
+  async generateTokens(userId: string, tenantId: string, email: string, role: string) {
+    const payload = { sub: userId, email, tenantId, role };
+    const refreshTokenId = uuidv4();
 
-    if (!user || !user.isActive || !user.tenant.isActive) {
-      return null;
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload),
+      this.jwtService.signAsync(
+        { ...payload, rtid: refreshTokenId },
+        {
+          expiresIn: this.configService.get<string>('JWT_REFRESH_TTL', '7d') as any,
+          secret: this.configService.get<string>('JWT_REFRESH_SECRET') || this.configService.get<string>('JWT_SECRET')
+        }
+      ),
+    ]);
+
+    // Store refresh token metadata in Redis for rotation/revocation
+    const ttl = 7 * 24 * 60 * 60; // default 7 days in seconds
+    await this.redisService.setWithTTL(`auth:refresh:${userId}:${refreshTokenId}`, '1', ttl);
+
+    return { accessToken, refreshToken };
+  }
+
+  /**
+   * Refreshes access token and rotates the refresh token
+   */
+  async refresh(oldRefreshToken: string) {
+    try {
+      const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || this.configService.get<string>('JWT_SECRET');
+      const payload = await this.jwtService.verifyAsync(oldRefreshToken, {
+        secret: refreshSecret
+      });
+
+      const { sub: userId, tenantId, email, role, rtid: refreshTokenId } = payload;
+
+      // Check if this refresh token is still valid in Redis
+      const redisKey = `auth:refresh:${userId}:${refreshTokenId}`;
+      const isValid = await this.redisService.exists(redisKey);
+
+      if (!isValid) {
+        // Potential reuse attack!
+        // Security best practice: Revoke all refresh tokens for this user
+        await this.revokeAllUserTokens(userId);
+        throw new UnauthorizedException('Invalid or expired refresh token');
+      }
+
+      // Revoke the used refresh token (rotation)
+      await this.redisService.delete(redisKey);
+
+      // Generate new tokens
+      return this.generateTokens(userId, tenantId, email, role);
+    } catch (e) {
+      throw new UnauthorizedException('Session expired');
     }
+  }
 
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      tenantId: user.tenantId,
-      role: (user as any).role || UserRole.ADMIN,
-      licenseStatus: (user as any).licenseStatus,
-      trialStartedAt: (user as any).trialStartedAt,
-      trialEndsAt: (user as any).trialEndsAt,
-      licenseExpiresAt: (user as any).licenseExpiresAt,
-      tenant: {
-        id: user.tenant.id,
-        name: user.tenant.name,
-        email: user.tenant.email,
-      },
-    };
+  async logout(userId: string, refreshTokenId?: string) {
+    if (refreshTokenId) {
+      await this.redisService.delete(`auth:refresh:${userId}:${refreshTokenId}`);
+    } else {
+      await this.revokeAllUserTokens(userId);
+    }
+  }
+
+  private async asyncDeleteKeys(pattern: string) {
+    const redis = this.redisService.getClient();
+    const keys = await redis.keys(pattern);
+    if (keys.length > 0) {
+      await redis.del(...keys);
+    }
+  }
+
+  async revokeAllUserTokens(userId: string) {
+    await this.asyncDeleteKeys(`auth:refresh:${userId}:*`);
   }
 }
 

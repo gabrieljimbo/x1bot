@@ -6,7 +6,7 @@ import { Public } from './decorators/public.decorator';
 
 @Controller('api/auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) { }
 
   @Post('register')
   @Public()
@@ -20,6 +20,19 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Post('refresh')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  async refresh(@Body('refreshToken') refreshToken: string) {
+    return this.authService.refresh(refreshToken);
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(@Body('userId') userId: string, @Body('refreshTokenId') rtid?: string) {
+    return this.authService.logout(userId, rtid);
   }
 }
 

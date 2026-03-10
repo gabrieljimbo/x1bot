@@ -10,7 +10,14 @@
       "Bash(git add apps/backend/prisma/schema.prisma apps/backend/prisma/migrations/20260308_add_sent_products/migration.sql apps/backend/src/execution/node-executor.service.ts apps/backend/src/execution/ml-offers.service.ts)",
       "Bash(git commit:*)",
       "Bash(git push origin main)",
-      "Bash(git add apps/frontend/src/app/workflows/[id]/page.tsx apps/frontend/src/app/workflows/groups/page.tsx)"
+      "Bash(git add apps/frontend/src/app/workflows/[id]/page.tsx apps/frontend/src/app/workflows/groups/page.tsx)",
+      "Bash(npx prisma migrate status)",
+      "Bash(npx prisma migrate resolve --rolled-back 20260308_add_sent_products)",
+      "Bash(npx prisma migrate resolve --applied 20260309_add_sent_products)",
+      "Bash(npx tsc --noEmit -p apps/frontend/tsconfig.json)",
+      "Bash(git add apps/backend/prisma/migrations/20260309_add_sent_products/migration.sql apps/backend/src/products/products.service.ts apps/frontend/src/app/products/page.tsx)",
+      "Bash(npx prisma migrate resolve --rolled-back 20260309_add_sent_products)",
+      "Bash(git add apps/backend/docker-entrypoint.sh)"
     ]
   }
 }

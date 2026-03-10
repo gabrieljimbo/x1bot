@@ -19,9 +19,11 @@ import { ApiConfigsModule } from './api-configs/api-configs.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { ProductsModule } from './products/products.module';
 import { BullModule } from '@nestjs/bullmq';
+import { SecurityModule } from './security/security.module';
 
 @Module({
   imports: [
+    SecurityModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
