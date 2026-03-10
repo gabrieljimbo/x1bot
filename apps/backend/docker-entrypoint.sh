@@ -13,10 +13,10 @@ fi
 cd /app/apps/backend
 
 echo "📦 Running database migrations..."
-npx prisma migrate deploy --schema prisma/schema.prisma
+pnpm prisma migrate deploy --schema prisma/schema.prisma
 
 echo "🌱 Running database seeds..."
 node prisma/seed.js || echo "⚠️ Seed failed but continuing..."
 
 echo "🚀 Starting application..."
-exec npm start
+exec pnpm start

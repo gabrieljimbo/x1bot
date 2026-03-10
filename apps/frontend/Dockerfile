@@ -12,7 +12,7 @@ COPY packages/shared ./packages/shared
 COPY apps/frontend ./apps/frontend
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Build shared package
 WORKDIR /app/packages/shared
@@ -38,7 +38,7 @@ COPY packages/shared ./packages/shared
 COPY apps/frontend ./apps/frontend
 
 # Install production dependencies only
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --prod
 
 # Copy built files from build stage
 COPY --from=base /app/packages/shared/dist ./packages/shared/dist
