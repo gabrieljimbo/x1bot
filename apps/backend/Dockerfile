@@ -30,7 +30,7 @@ COPY packages/shared ./packages/shared
 
 # Generate Prisma Client (needed for build)
 WORKDIR /app/apps/backend
-RUN npx prisma generate --schema=prisma/schema.prisma
+RUN pnpm prisma generate --schema=prisma/schema.prisma
 
 # Build shared library then backend
 WORKDIR /app/packages/shared
@@ -43,6 +43,9 @@ RUN pnpm build
 FROM node:20-slim AS runner-deps
 WORKDIR /app
 RUN npm install -g pnpm@10
+# Install openssl for Prisma
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY apps/backend/package.json ./apps/backend/
 COPY packages/shared/package.json ./packages/shared/
@@ -52,9 +55,7 @@ COPY apps/backend/prisma ./apps/backend/prisma
 RUN pnpm install --prod --frozen-lockfile
 
 # Generate Prisma Client (needed for runtime)
-WORKDIR /app/apps/backend
-RUN npx prisma generate --schema=prisma/schema.prisma
-WORKDIR /app
+RUN pnpm prisma generate --schema=apps/backend/prisma/schema.prisma
 
 # Stage 3: Runtime image
 FROM node:20-slim AS production
