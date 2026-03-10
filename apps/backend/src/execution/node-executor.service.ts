@@ -785,19 +785,22 @@ export class NodeExecutorService {
       return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
     }
 
-    const timeoutSeconds =
-      config.timeoutSeconds ||
-      this.configService.get('WAIT_REPLY_DEFAULT_TIMEOUT_SECONDS', 300);
+    let timeoutSeconds = config.timeoutSeconds || this.configService.get('WAIT_REPLY_DEFAULT_TIMEOUT_SECONDS', 300);
 
-    // Find next node (will be used when resumed)
-    const nextEdge = edges.find((e) => e.source === node.id);
+    if (config.timeoutAmount && config.timeoutUnit) {
+      const multipliers: Record<string, number> = { seconds: 1, minutes: 60, hours: 3600, days: 86400 };
+      timeoutSeconds = config.timeoutAmount * (multipliers[config.timeoutUnit] || 1);
+    }
+
+    // Find next node (will be used when resumed) - engine handles this now, we keep for fallback
+    const nextEdge = edges.find((e) => e.source === node.id && (e.condition === 'success' || !e.condition));
     const nextNodeId = nextEdge ? nextEdge.target : null;
 
     return {
       nextNodeId,
       shouldWait: true,
       waitTimeoutSeconds: timeoutSeconds,
-      onTimeout: config.onTimeout,
+      onTimeout: config.onTimeout || 'GOTO_NODE',
       timeoutTargetNodeId: config.timeoutTargetNodeId,
     };
   }
@@ -2446,13 +2449,13 @@ functions, etc.)
       // Helper: compare two products by a named sort criterion
       const compareBy = (a: any, b: any, criterion: string): number => {
         switch (criterion) {
-          case 'vendidos':    return parseInt(b.sales || '0', 10) - parseInt(a.sales || '0', 10);
-          case 'comissao':    return parseFloat(b.commissionRate || '0') - parseFloat(a.commissionRate || '0');
-          case 'desconto':    return parseFloat(b.priceDiscountRate || '0') - parseFloat(a.priceDiscountRate || '0');
-          case 'avaliacao':   return parseFloat(b.ratingStar || '0') - parseFloat(a.ratingStar || '0');
+          case 'vendidos': return parseInt(b.sales || '0', 10) - parseInt(a.sales || '0', 10);
+          case 'comissao': return parseFloat(b.commissionRate || '0') - parseFloat(a.commissionRate || '0');
+          case 'desconto': return parseFloat(b.priceDiscountRate || '0') - parseFloat(a.priceDiscountRate || '0');
+          case 'avaliacao': return parseFloat(b.ratingStar || '0') - parseFloat(a.ratingStar || '0');
           case 'menor_preco': return parseFloat(a.priceMin || '0') - parseFloat(b.priceMin || '0');
           case 'maior_preco': return parseFloat(b.priceMin || '0') - parseFloat(a.priceMin || '0');
-          default:            return 0;
+          default: return 0;
         }
       };
 

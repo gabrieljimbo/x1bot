@@ -1014,6 +1014,42 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
                 ))}
               </div>
             </>
+          ) : data.type === 'WAIT_REPLY' ? (
+            <div className="absolute -right-3 top-3 bottom-3 flex flex-col justify-between pointer-events-none w-28">
+              <div className="relative flex items-center justify-end translate-x-3">
+                <span className="mr-2 text-[10px] font-bold text-green-400 bg-[#0f172a] px-1.5 py-0.5 rounded border border-green-500/30 whitespace-nowrap shadow-sm backdrop-blur-sm">
+                  RETORNOU
+                </span>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id="success"
+                  className="w-3 h-3 !bg-green-500 border-2 border-[#1a1c2e] hover:!bg-green-400 transition-colors !cursor-crosshair pointer-events-auto"
+                />
+              </div>
+              <div className="relative flex items-center justify-end translate-x-3">
+                <span className="mr-2 text-[10px] font-bold text-blue-400 bg-[#0f172a] px-1.5 py-0.5 rounded border border-blue-500/30 whitespace-nowrap shadow-sm backdrop-blur-sm">
+                  REMK.
+                </span>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id="remarketing"
+                  className="w-3 h-3 !bg-blue-500 border-2 border-[#1a1c2e] hover:!bg-blue-400 transition-colors !cursor-crosshair pointer-events-auto"
+                />
+              </div>
+              <div className="relative flex items-center justify-end translate-x-3">
+                <span className="mr-2 text-[10px] font-bold text-orange-400 bg-[#0f172a] px-1.5 py-0.5 rounded border border-orange-500/30 whitespace-nowrap shadow-sm backdrop-blur-sm">
+                  TIMEOUT
+                </span>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id="timeout"
+                  className="w-3 h-3 !bg-orange-500 border-2 border-[#1a1c2e] hover:!bg-orange-400 transition-colors !cursor-crosshair pointer-events-auto"
+                />
+              </div>
+            </div>
           ) : (
             <Handle
               type="source"

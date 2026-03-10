@@ -460,10 +460,20 @@ export class ExecutionEngineService implements OnModuleInit {
 
         this.nodeExecutor.processReply(currentNode, message, execution.context);
 
+        // Check phase for output
+        const hasRemarketingFired = execution.context.variables._waitReplyRemarketingFired;
+        const condition = hasRemarketingFired ? 'remarketing' : 'success';
+
         // Move to next node after processing reply
-        const nextEdge = workflow.edges.find((e) => e.source === currentNode.id);
+        const nextEdge = workflow.edges.find((e) => e.source === currentNode.id && e.condition === condition);
         if (nextEdge) {
           execution.currentNodeId = nextEdge.target;
+        } else {
+          // Fallback legacy without edge conditions
+          const fallbackEdge = workflow.edges.find((e) => e.source === currentNode.id && !e.condition);
+          if (fallbackEdge) {
+            execution.currentNodeId = fallbackEdge.target;
+          }
         }
       }
 
@@ -929,6 +939,8 @@ export class ExecutionEngineService implements OnModuleInit {
               JSON.stringify({
                 onTimeout: result.onTimeout,
                 timeoutTargetNodeId: result.timeoutTargetNodeId,
+                nodeConfig: currentNode.config,
+                isRemarketingPhase: false
               }),
               result.waitTimeoutSeconds,
             );
@@ -940,6 +952,8 @@ export class ExecutionEngineService implements OnModuleInit {
               result.waitTimeoutSeconds * 1000,
               result.onTimeout || 'END',
               result.timeoutTargetNodeId,
+              currentNode.config,
+              false
             );
           }
         }
@@ -1550,6 +1564,8 @@ export class ExecutionEngineService implements OnModuleInit {
     delayMs: number,
     onTimeout: 'END' | 'GOTO_NODE',
     timeoutTargetNodeId?: string,
+    config?: any,
+    isRemarketingPhase: boolean = false
   ): void {
     const safeDelay = Math.max(0, delayMs);
     console.log(`[WAIT_REPLY] Scheduling timeout in ${safeDelay}ms for execution ${executionId} (action: ${onTimeout})`);
@@ -1600,121 +1616,183 @@ export class ExecutionEngineService implements OnModuleInit {
         const timeoutKey = `execution:timeout:${executionId}`;
         await this.redis.delete(timeoutKey).catch(() => { });
 
-        if (onTimeout === 'END' || !timeoutTargetNodeId) {
-          // End the execution on timeout
-          console.log(`[WAIT_REPLY] Ending execution ${executionId} due to timeout`);
+        if (!isRemarketingPhase && config && config.enableRemarketing) {
+          // Phase 1 timeout -> Fire Remarketing
+          console.log(`[WAIT_REPLY] Sending Remarketing for execution ${executionId}`);
+
+          recheckExecution.context.variables._waitReplyRemarketingFired = true;
           await this.executionService.updateExecution(executionId, {
-            status: ExecutionStatus.COMPLETED,
-            context: recheckExecution.context,
+            context: recheckExecution.context
           });
-          await this.eventBus.emit({
-            type: EventType.EXECUTION_COMPLETED,
-            tenantId: recheckExecution.tenantId,
-            executionId: recheckExecution.id,
-            workflowId: recheckExecution.workflowId,
-            sessionId: recheckExecution.sessionId,
-            contactPhone: recheckExecution.contactPhone,
-            output: recheckExecution.context.output,
-            timestamp: new Date(),
-          });
+
+          if (config.remarketingMessage && (!config.remarketingMessageType || config.remarketingMessageType === 'text')) {
+            await this.whatsappSender.sendMessage(
+              recheckExecution.sessionId,
+              recheckExecution.contactPhone,
+              config.remarketingMessage
+            ).catch(e => console.error('[WAIT_REPLY] Remarketing SendMessage Error:', e));
+          } else if (config.remarketingMediaUrl) {
+            await this.whatsappSender.sendMedia(
+              recheckExecution.sessionId,
+              recheckExecution.contactPhone,
+              config.remarketingMessageType || 'image',
+              config.remarketingMediaUrl,
+              { caption: config.remarketingMessage }
+            ).catch(e => console.error('[WAIT_REPLY] Remarketing SendMedia Error:', e));
+          }
+
+          // Reschedule second timeout
+          const remarketingAmount = config.remarketingTimeoutAmount || 1;
+          const remarketingUnit = config.remarketingTimeoutUnit || 'hours';
+          const multipliers: Record<string, number> = { seconds: 1, minutes: 60, hours: 3600, days: 86400 };
+          const remarketingDelay = remarketingAmount * (multipliers[remarketingUnit] || 3600);
+
+          await this.redis.setWithTTL(
+            `execution:timeout:${executionId}`,
+            JSON.stringify({
+              onTimeout,
+              timeoutTargetNodeId,
+              nodeConfig: config,
+              isRemarketingPhase: true
+            }),
+            remarketingDelay
+          );
+
+          this.scheduleWaitReplyTimeout(
+            executionId,
+            tenantId,
+            remarketingDelay * 1000,
+            onTimeout,
+            timeoutTargetNodeId,
+            config,
+            true
+          );
         } else {
-          // GOTO_NODE: resume execution from the specified target node
-          console.log(`[WAIT_REPLY] Timeout GOTO_NODE logic for execution ${executionId}`);
-
-          const workflowData = await this.prisma.workflow.findFirst({
-            where: { id: recheckExecution.workflowId, tenantId: recheckExecution.tenantId },
-          });
-
-          if (!workflowData) {
-            console.error(`[WAIT_REPLY] Workflow not found for execution ${executionId}`);
+          // Final Timeout Logic
+          if (onTimeout === 'END' && !timeoutTargetNodeId) {
+            // End the execution on timeout
+            console.log(`[WAIT_REPLY] Ending execution ${executionId} due to timeout`);
             await this.executionService.updateExecution(executionId, {
-              status: ExecutionStatus.ERROR,
-              error: 'WAIT_REPLY timeout: workflow not found',
+              status: ExecutionStatus.COMPLETED,
+              context: recheckExecution.context,
             });
-            return;
-          }
+            await this.eventBus.emit({
+              type: EventType.EXECUTION_COMPLETED,
+              tenantId: recheckExecution.tenantId,
+              executionId: recheckExecution.id,
+              workflowId: recheckExecution.workflowId,
+              sessionId: recheckExecution.sessionId,
+              contactPhone: recheckExecution.contactPhone,
+              output: recheckExecution.context.output,
+              timestamp: new Date(),
+            });
+          } else {
+            // GOTO_NODE: resume execution from the specified target node
+            console.log(`[WAIT_REPLY] Timeout GOTO_NODE logic for execution ${executionId}`);
 
-          const workflow: Workflow = {
-            ...workflowData,
-            description: workflowData.description || undefined,
-            nodes: workflowData.nodes as any,
-            edges: workflowData.edges as any,
-          };
+            const workflowData = await this.prisma.workflow.findFirst({
+              where: { id: recheckExecution.workflowId, tenantId: recheckExecution.tenantId },
+            });
 
-          // Determine target node ID
-          let finalTargetNodeId = timeoutTargetNodeId;
-          const currentNode = workflow.nodes.find(n => n.id === recheckExecution.currentNodeId);
+            if (!workflowData) {
+              console.error(`[WAIT_REPLY] Workflow not found for execution ${executionId}`);
+              await this.executionService.updateExecution(executionId, {
+                status: ExecutionStatus.ERROR,
+                error: 'WAIT_REPLY timeout: workflow not found',
+              });
+              return;
+            }
 
-          if (currentNode?.type === WorkflowNodeType.SEND_PIX) {
-            const config = currentNode.config as PixConfig;
+            const workflow: Workflow = {
+              ...workflowData,
+              description: workflowData.description || undefined,
+              nodes: workflowData.nodes as any,
+              edges: workflowData.edges as any,
+            };
 
-            // Handle Auto-Retry
-            if (config.autoRetry) {
-              const currentRetry = (recheckExecution.context.variables as any)._pixRetryCount || 0;
-              const maxRetry = config.retryCount || 1;
+            // Determine target node ID
+            let finalTargetNodeId = timeoutTargetNodeId;
+            const currentNode = workflow.nodes.find(n => n.id === recheckExecution.currentNodeId);
 
-              if (currentRetry < maxRetry) {
-                console.log(`[WAIT_REPLY] SEND_PIX auto-retry ${currentRetry + 1}/${maxRetry} for execution ${executionId}`);
+            if (currentNode?.type === WorkflowNodeType.SEND_PIX) {
+              const config = currentNode.config as PixConfig;
 
-                // Increment retry count
-                recheckExecution.context.variables._pixRetryCount = currentRetry + 1;
+              // Handle Auto-Retry
+              if (config.autoRetry) {
+                const currentRetry = (recheckExecution.context.variables as any)._pixRetryCount || 0;
+                const maxRetry = config.retryCount || 1;
 
-                // Restart node execution
-                recheckExecution.status = ExecutionStatus.RUNNING;
-                await this.executionService.updateExecution(executionId, {
-                  status: ExecutionStatus.RUNNING,
-                  context: recheckExecution.context,
-                });
+                if (currentRetry < maxRetry) {
+                  console.log(`[WAIT_REPLY] SEND_PIX auto-retry ${currentRetry + 1}/${maxRetry} for execution ${executionId}`);
 
-                await this.continueExecution(recheckExecution, workflow);
-                return;
+                  // Increment retry count
+                  recheckExecution.context.variables._pixRetryCount = currentRetry + 1;
+
+                  // Restart node execution
+                  recheckExecution.status = ExecutionStatus.RUNNING;
+                  await this.executionService.updateExecution(executionId, {
+                    status: ExecutionStatus.RUNNING,
+                    context: recheckExecution.context,
+                  });
+
+                  await this.continueExecution(recheckExecution, workflow);
+                  return;
+                }
+              }
+
+              const timeoutEdge = workflow.edges.find(e => e.source === currentNode.id && e.condition === 'timeout');
+
+              if (timeoutEdge) {
+                finalTargetNodeId = timeoutEdge.target;
+                console.log(`[WAIT_REPLY] SEND_PIX timeout routing to edge: ${finalTargetNodeId}`);
+
+                // Send timeout message if configured and enabled
+                if (config.enviarMensagensAutomaticas && config.mensagemTimeout) {
+                  await this.sendMessageWithRetry({
+                    sessionId: recheckExecution.sessionId,
+                    contactPhone: recheckExecution.contactPhone,
+                    message: config.mensagemTimeout
+                  });
+                }
+              }
+            } else if (currentNode?.type === WorkflowNodeType.WAIT_REPLY) {
+              const timeoutEdge = workflow.edges.find(e => e.source === currentNode.id && e.condition === 'timeout');
+              if (timeoutEdge) {
+                finalTargetNodeId = timeoutEdge.target;
+              } else {
+                const fallbackEdge = workflow.edges.find((e) => e.source === currentNode.id && !e.condition);
+                if (fallbackEdge) finalTargetNodeId = fallbackEdge.target;
               }
             }
 
-            const timeoutEdge = workflow.edges.find(e => e.source === currentNode.id && e.condition === 'timeout');
-
-            if (timeoutEdge) {
-              finalTargetNodeId = timeoutEdge.target;
-              console.log(`[WAIT_REPLY] SEND_PIX timeout routing to edge: ${finalTargetNodeId}`);
-
-              // Send timeout message if configured and enabled
-              if (config.enviarMensagensAutomaticas && config.mensagemTimeout) {
-                await this.sendMessageWithRetry({
-                  sessionId: recheckExecution.sessionId,
-                  contactPhone: recheckExecution.contactPhone,
-                  message: config.mensagemTimeout
-                });
-              }
+            if (!finalTargetNodeId) {
+              console.log(`[WAIT_REPLY] No target node for timeout, completing execution ${executionId}`);
+              await this.completeExecution(recheckExecution, 'Timeout reached (no target node)');
+              return;
             }
+
+            // Update execution to point to the timeout target node
+            recheckExecution.currentNodeId = finalTargetNodeId;
+            recheckExecution.status = ExecutionStatus.RUNNING;
+            await this.executionService.updateExecution(executionId, {
+              status: ExecutionStatus.RUNNING,
+              currentNodeId: finalTargetNodeId,
+              context: recheckExecution.context,
+            });
+
+            await this.eventBus.emit({
+              type: EventType.EXECUTION_RESUMED,
+              tenantId: recheckExecution.tenantId,
+              executionId: recheckExecution.id,
+              workflowId: recheckExecution.workflowId,
+              sessionId: recheckExecution.sessionId,
+              contactPhone: recheckExecution.contactPhone,
+              previousStatus: ExecutionStatus.WAITING,
+              timestamp: new Date(),
+            });
+
+            await this.continueExecution(recheckExecution, workflow);
           }
-
-          if (!finalTargetNodeId) {
-            console.log(`[WAIT_REPLY] No target node for timeout, completing execution ${executionId}`);
-            await this.completeExecution(recheckExecution, 'Timeout reached (no target node)');
-            return;
-          }
-
-          // Update execution to point to the timeout target node
-          recheckExecution.currentNodeId = finalTargetNodeId;
-          recheckExecution.status = ExecutionStatus.RUNNING;
-          await this.executionService.updateExecution(executionId, {
-            status: ExecutionStatus.RUNNING,
-            currentNodeId: finalTargetNodeId,
-            context: recheckExecution.context,
-          });
-
-          await this.eventBus.emit({
-            type: EventType.EXECUTION_RESUMED,
-            tenantId: recheckExecution.tenantId,
-            executionId: recheckExecution.id,
-            workflowId: recheckExecution.workflowId,
-            sessionId: recheckExecution.sessionId,
-            contactPhone: recheckExecution.contactPhone,
-            previousStatus: ExecutionStatus.WAITING,
-            timestamp: new Date(),
-          });
-
-          await this.continueExecution(recheckExecution, workflow);
         }
       } catch (error: any) {
         console.error(`[WAIT_REPLY] Error handling timeout for execution ${executionId}:`, error);

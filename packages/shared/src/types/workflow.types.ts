@@ -225,7 +225,20 @@ export interface ConditionConfig {
 
 export interface WaitReplyConfig {
   saveAs: string; // variable name to save response
-  timeoutSeconds: number;
+  // Primary Time
+  timeoutAmount?: number;
+  timeoutUnit?: 'seconds' | 'minutes' | 'hours' | 'days';
+
+  // Remarketing configuration
+  enableRemarketing?: boolean;
+  remarketingMessageType?: 'text' | 'image' | 'audio';
+  remarketingMessage?: string;
+  remarketingMediaUrl?: string; // used for image/audio
+  remarketingTimeoutAmount?: number;
+  remarketingTimeoutUnit?: 'seconds' | 'minutes' | 'hours' | 'days';
+
+  // Legacy support
+  timeoutSeconds?: number;
   onTimeout: 'END' | 'GOTO_NODE';
   timeoutTargetNodeId?: string;
 }

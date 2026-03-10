@@ -3217,8 +3217,8 @@ function GroupTriggerConfig({ config, setConfig }: any) {
     const defaultExec = mode === 'fixed_date'
       ? { id: crypto.randomUUID(), type: 'fixed_date', date: '', time: '10:00' }
       : mode === 'daily'
-      ? { id: crypto.randomUUID(), type: 'days_after', day: 1, time: '12:00' }
-      : { id: crypto.randomUUID(), type: 'days_after', day: executions.length + 1, time: '09:00' };
+        ? { id: crypto.randomUUID(), type: 'days_after', day: 1, time: '12:00' }
+        : { id: crypto.randomUUID(), type: 'days_after', day: executions.length + 1, time: '09:00' };
 
     setConfig({
       ...config,
@@ -4802,36 +4802,142 @@ export default function NodeConfigModal({
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium mb-2 text-gray-200">
-                Save Reply As
+                Salvar Resposta Como
               </label>
               <input
                 type="text"
                 value={config.saveAs || ''}
                 onChange={(e) => setConfig({ ...config, saveAs: e.target.value })}
-                placeholder="e.g., userName, email, choice"
+                placeholder="Exemplo: nomeUsuario, email, opcao"
                 className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
               />
               <p className="text-xs text-gray-500 mt-1.5">
-                Variable name to store the user&apos;s reply
+                Nome da variável para guardar a resposta do usuário
               </p>
             </div>
 
             <div>
               <label className="block text-sm font-medium mb-2 text-gray-200">
-                Timeout (seconds)
+                Tempo de Espera (Principal)
               </label>
-              <input
-                type="number"
-                value={config.timeoutSeconds || 300}
-                onChange={(e) => setConfig({ ...config, timeoutSeconds: parseInt(e.target.value) || 300 })}
-                placeholder="300"
-                min="10"
-                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
-              />
-              <p className="text-xs text-gray-500 mt-1.5">
-                How long to wait for a reply (default: 300s)
-              </p>
+              <div className="flex gap-3">
+                <input
+                  type="number"
+                  value={config.timeoutAmount || (config.timeoutSeconds ? Math.floor(config.timeoutSeconds / 60) : 5)}
+                  onChange={(e) => setConfig({ ...config, timeoutAmount: parseInt(e.target.value) || 1 })}
+                  placeholder="5"
+                  min="1"
+                  className="flex-1 px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                />
+                <select
+                  value={config.timeoutUnit || (config.timeoutSeconds ? 'minutes' : 'minutes')}
+                  onChange={(e) => setConfig({ ...config, timeoutUnit: e.target.value })}
+                  className="px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                >
+                  <option value="seconds">Segundos</option>
+                  <option value="minutes">Minutos</option>
+                  <option value="hours">Horas</option>
+                  <option value="days">Dias</option>
+                </select>
+              </div>
             </div>
+
+            <label className="flex items-center cursor-pointer p-4 bg-[#1a1a1a] rounded border border-gray-700">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={config.enableRemarketing || false}
+                onChange={(e) => setConfig({ ...config, enableRemarketing: e.target.checked })}
+              />
+              <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary relative"></div>
+              <span className="ml-3 text-sm font-medium text-gray-200">🔄 Fazer Remarketing se nâo responder</span>
+            </label>
+
+            {config.enableRemarketing && (
+              <div className="space-y-4 p-4 border border-blue-500/30 bg-blue-500/5 rounded-lg">
+                <p className="text-xs text-blue-300 mb-2 font-medium">Configuração de Remarketing (Envio automático após esgotar o tempo principal)</p>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-200">
+                    Tipo de Mensagem
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['text', 'image', 'audio'].map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setConfig({ ...config, remarketingMessageType: type })}
+                        className={`
+                          px-4 py-2 rounded-lg border-2 transition-all text-xs font-semibold
+                          ${(config.remarketingMessageType || 'text') === type
+                            ? 'bg-primary/20 border-primary text-primary'
+                            : 'bg-[#151515] border-gray-700 text-gray-400 hover:border-gray-600'
+                          }
+                        `}
+                      >
+                        {type === 'text' && '📝 Texto'}
+                        {type === 'image' && '📸 Imagem'}
+                        {type === 'audio' && '🎵 Áudio'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {(config.remarketingMessageType || 'text') === 'text' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-200">Mensagem de Remarketing</label>
+                    <DroppableInput
+                      type="textarea"
+                      value={config.remarketingMessage || ''}
+                      onChange={(e: any) => setConfig({ ...config, remarketingMessage: e.target.value })}
+                      placeholder="Oi, acabei de te mandar uma mensagem..."
+                      className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary resize-none text-white text-sm"
+                    />
+                  </div>
+                )}
+
+                {['image', 'audio'].includes(config.remarketingMessageType || 'text') && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-200">URL da Mídia (Remarketing)</label>
+                    <input
+                      type="text"
+                      value={config.remarketingMediaUrl || ''}
+                      onChange={(e) => setConfig({ ...config, remarketingMediaUrl: e.target.value })}
+                      placeholder="https://example.com/arquivo.png"
+                      className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white text-sm font-mono"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-200">
+                    Esperar mais quanto tempo? (Tempo limite final)
+                  </label>
+                  <div className="flex gap-3">
+                    <input
+                      type="number"
+                      value={config.remarketingTimeoutAmount || 1}
+                      onChange={(e) => setConfig({ ...config, remarketingTimeoutAmount: parseInt(e.target.value) || 1 })}
+                      min="1"
+                      className="flex-1 px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                    />
+                    <select
+                      value={config.remarketingTimeoutUnit || 'hours'}
+                      onChange={(e) => setConfig({ ...config, remarketingTimeoutUnit: e.target.value })}
+                      className="px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white"
+                    >
+                      <option value="seconds">Segundos</option>
+                      <option value="minutes">Minutos</option>
+                      <option value="hours">Horas</option>
+                      <option value="days">Dias</option>
+                    </select>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    Se não responder após esse segundo prazo, irá para o output TIMEOUT
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )
 
