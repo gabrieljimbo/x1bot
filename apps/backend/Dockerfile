@@ -29,13 +29,9 @@ RUN pnpm install --frozen-lockfile
 COPY apps/backend ./apps/backend
 COPY packages/shared ./packages/shared
 
-# Generate Prisma Client (needed for build and runtime)
+# Generate Prisma Client (needed for TypeScript build)
 WORKDIR /app/apps/backend
-RUN pnpm prisma generate --schema=prisma/schema.prisma
-# Copy generated Prisma client to a known location for production stage
-RUN mkdir -p /app/prisma-generated && \
-    cp -r /app/node_modules/.pnpm/@prisma+client*/node_modules/@prisma/client /app/prisma-generated/prisma-client && \
-    cp -r /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma /app/prisma-generated/dot-prisma
+RUN npx prisma generate --schema=prisma/schema.prisma
 WORKDIR /app
 
 # Build shared library then backend
@@ -60,6 +56,12 @@ COPY packages/shared/package.json ./packages/shared/
 # Install only production dependencies
 COPY apps/backend/prisma ./apps/backend/prisma
 RUN pnpm install --prod --frozen-lockfile
+
+# Generate Prisma Client (running it in runner-deps gives it the right context for node_modules)
+# We use the prisma package from builder or just npx
+WORKDIR /app/apps/backend
+RUN npx prisma generate --schema=prisma/schema.prisma
+WORKDIR /app
 
 # Stage 3: Runtime image
 FROM node:20-slim AS production
@@ -104,16 +106,15 @@ ENV NODE_ENV=production
 RUN mkdir -p /app/data /app/logs /app/apps/backend/.wwebjs_auth /app/apps/backend/.wwebjs_cache \
     && chown -R node:node /app
 
-# Copy production node_modules from runner-deps
+# Copy production node_modules from runner-deps (includes pnpm store and generated prisma)
 COPY --from=runner-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=runner-deps --chown=node:node /app/apps/backend/node_modules ./apps/backend/node_modules
 
-# Copy generated Prisma client from builder to production node_modules
-COPY --from=builder --chown=node:node /app/prisma-generated/prisma-client ./node_modules/@prisma/client
-COPY --from=builder --chown=node:node /app/prisma-generated/dot-prisma ./node_modules/.prisma
+# IMPORTANT: Copy the workspace package files so Node can resolve the symlink
+COPY --from=builder --chown=node:node /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=builder --chown=node:node /app/packages/shared/dist ./packages/shared/dist
 
 # Copy built code from builder
-COPY --from=builder --chown=node:node /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder --chown=node:node /app/apps/backend/dist ./apps/backend/dist
 
 # Copy static assets and config
@@ -127,3 +128,4 @@ WORKDIR /app/apps/backend
 
 EXPOSE 3041
 ENTRYPOINT ["/app/apps/backend/docker-entrypoint.sh"]
+
