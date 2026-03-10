@@ -48,7 +48,13 @@ COPY apps/backend/package.json ./apps/backend/
 COPY packages/shared/package.json ./packages/shared/
 
 # Install only production dependencies
+COPY apps/backend/prisma ./apps/backend/prisma
 RUN pnpm install --prod --frozen-lockfile
+
+# Generate Prisma Client (needed for runtime)
+WORKDIR /app/apps/backend
+RUN npx prisma generate --schema=prisma/schema.prisma
+WORKDIR /app
 
 # Stage 3: Runtime image
 FROM node:20-slim AS production
