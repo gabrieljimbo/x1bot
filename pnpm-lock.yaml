@@ -141,6 +141,9 @@ importers:
       date-fns-tz:
         specifier: ^3.2.0
         version: 3.2.0(date-fns@4.1.0)
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
       helmet:
         specifier: ^8.1.0
         version: 8.1.0
