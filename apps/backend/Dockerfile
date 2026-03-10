@@ -58,8 +58,10 @@ COPY apps/backend/prisma ./apps/backend/prisma
 RUN pnpm install --prod --frozen-lockfile
 
 # Generate Prisma Client in production node_modules
+# Setting ENV ensures Prisma sees it before running
+ENV PRISMA_GENERATE_SKIP_AUTOINSTALL=true
 WORKDIR /app/apps/backend
-RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=true npx prisma generate --schema=prisma/schema.prisma
+RUN pnpm prisma generate --schema=prisma/schema.prisma
 WORKDIR /app
 
 # Stage 3: Runtime image
