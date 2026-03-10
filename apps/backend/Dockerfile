@@ -31,7 +31,7 @@ COPY packages/shared ./packages/shared
 
 # Generate Prisma Client (needed for TypeScript build)
 WORKDIR /app/apps/backend
-RUN npx prisma generate --schema=prisma/schema.prisma
+RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=true npx prisma generate --schema=prisma/schema.prisma
 WORKDIR /app
 
 # Build shared library then backend
@@ -52,15 +52,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY apps/backend/package.json ./apps/backend/
 COPY packages/shared/package.json ./packages/shared/
+COPY apps/backend/prisma ./apps/backend/prisma
 
 # Install only production dependencies
-COPY apps/backend/prisma ./apps/backend/prisma
 RUN pnpm install --prod --frozen-lockfile
 
-# Generate Prisma Client (running it in runner-deps gives it the right context for node_modules)
-# We use the prisma package from builder or just npx
+# Generate Prisma Client in production node_modules
 WORKDIR /app/apps/backend
-RUN npx prisma generate --schema=prisma/schema.prisma
+RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=true npx prisma generate --schema=prisma/schema.prisma
 WORKDIR /app
 
 # Stage 3: Runtime image
@@ -128,4 +127,3 @@ WORKDIR /app/apps/backend
 
 EXPOSE 3041
 ENTRYPOINT ["/app/apps/backend/docker-entrypoint.sh"]
-
