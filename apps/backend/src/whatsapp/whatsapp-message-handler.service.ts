@@ -190,11 +190,13 @@ export class WhatsappMessageHandler {
     workflows.sort((a, b) => {
       const getPattern = (w: any) => {
         const nodes = w.nodes as any[];
-        if (!Array.isArray(nodes)) return '';
+        const edges = w.edges as any[];
+        if (!Array.isArray(nodes) || !Array.isArray(edges)) return '';
         const trigger = nodes.find((n: any) =>
-          n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
-          n.type === WorkflowNodeType.TRIGGER_KEYWORD ||
-          n.type === WorkflowNodeType.TRIGGER_MESSAGE
+          (n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
+            n.type === WorkflowNodeType.TRIGGER_KEYWORD ||
+            n.type === WorkflowNodeType.TRIGGER_MESSAGE) &&
+          edges.some(e => e.source === n.id)
         );
         return trigger?.config?.pattern?.trim() || '';
       };
@@ -220,17 +222,30 @@ export class WhatsappMessageHandler {
         edges: workflowData.edges as any,
       };
 
-      // Find trigger node
+      const hasOutgoingEdges = (nodeId: string) => workflow.edges.some((e: any) => e.source === nodeId);
+
+      // Find trigger node that actually has outgoing edges
       const triggerNode = workflow.nodes.find(
         (n: any) =>
-          n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
-          n.type === WorkflowNodeType.TRIGGER_KEYWORD ||
-          n.type === WorkflowNodeType.TRIGGER_MESSAGE, // Backward compatibility
+          (n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
+            n.type === WorkflowNodeType.TRIGGER_KEYWORD ||
+            n.type === WorkflowNodeType.TRIGGER_MESSAGE) &&
+          hasOutgoingEdges(n.id)
       );
 
       console.log(`[TRIGGER] Trigger node found for ${workflow.name}:`, !!triggerNode);
 
       if (!triggerNode) {
+        // Log if we skipped disconnected triggers
+        const hasDisconnected = workflow.nodes.some(
+          (n: any) =>
+          (n.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
+            n.type === WorkflowNodeType.TRIGGER_KEYWORD ||
+            n.type === WorkflowNodeType.TRIGGER_MESSAGE)
+        );
+        if (hasDisconnected) {
+          console.log(`[TRIGGER] Found trigger nodes in ${workflow.name} but they are disconnected (no outgoing edges), skipping...`);
+        }
         continue;
       }
 
