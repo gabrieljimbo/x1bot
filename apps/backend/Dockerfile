@@ -23,7 +23,7 @@ COPY apps/backend/package.json ./apps/backend/
 COPY packages/shared/package.json ./packages/shared/
 
 # Install ALL dependencies (including devDeps for building)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Copy source code
 COPY apps/backend ./apps/backend
@@ -55,7 +55,7 @@ COPY packages/shared/package.json ./packages/shared/
 COPY apps/backend/prisma ./apps/backend/prisma
 
 # Install only production dependencies
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm install --prod
 
 # Generate Prisma Client in production node_modules
 # Setting ENV ensures Prisma sees it before running
