@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     openssl \
     git \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy configuration and workspace files
@@ -57,6 +58,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     librsvg2-2 \
     openssl \
     git \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
