@@ -32,6 +32,10 @@ COPY packages/shared ./packages/shared
 # Generate Prisma Client (needed for build and runtime)
 WORKDIR /app/apps/backend
 RUN pnpm prisma generate --schema=prisma/schema.prisma
+# Copy generated Prisma client to a known location for production stage
+RUN mkdir -p /app/prisma-generated && \
+    cp -r /app/node_modules/.pnpm/@prisma+client*/node_modules/@prisma/client /app/prisma-generated/prisma-client && \
+    cp -r /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma /app/prisma-generated/dot-prisma
 WORKDIR /app
 
 # Build shared library then backend
@@ -104,8 +108,9 @@ RUN mkdir -p /app/data /app/logs /app/apps/backend/.wwebjs_auth /app/apps/backen
 COPY --from=runner-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=runner-deps --chown=node:node /app/apps/backend/node_modules ./apps/backend/node_modules
 
-# Copy generated Prisma Client from builder
-COPY --from=builder --chown=node:node /app/node_modules/.prisma ./node_modules/.prisma
+# Copy generated Prisma client from builder to production node_modules
+COPY --from=builder --chown=node:node /app/prisma-generated/prisma-client ./node_modules/@prisma/client
+COPY --from=builder --chown=node:node /app/prisma-generated/dot-prisma ./node_modules/.prisma
 
 # Copy built code from builder
 COPY --from=builder --chown=node:node /app/packages/shared/dist ./packages/shared/dist
