@@ -78,6 +78,8 @@ WORKDIR /app
 # Stage 3: Runtime image
 FROM node:20-slim AS production
 
+RUN npm install -g pnpm@10
+
 WORKDIR /app
 
 # Install runtime-only system dependencies
