@@ -48,6 +48,20 @@ export class CampaignsController {
     return this.campaignsService.getCampaignWhatsappLabels(req.user.tenantId);
   }
 
+  @Get('groups')
+  getGroups(@Request() req: any, @Query('sessionId') sessionId?: string) {
+    return this.campaignsService.getGroups(req.user.tenantId, sessionId);
+  }
+
+  @Get('groups/:groupJid/participants')
+  getGroupParticipants(
+    @Request() req: any,
+    @Param('groupJid') groupJid: string,
+    @Query('sessionId') sessionId: string,
+  ) {
+    return this.campaignsService.getGroupParticipants(req.user.tenantId, sessionId, groupJid);
+  }
+
   @Post('blacklist')
   addToBlacklist(@Request() req: any, @Body() body: { phone: string; reason?: string }) {
     return this.campaignsService.addToBlacklist(req.user.tenantId, body.phone, body.reason);
@@ -116,6 +130,30 @@ export class CampaignsController {
   @Post(':id/recipients/list')
   addFromList(@Param('id') id: string, @Body() body: { contactListId: string }) {
     return this.campaignsService.addRecipientsFromContactList(id, body.contactListId);
+  }
+
+  @Post(':id/recipients/group')
+  addFromGroup(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: {
+      sessionId: string;
+      groupJid: string;
+      excludeAdmins?: boolean;
+      allowResend?: boolean;
+      selectedPhones?: string[];
+    },
+  ) {
+    return this.campaignsService.addRecipientsFromGroup(id, req.user.tenantId, body.sessionId, body.groupJid, {
+      excludeAdmins: body.excludeAdmins,
+      allowResend: body.allowResend,
+      selectedPhones: body.selectedPhones,
+    });
+  }
+
+  @Get(':id/send-history')
+  getSendHistory(@Request() req: any, @Param('id') id: string) {
+    return this.campaignsService.getCampaignSendHistory(req.user.tenantId, id);
   }
 
   // ─── WORKFLOW ─────────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, Play, Pause, Trash2, Edit2, BarChart2, X,
-  Send, Upload, Phone, List, RefreshCw, Tag, Smartphone, Shuffle, AlignJustify, GitBranch
+  Send, Upload, Phone, List, RefreshCw, Tag, Smartphone, Shuffle, AlignJustify, GitBranch, Users
 } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { AuthGuard } from '@/components/AuthGuard'
@@ -127,7 +127,7 @@ function CampaignDrawer({
   const [saving, setSaving] = useState(false)
   const [campaignId, setCampaignId] = useState<string | null>(initial?.id ?? null)
   const [recipientResult, setRecipientResult] = useState<string | null>(null)
-  const [recipientMode, setRecipientMode] = useState<'phones' | 'csv' | 'inbox' | 'list'>('phones')
+  const [recipientMode, setRecipientMode] = useState<'phones' | 'csv' | 'inbox' | 'list' | 'group'>('phones')
 
   // Tags/labels for inbox mode
   const [internalTags, setInternalTags] = useState<InternalTag[]>([])
@@ -135,6 +135,17 @@ function CampaignDrawer({
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([])
   const [loadingTags, setLoadingTags] = useState(false)
+
+  // Group mode state
+  const [groupSessionId, setGroupSessionId] = useState('')
+  const [groups, setGroups] = useState<{ groupId: string; name: string; sessionId: string }[]>([])
+  const [selectedGroupJid, setSelectedGroupJid] = useState('')
+  const [groupParticipants, setGroupParticipants] = useState<{ phone: string; name: string | null; isAdmin: boolean; isSuperAdmin: boolean }[]>([])
+  const [selectedGroupPhones, setSelectedGroupPhones] = useState<Set<string>>(new Set())
+  const [excludeAdmins, setExcludeAdmins] = useState(false)
+  const [allowResend, setAllowResend] = useState(false)
+  const [loadingGroups, setLoadingGroups] = useState(false)
+  const [loadingParticipants, setLoadingParticipants] = useState(false)
 
   const [form, setForm] = useState({
     name: initial?.name ?? '',
@@ -170,6 +181,35 @@ function CampaignDrawer({
     }).finally(() => setLoadingTags(false))
   }, [recipientMode])
 
+  // Load groups when session changes in group mode
+  useEffect(() => {
+    if (recipientMode !== 'group' || !groupSessionId) return
+    setLoadingGroups(true)
+    setGroups([])
+    setSelectedGroupJid('')
+    setGroupParticipants([])
+    setSelectedGroupPhones(new Set())
+    apiClient.getCampaignGroups(groupSessionId)
+      .then(setGroups)
+      .catch(() => {})
+      .finally(() => setLoadingGroups(false))
+  }, [recipientMode, groupSessionId])
+
+  // Load participants when group changes
+  useEffect(() => {
+    if (!selectedGroupJid || !groupSessionId) return
+    setLoadingParticipants(true)
+    setGroupParticipants([])
+    setSelectedGroupPhones(new Set())
+    apiClient.getGroupParticipants(groupSessionId, selectedGroupJid)
+      .then(participants => {
+        setGroupParticipants(participants)
+        setSelectedGroupPhones(new Set(participants.map(p => p.phone)))
+      })
+      .catch(() => {})
+      .finally(() => setLoadingParticipants(false))
+  }, [selectedGroupJid, groupSessionId])
+
   const toggleTag = (tag: string) =>
     setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
 
@@ -202,6 +242,39 @@ function CampaignDrawer({
     }
   }
 
+  const toggleGroupPhone = (phone: string) => {
+    setSelectedGroupPhones(prev => {
+      const next = new Set(prev)
+      if (next.has(phone)) next.delete(phone)
+      else next.add(phone)
+      return next
+    })
+  }
+
+  const toggleAllGroupPhones = () => {
+    const visible = getVisibleParticipants()
+    const allSelected = visible.every(p => selectedGroupPhones.has(p.phone))
+    if (allSelected) {
+      setSelectedGroupPhones(prev => {
+        const next = new Set(prev)
+        visible.forEach(p => next.delete(p.phone))
+        return next
+      })
+    } else {
+      setSelectedGroupPhones(prev => {
+        const next = new Set(prev)
+        visible.forEach(p => next.add(p.phone))
+        return next
+      })
+    }
+  }
+
+  const getVisibleParticipants = () => {
+    let list = groupParticipants
+    if (excludeAdmins) list = list.filter(p => !p.isAdmin)
+    return list
+  }
+
   const handleAddRecipients = async () => {
     const id = campaignId
     if (!id) return alert('Salve a campanha primeiro')
@@ -213,6 +286,15 @@ function CampaignDrawer({
         result = await apiClient.addCampaignRecipientsFromCsv(id, csvText)
       } else if (recipientMode === 'inbox') {
         result = await apiClient.addCampaignRecipientsFromContacts(id, selectedTags, selectedLabelIds)
+      } else if (recipientMode === 'group') {
+        if (!groupSessionId || !selectedGroupJid) return alert('Selecione uma sessão e um grupo')
+        result = await apiClient.addCampaignRecipientsFromGroup(id, {
+          sessionId: groupSessionId,
+          groupJid: selectedGroupJid,
+          excludeAdmins,
+          allowResend,
+          selectedPhones: [...selectedGroupPhones],
+        })
       } else {
         if (!selectedListId) return alert('Selecione uma lista')
         result = await apiClient.addCampaignRecipientsFromList(id, selectedListId)
@@ -347,11 +429,12 @@ function CampaignDrawer({
             <>
               <div className="flex flex-wrap gap-2">
                 {([
-                  { mode: 'phones', label: 'Números', icon: <Phone size={12} /> },
-                  { mode: 'csv', label: 'CSV', icon: <Upload size={12} /> },
-                  { mode: 'inbox', label: 'Do Inbox', icon: <List size={12} /> },
-                  { mode: 'list', label: 'Listas', icon: <List size={12} /> },
-                ] as const).map(({ mode, label, icon }) => (
+                  { mode: 'phones' as const, label: 'Números', icon: <Phone size={12} /> },
+                  { mode: 'csv' as const, label: 'CSV', icon: <Upload size={12} /> },
+                  { mode: 'inbox' as const, label: 'Do Inbox', icon: <List size={12} /> },
+                  { mode: 'list' as const, label: 'Listas', icon: <List size={12} /> },
+                  { mode: 'group' as const, label: 'Grupos', icon: <Users size={12} /> },
+                ]).map(({ mode, label, icon }) => (
                   <button key={mode} onClick={() => setRecipientMode(mode)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${recipientMode === mode ? 'bg-[#00ff88]/20 text-[#00ff88] border border-[#00ff88]/40' : 'bg-white/5 text-gray-400 border border-white/10 hover:text-white'}`}>
                     {icon} {label}
@@ -445,6 +528,123 @@ function CampaignDrawer({
                     <option key={l.id} value={l.id}>{l.name} ({l._count.contacts} contatos)</option>
                   ))}
                 </select>
+              )}
+              {recipientMode === 'group' && (
+                <div className="space-y-4">
+                  {/* Session selector */}
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Sessão WhatsApp</label>
+                    <select value={groupSessionId} onChange={e => setGroupSessionId(e.target.value)}
+                      className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50">
+                      <option value="">Selecione uma sessão...</option>
+                      {sessions.filter(s => s.status === 'connected').map(s => (
+                        <option key={s.id} value={s.id}>{s.name} {s.phoneNumber ? `(${s.phoneNumber})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Group selector */}
+                  {groupSessionId && (
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Grupo</label>
+                      {loadingGroups ? (
+                        <p className="text-gray-500 text-sm py-2">Carregando grupos...</p>
+                      ) : (
+                        <select value={selectedGroupJid} onChange={e => setSelectedGroupJid(e.target.value)}
+                          className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50">
+                          <option value="">Selecione um grupo...</option>
+                          {groups.map(g => (
+                            <option key={g.groupId} value={g.groupId}>{g.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Toggles */}
+                  {selectedGroupJid && (
+                    <div className="flex flex-col gap-3">
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <div className={`w-10 h-6 rounded-full transition relative ${excludeAdmins ? 'bg-[#00ff88]' : 'bg-white/10'}`}
+                            onClick={() => setExcludeAdmins(!excludeAdmins)}>
+                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${excludeAdmins ? 'left-5' : 'left-1'}`} />
+                          </div>
+                          <div>
+                            <p className="text-white text-sm">👑 Excluir administradores</p>
+                            <p className="text-gray-600 text-xs">Remover admins e super admins do grupo</p>
+                          </div>
+                        </label>
+                      </div>
+
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <div className={`w-10 h-6 rounded-full transition relative ${allowResend ? 'bg-[#00ff88]' : 'bg-white/10'}`}
+                            onClick={() => setAllowResend(!allowResend)}>
+                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${allowResend ? 'left-5' : 'left-1'}`} />
+                          </div>
+                          <div>
+                            <p className="text-white text-sm">🔄 Permitir reenvio</p>
+                            <p className="text-gray-600 text-xs">Incluir contatos que já receberam esta campanha</p>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Participants list */}
+                  {selectedGroupJid && (
+                    loadingParticipants ? (
+                      <p className="text-gray-500 text-sm text-center py-4">Carregando participantes...</p>
+                    ) : groupParticipants.length > 0 ? (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs text-gray-400 font-medium">
+                            {getVisibleParticipants().length} participantes
+                            {excludeAdmins && groupParticipants.some(p => p.isAdmin) && (
+                              <span className="text-yellow-500"> ({groupParticipants.filter(p => p.isAdmin).length} admins excluídos)</span>
+                            )}
+                          </p>
+                          <button onClick={toggleAllGroupPhones}
+                            className="text-xs text-[#00ff88] hover:text-[#00dd77] transition">
+                            {getVisibleParticipants().every(p => selectedGroupPhones.has(p.phone)) ? 'Desmarcar todos' : 'Selecionar todos'}
+                          </button>
+                        </div>
+                        <div className="max-h-[240px] overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                          {getVisibleParticipants().map(p => (
+                            <label key={p.phone}
+                              className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition ${
+                                selectedGroupPhones.has(p.phone)
+                                  ? 'bg-[#00ff88]/5 border border-[#00ff88]/20'
+                                  : 'bg-white/5 border border-white/5 hover:border-white/10'
+                              }`}>
+                              <input type="checkbox" checked={selectedGroupPhones.has(p.phone)}
+                                onChange={() => toggleGroupPhone(p.phone)} className="accent-[#00ff88] flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white text-sm truncate">{p.name || p.phone}</p>
+                                {p.name && <p className="text-gray-500 text-xs font-mono">{p.phone}</p>}
+                              </div>
+                              {p.isAdmin && (
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+                                  p.isSuperAdmin
+                                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                                    : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                }`}>
+                                  {p.isSuperAdmin ? '⭐ Super Admin' : '👑 Admin'}
+                                </span>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                        <p className="text-xs text-[#00ff88] mt-2 font-medium">
+                          {selectedGroupPhones.size} selecionados de {getVisibleParticipants().length}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm text-center py-4">Nenhum participante encontrado</p>
+                    )
+                  )}
+                </div>
               )}
 
               <button onClick={handleAddRecipients}

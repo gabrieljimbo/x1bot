@@ -580,6 +580,32 @@ export const apiClient = {
     return data;
   },
 
+  getCampaignGroups: async (sessionId?: string) => {
+    const { data } = await client.get('/api/campaigns/groups', { params: sessionId ? { sessionId } : {} });
+    return data as { groupId: string; name: string; sessionId: string; enabled: boolean }[];
+  },
+
+  getGroupParticipants: async (sessionId: string, groupJid: string) => {
+    const { data } = await client.get(`/api/campaigns/groups/${encodeURIComponent(groupJid)}/participants`, { params: { sessionId } });
+    return data as { phone: string; name: string | null; isAdmin: boolean; isSuperAdmin: boolean }[];
+  },
+
+  addCampaignRecipientsFromGroup: async (id: string, body: {
+    sessionId: string;
+    groupJid: string;
+    excludeAdmins?: boolean;
+    allowResend?: boolean;
+    selectedPhones?: string[];
+  }) => {
+    const { data } = await client.post(`/api/campaigns/${id}/recipients/group`, body);
+    return data;
+  },
+
+  getCampaignSendHistory: async (id: string) => {
+    const { data } = await client.get(`/api/campaigns/${id}/send-history`);
+    return data as { phone: string; name: string | null; sentAt: string }[];
+  },
+
   getCampaignWorkflow: async (id: string) => {
     const { data } = await client.get(`/api/campaigns/${id}/workflow`);
     return data;

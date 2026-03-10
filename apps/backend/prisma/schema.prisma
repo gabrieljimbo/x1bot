@@ -591,15 +591,17 @@ model CampaignWorkflow {
 }
 
 model CampaignRecipient {
-  id         String    @id @default(cuid())
-  campaignId String
-  phone      String
-  name       String?
-  status     String    @default("pending")
-  sentAt     DateTime?
-  error      String?
+  id           String    @id @default(cuid())
+  campaignId   String
+  phone        String
+  name         String?
+  isGroupAdmin Boolean   @default(false)
+  sourceGroup  String?
+  status       String    @default("pending")
+  sentAt       DateTime?
+  error        String?
 
-  campaign   Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign     Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId])
   @@index([phone])

@@ -494,6 +494,118 @@ export class CampaignsService {
     return palette[color] ?? '#888888';
   }
 
+  // ─── GROUPS ──────────────────────────────────────────────────────────────────
+
+  async getGroups(tenantId: string, sessionId?: string) {
+    const where: any = { whatsappSession: { tenantId } };
+    if (sessionId) where.sessionId = sessionId;
+
+    const configs = await this.prisma.whatsappGroupConfig.findMany({
+      where,
+      select: { groupId: true, name: true, sessionId: true, enabled: true },
+      orderBy: { name: 'asc' },
+    });
+
+    return configs.map(g => ({
+      groupId: g.groupId,
+      name: g.name,
+      sessionId: g.sessionId,
+      enabled: g.enabled,
+    }));
+  }
+
+  async getGroupParticipants(tenantId: string, sessionId: string, groupJid: string) {
+    // Verify session belongs to tenant
+    const session = await this.prisma.whatsappSession.findFirst({
+      where: { id: sessionId, tenantId },
+    });
+    if (!session) throw new NotFoundException('Session not found');
+
+    const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId, groupJid);
+
+    return (metadata.participants || []).map((p: any) => {
+      const phone = p.id.split('@')[0];
+      return {
+        phone,
+        name: p.name || p.notify || null,
+        isAdmin: p.admin === 'admin' || p.admin === 'superadmin',
+        isSuperAdmin: p.admin === 'superadmin',
+      };
+    });
+  }
+
+  async addRecipientsFromGroup(
+    campaignId: string,
+    tenantId: string,
+    sessionId: string,
+    groupJid: string,
+    options: {
+      excludeAdmins?: boolean;
+      allowResend?: boolean;
+      selectedPhones?: string[];
+    } = {},
+  ) {
+    const campaign = await this.prisma.campaign.findFirst({ where: { id: campaignId, tenantId } });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+
+    let participants = await this.getGroupParticipants(tenantId, sessionId, groupJid);
+
+    // Filter by selected phones if provided
+    if (options.selectedPhones && options.selectedPhones.length > 0) {
+      const selectedSet = new Set(options.selectedPhones);
+      participants = participants.filter((p: any) => selectedSet.has(p.phone));
+    }
+
+    // Filter out admins if requested
+    if (options.excludeAdmins) {
+      participants = participants.filter((p: any) => !p.isAdmin);
+    }
+
+    // Check send history: filter out phones already sent in this campaign
+    if (!options.allowResend) {
+      const alreadySent = await this.prisma.campaignRecipient.findMany({
+        where: { campaignId, status: 'sent' },
+        select: { phone: true },
+      });
+      const sentPhones = new Set(alreadySent.map(r => r.phone));
+      participants = participants.filter((p: any) => !sentPhones.has(p.phone));
+    }
+
+    // Upsert recipients (avoid duplicates in this campaign)
+    const existing = await this.prisma.campaignRecipient.findMany({
+      where: { campaignId },
+      select: { phone: true },
+    });
+    const existingPhones = new Set(existing.map(r => r.phone));
+    const newOnes = participants.filter((p: any) => !existingPhones.has(p.phone));
+
+    if (newOnes.length > 0) {
+      await this.prisma.campaignRecipient.createMany({
+        data: newOnes.map((p: any) => ({
+          campaignId,
+          phone: p.phone,
+          name: p.name || undefined,
+          isGroupAdmin: p.isAdmin,
+          sourceGroup: groupJid,
+        })),
+      });
+    }
+
+    return { added: newOnes.length, total: existingPhones.size + newOnes.length };
+  }
+
+  async getCampaignSendHistory(tenantId: string, campaignId: string) {
+    await this.assertCampaignBelongs(tenantId, campaignId);
+
+    const sentRecipients = await this.prisma.campaignRecipient.findMany({
+      where: { campaignId, status: 'sent' },
+      select: { phone: true, name: true, sentAt: true },
+      orderBy: { sentAt: 'desc' },
+    });
+
+    return sentRecipients;
+  }
+
   // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
   private async assertCampaignBelongs(tenantId: string, campaignId: string) {
