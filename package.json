@@ -41,10 +41,18 @@
       "canvas": "2.11.2"
     },
     "onlyBuiltDependencies": [
-      "canvas",
-      "sharp",
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "@whiskeysockets/baileys",
       "bcrypt",
-      "puppeteer"
+      "canvas",
+      "msgpackr-extract",
+      "prisma",
+      "protobufjs",
+      "puppeteer",
+      "sharp",
+      "tesseract.js"
     ]
   }
 }
