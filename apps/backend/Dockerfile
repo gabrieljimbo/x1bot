@@ -46,8 +46,16 @@ FROM node:20-slim AS runner-deps
 WORKDIR /app
 ENV NODE_ENV=development
 RUN npm install -g pnpm@10
-# Install openssl for Prisma
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+
+# Install runtime dependencies for native modules (canvas, prisma, openssl)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcairo2 \
+    libpango-1.0-0 \
+    libjpeg62-turbo \
+    libgif7 \
+    librsvg2-2 \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY apps/backend/package.json ./apps/backend/
@@ -58,7 +66,6 @@ COPY apps/backend/prisma ./apps/backend/prisma
 RUN pnpm install --prod
 
 # Generate Prisma Client in production node_modules
-# Setting ENV ensures Prisma sees it before running
 ENV PRISMA_GENERATE_SKIP_AUTOINSTALL=true
 WORKDIR /app/apps/backend
 RUN pnpm prisma generate --schema=prisma/schema.prisma
