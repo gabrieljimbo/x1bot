@@ -25,7 +25,6 @@ async function bootstrap() {
   });
 
   const reflector = app.get(Reflector);
-  const configService = app.get('ConfigService');
 
   // Trust Proxy for Traefik/Reverse Proxy
   // Essential for correct IP detection and secure cookies
