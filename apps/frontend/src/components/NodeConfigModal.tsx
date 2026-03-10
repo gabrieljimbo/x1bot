@@ -1144,10 +1144,15 @@ function ConditionConfig({ config, setConfig }: any) {
   return (
     <div className="space-y-6">
       <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
+        <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <p className="text-xs text-blue-300">
+            💡 <strong>Dica:</strong> Para verificar em qual etapa o lead está, use o campo <strong>etapa</strong> no Valor 1.
+          </p>
+        </div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-200">Conditions</h3>
+          <h3 className="text-sm font-semibold text-gray-200">Condições</h3>
           <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded font-mono">
-            {config.expression || 'no expression'}
+            {config.expression || 'nenhuma expressão'}
           </span>
         </div>
 
@@ -5834,12 +5839,35 @@ export default function NodeConfigModal({
             <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-gray-200">Regras de Roteamento</h3>
-                <button
-                  onClick={addRule}
-                  className="px-3 py-1.5 bg-primary text-black rounded text-xs font-semibold hover:bg-primary/80 transition"
-                >
-                  + Adicionar Regra
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const newRule = {
+                        id: `rule-${Date.now()}`,
+                        value1: 'etapa',
+                        operator: '==',
+                        value2: '',
+                        outputKey: String(switchRules.length),
+                      }
+                      setConfig({ ...config, rules: [...switchRules, newRule] })
+                    }}
+                    className="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700 transition"
+                  >
+                    + Checar Etapa
+                  </button>
+                  <button
+                    onClick={addRule}
+                    className="px-3 py-1.5 bg-primary text-black rounded text-xs font-semibold hover:bg-primary/80 transition"
+                  >
+                    + Regra Personalizada
+                  </button>
+                </div>
+              </div>
+
+              <div className="mb-4 p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
+                <p className="text-xs text-indigo-300">
+                  💡 <strong>Dica Profissional:</strong> Use o botão <strong>+ Checar Etapa</strong> para direcionar leads baseados na etapa que você marcou neles anteriormente!
+                </p>
               </div>
 
               <div className="space-y-4">

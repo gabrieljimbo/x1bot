@@ -882,8 +882,8 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
               {/* Labels for switch outputs */}
               <div className="absolute -right-5 top-0 bottom-0 flex flex-col justify-around text-[9px] font-bold py-2">
                 {switchRules.map((rule: any, index: number) => (
-                  <span key={rule.id || index} className="text-indigo-400 truncate">
-                    {index}
+                  <span key={rule.id || index} className="text-indigo-400 truncate max-w-[40px]" title={rule.value2 || String(index)}>
+                    {rule.value2 || index}
                   </span>
                 ))}
                 <span className="text-yellow-400">Def</span>

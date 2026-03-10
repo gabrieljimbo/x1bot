@@ -283,7 +283,7 @@ export class NodeExecutorService {
         return await this.executeRmkt(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.MARK_STAGE:
-        return this.executeMarkStage(node, context, edges);
+        return await this.executeMarkStage(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.PROMO_ML:
         return this.executePromoML(node, context, edges, sessionId, contactPhone);
@@ -2315,12 +2315,39 @@ functions, etc.)
   /**
    * Execute MARK_STAGE node
    */
-  private executeMarkStage(
-    node: any,
-    context: any,
+  private async executeMarkStage(
+    node: WorkflowNode,
+    context: ExecutionContext,
     edges: any[],
-  ): any {
-    // This is a passive node for analytics, just move to next node
+    sessionId?: string,
+    contactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as any;
+    const stageName = config.stageName || 'Sem Etapa';
+
+    // Get contact info from context if available
+    const finalSessionId = sessionId || context.variables._sessionId;
+    const finalContactPhone = contactPhone || context.variables._contactPhone;
+    const tenantId = context.variables._tenantId;
+
+    if (finalSessionId && finalContactPhone && tenantId) {
+      console.log(`[MARK_STAGE] Marking stage "${stageName}" for ${finalContactPhone}`);
+
+      // Get current tags
+      const currentTags = await this.contactTagsService.getTags(tenantId, finalSessionId, finalContactPhone);
+
+      // Filter out existing stage tags and add the new one
+      const otherTags = currentTags.filter(t => !t.startsWith('stage:'));
+      const newTags = [...otherTags, `stage:${stageName}`];
+
+      // Persist
+      await this.contactTagsService.setTags(tenantId, finalSessionId, finalContactPhone, newTags);
+
+      // Update current context immediately
+      context.variables.etapa = stageName;
+      context.variables.contactStage = stageName; // Alias for English users
+    }
+
     const nextEdge = edges.find((e) => e.source === node.id);
     const nextNodeId = nextEdge ? nextEdge.target : null;
 

@@ -277,6 +277,19 @@ export class ExecutionEngineService implements OnModuleInit {
       };
       baseContext.variables.contactTags = contactTags; // Make tags available in all nodes
       baseContext.variables._tenantId = tenantId; // Nodes like PROMO_SHOPEE need this
+      baseContext.variables._sessionId = sessionId;
+      baseContext.variables._contactPhone = contactPhone;
+
+      // Extract current stage from tags if present
+      const stageTag = contactTags.find(t => t.startsWith('stage:'));
+      if (stageTag) {
+        const stageName = stageTag.replace('stage:', '');
+        baseContext.variables.etapa = stageName;
+        baseContext.variables.contactStage = stageName;
+      } else {
+        baseContext.variables.etapa = '';
+        baseContext.variables.contactStage = '';
+      }
 
       // Create execution with normalized payload
       const execution = await this.prisma.workflowExecution.create({
