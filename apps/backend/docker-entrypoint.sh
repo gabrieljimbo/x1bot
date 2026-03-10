@@ -23,4 +23,4 @@ echo "🌱 Running database seeds..."
 node prisma/seed.js || echo "⚠️ Seed failed but continuing..."
 
 echo "🚀 Starting application..."
-exec pnpm start
+exec npm start

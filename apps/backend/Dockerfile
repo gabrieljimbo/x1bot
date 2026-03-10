@@ -43,6 +43,9 @@ RUN pnpm build
 ############################
 FROM node:20-slim AS production
 
+# Install pnpm in production stage as well
+RUN npm install -g pnpm@10 --registry=https://registry.npmjs.org/
+
 WORKDIR /app
 
 # Install runtime libraries only
