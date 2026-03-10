@@ -236,5 +236,17 @@ export class AuthService {
   async revokeAllUserTokens(userId: string) {
     await this.asyncDeleteKeys(`auth:refresh:${userId}:*`);
   }
+
+  async validateUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || !user.isActive) {
+      return null;
+    }
+
+    return user;
+  }
 }
 
