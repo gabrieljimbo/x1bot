@@ -2,6 +2,7 @@
 FROM node:20-slim AS builder
 
 WORKDIR /app
+ENV NODE_ENV=development
 
 # Install pnpm and build dependencies
 RUN npm install -g pnpm@10
@@ -43,6 +44,7 @@ RUN pnpm build
 # Stage 2: Production Dependencies (Minimal)
 FROM node:20-slim AS runner-deps
 WORKDIR /app
+ENV NODE_ENV=development
 RUN npm install -g pnpm@10
 # Install openssl for Prisma
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
