@@ -42,7 +42,7 @@ services:
       labels:
       - traefik.enable=true
       - traefik.docker.network=traefik-public
-      - traefik.http.routers.backend-n9n.rule=Host(`${API_DOMAIN:-api.x1bot.cloud}`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`))
+      - traefik.http.routers.backend-n9n.rule=Host(`${API_DOMAIN:-api.n9n.archcode.space}`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`))
       - traefik.http.routers.backend-n9n.entrypoints=websecure
       - traefik.http.routers.backend-n9n.tls=true
       - traefik.http.routers.backend-n9n.tls.certresolver=letsencryptresolver
@@ -55,8 +55,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3040
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.x1bot.cloud}
-      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-https://api.x1bot.cloud}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.n9n.archcode.space}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-https://api.n9n.archcode.space}
 
     networks:
       - traefik-public
