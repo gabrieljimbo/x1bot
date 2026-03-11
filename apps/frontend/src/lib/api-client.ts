@@ -50,12 +50,12 @@ export const apiClient = {
 
   // Auth
   login: async (email: string, password: string) => {
-    const { data } = await client.post('/api/auth/login', { email, password })
+    const { data } = await client.post('/auth/login', { email, password })
     return data
   },
 
   register: async (email: string, password: string, name?: string, tenantName: string = '') => {
-    const { data } = await client.post('/api/auth/register', {
+    const { data } = await client.post('/auth/register', {
       email,
       password,
       name,
@@ -67,7 +67,7 @@ export const apiClient = {
   // Workflows
   getWorkflows: async (tenantId?: string) => {
     const params = tenantId ? { tenantId } : {}
-    const { data } = await client.get('/api/workflows', { params })
+    const { data } = await client.get('/workflows', { params })
     return data
   },
 
@@ -79,7 +79,7 @@ export const apiClient = {
 
   createWorkflow: async (name: string, description?: string, tenantId?: string) => {
     const params = tenantId ? { tenantId } : {}
-    const { data } = await client.post('/api/workflows', { name, description }, { params })
+    const { data } = await client.post('/workflows', { name, description }, { params })
     return data
   },
 
@@ -124,7 +124,7 @@ export const apiClient = {
   // WhatsApp Sessions
   getWhatsappSessions: async (tenantId?: string) => {
     const params = tenantId ? { tenantId } : {}
-    const { data } = await client.get('/api/whatsapp/sessions', { params })
+    const { data } = await client.get('/whatsapp/sessions', { params })
     return data
   },
 
@@ -136,7 +136,7 @@ export const apiClient = {
 
   createWhatsappSession: async (name: string, tenantId?: string) => {
     const params = tenantId ? { tenantId } : {}
-    const { data } = await client.post('/api/whatsapp/sessions', { name }, { params })
+    const { data } = await client.post('/whatsapp/sessions', { name }, { params })
     return data
   },
 
@@ -189,14 +189,14 @@ export const apiClient = {
   },
 
   getGroupLinks: async (tenantId: string) => {
-    const { data } = await client.get('/api/whatsapp/groups/links', {
+    const { data } = await client.get('/whatsapp/groups/links', {
       params: { tenantId }
     })
     return data
   },
 
   createGroupLink: async (groupJid: string, workflowId: string, tenantId: string) => {
-    const { data } = await client.post('/api/whatsapp/groups/links', { groupJid, workflowId, tenantId })
+    const { data } = await client.post('/whatsapp/groups/links', { groupJid, workflowId, tenantId })
     return data
   },
 
@@ -207,7 +207,7 @@ export const apiClient = {
   },
 
   getGroupOffers: async (tenantId: string) => {
-    const { data } = await client.get('/api/whatsapp/groups/offers', {
+    const { data } = await client.get('/whatsapp/groups/offers', {
       params: { tenantId }
     })
     return data
@@ -276,7 +276,7 @@ export const apiClient = {
 
   // Tags
   getTags: async () => {
-    const { data } = await client.get('/api/tags')
+    const { data } = await client.get('/tags')
     return data
   },
 
@@ -286,7 +286,7 @@ export const apiClient = {
   },
 
   createTag: async (name: string, color?: string, description?: string) => {
-    const { data } = await client.post('/api/tags', { name, color, description })
+    const { data } = await client.post('/tags', { name, color, description })
     return data
   },
 
@@ -301,7 +301,7 @@ export const apiClient = {
 
   // Admin - Tenants (SUPER_ADMIN only)
   getTenants: async () => {
-    const { data } = await client.get('/api/admin/tenants')
+    const { data } = await client.get('/admin/tenants')
     return data
   },
 
@@ -311,12 +311,12 @@ export const apiClient = {
   },
 
   getMyTenant: async () => {
-    const { data } = await client.get('/api/tenant/me')
+    const { data } = await client.get('/tenant/me')
     return data
   },
 
   createTenant: async (name: string, email: string) => {
-    const { data } = await client.post('/api/admin/tenants', { name, email })
+    const { data } = await client.post('/admin/tenants', { name, email })
     return data
   },
 
@@ -331,7 +331,7 @@ export const apiClient = {
 
   // Admin - Users
   getUsers: async () => {
-    const { data } = await client.get('/api/admin/users')
+    const { data } = await client.get('/admin/users')
     return data
   },
 
@@ -341,7 +341,7 @@ export const apiClient = {
   },
 
   createUser: async (email: string, password: string, name: string, tenantId: string, role?: string) => {
-    const { data } = await client.post('/api/admin/users', {
+    const { data } = await client.post('/admin/users', {
       email,
       password,
       name,
@@ -362,18 +362,18 @@ export const apiClient = {
 
   // WhatsApp Global Config
   getWhatsappConfig: async () => {
-    const { data } = await client.get('/api/whatsapp/config')
+    const { data } = await client.get('/whatsapp/config')
     return data
   },
 
   updateWhatsappConfig: async (config: any) => {
-    const { data } = await client.post('/api/whatsapp/config', config)
+    const { data } = await client.post('/whatsapp/config', config)
     return data
   },
 
   // Licensing
   getLicenses: async () => {
-    const { data } = await client.get('/api/admin/users/licenses')
+    const { data } = await client.get('/admin/users/licenses')
     return data
   },
 
@@ -392,7 +392,7 @@ export const apiClient = {
     limit?: number
     search?: string
   }) => {
-    const { data } = await client.get('/api/inbox', { params })
+    const { data } = await client.get('/inbox', { params })
     return data
   },
 
@@ -432,7 +432,7 @@ export const apiClient = {
   },
 
   getInboxStats: async () => {
-    const { data } = await client.get('/api/inbox/stats')
+    const { data } = await client.get('/inbox/stats')
     return data
   },
 
@@ -448,16 +448,16 @@ export const apiClient = {
 
   // Leads
   getLeadOrigins: async (period?: string) => {
-    const { data } = await client.get('/api/leads/origins', { params: { period } })
+    const { data } = await client.get('/leads/origins', { params: { period } })
     return data
   },
   getPixels: async () => {
-    const { data } = await client.get('/api/leads/pixels');
+    const { data } = await client.get('/leads/pixels');
     return data;
   },
 
   createPixel: async (data: any) => {
-    const { data: responseData } = await client.post('/api/leads/pixels', data);
+    const { data: responseData } = await client.post('/leads/pixels', data);
     return responseData;
   },
 
@@ -476,18 +476,18 @@ export const apiClient = {
   },
 
   getPixelConfig: async () => {
-    const { data } = await client.get('/api/leads/pixel-config');
+    const { data } = await client.get('/leads/pixel-config');
     return data;
   },
 
   updatePixelConfig: async (config: any) => {
-    const { data } = await client.patch('/api/leads/pixel-config', config);
+    const { data } = await client.patch('/leads/pixel-config', config);
     return data;
   },
 
   // API Configs (per-tenant, per-provider credentials)
   getApiConfigs: async () => {
-    const { data } = await client.get('/api/api-configs');
+    const { data } = await client.get('/api-configs');
     return data;
   },
 
@@ -507,7 +507,7 @@ export const apiClient = {
 
   // Campaigns
   getCampaigns: async (type?: string, isTemplate?: boolean) => {
-    const { data } = await client.get('/api/campaigns', { params: { type, isTemplate } });
+    const { data } = await client.get('/campaigns', { params: { type, isTemplate } });
     return data;
   },
 
@@ -517,7 +517,7 @@ export const apiClient = {
   },
 
   createCampaign: async (payload: any) => {
-    const { data } = await client.post('/api/campaigns', payload);
+    const { data } = await client.post('/campaigns', payload);
     return data;
   },
 
@@ -556,12 +556,12 @@ export const apiClient = {
   },
 
   getCampaignTags: async () => {
-    const { data } = await client.get('/api/campaigns/tags');
+    const { data } = await client.get('/campaigns/tags');
     return data as { tag: string; count: number }[];
   },
 
   getCampaignWhatsappLabels: async () => {
-    const { data } = await client.get('/api/campaigns/whatsapp-labels');
+    const { data } = await client.get('/campaigns/whatsapp-labels');
     return data as { id: string; name: string; color: string; count: number }[];
   },
 
@@ -581,7 +581,7 @@ export const apiClient = {
   },
 
   getCampaignGroups: async (sessionId?: string) => {
-    const { data } = await client.get('/api/campaigns/groups', { params: sessionId ? { sessionId } : {} });
+    const { data } = await client.get('/campaigns/groups', { params: sessionId ? { sessionId } : {} });
     return data as { groupId: string; name: string; sessionId: string; enabled: boolean }[];
   },
 
@@ -617,22 +617,22 @@ export const apiClient = {
   },
 
   getCampaignWorkflowsList: async () => {
-    const { data } = await client.get('/api/campaigns/workflows');
+    const { data } = await client.get('/campaigns/workflows');
     return data;
   },
 
   duplicateWorkflowTo: async (body: { sourceId: string; sourceType: string; targetType: string; name: string }) => {
-    const { data } = await client.post('/api/workflows/duplicate-to', body);
+    const { data } = await client.post('/workflows/duplicate-to', body);
     return data;
   },
 
   getCampaignBlacklist: async () => {
-    const { data } = await client.get('/api/campaigns/blacklist');
+    const { data } = await client.get('/campaigns/blacklist');
     return data;
   },
 
   addToBlacklist: async (phone: string, reason?: string) => {
-    const { data } = await client.post('/api/campaigns/blacklist', { phone, reason });
+    const { data } = await client.post('/campaigns/blacklist', { phone, reason });
     return data;
   },
 
@@ -642,7 +642,7 @@ export const apiClient = {
 
   // Contact Lists
   getContactLists: async () => {
-    const { data } = await client.get('/api/contact-lists');
+    const { data } = await client.get('/contact-lists');
     return data;
   },
 
@@ -652,7 +652,7 @@ export const apiClient = {
   },
 
   createContactList: async (name: string, description?: string) => {
-    const { data } = await client.post('/api/contact-lists', { name, description });
+    const { data } = await client.post('/contact-lists', { name, description });
     return data;
   },
 
@@ -695,12 +695,12 @@ export const apiClient = {
     catId?: number;
     extraCommissionOnly?: boolean;
   }) => {
-    const { data } = await client.get('/api/products/search', { params });
+    const { data } = await client.get('/products/search', { params });
     return data as { products: any[]; fromCache: boolean; hasNextPage: boolean };
   },
 
   clearProductsCache: async () => {
-    const { data } = await client.delete('/api/products/cache');
+    const { data } = await client.delete('/products/cache');
     return data as { deleted: number };
   },
 
