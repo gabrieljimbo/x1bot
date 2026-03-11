@@ -22,6 +22,11 @@ RUN NODE_ENV=production pnpm build
 WORKDIR /app/apps/frontend
 # Create public directory if it doesn't exist (Next.js may need it)
 RUN mkdir -p public
+
+# Build-time environment variable for API URL
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN NODE_ENV=production pnpm build
 
 # Production stage
@@ -58,4 +63,3 @@ ENV PORT=3040
 
 # Start the application
 CMD ["pnpm", "start"]
-
