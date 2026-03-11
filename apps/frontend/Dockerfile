@@ -11,18 +11,19 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared ./packages/shared
 COPY apps/frontend ./apps/frontend
 
-# Install dependencies
-RUN pnpm install
+# Install ALL dependencies (including devDeps for building)
+# Force NODE_ENV=development inline to prevent Coolify's build-arg from skipping devDeps
+RUN NODE_ENV=development pnpm install
 
 # Build shared package
 WORKDIR /app/packages/shared
-RUN pnpm build
+RUN NODE_ENV=development pnpm build
 
 # Build frontend
 WORKDIR /app/apps/frontend
 # Create public directory if it doesn't exist (Next.js may need it)
 RUN mkdir -p public
-RUN pnpm build
+RUN NODE_ENV=development pnpm build
 
 # Production stage
 FROM node:18-alpine AS production
@@ -32,22 +33,21 @@ RUN npm install -g pnpm@10
 
 WORKDIR /app
 
-# Copy workspace files
+# Copy workspace files for production pnpm install
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/shared ./packages/shared
-COPY apps/frontend ./apps/frontend
+COPY packages/shared/package.json ./packages/shared/package.json
+COPY apps/frontend/package.json ./apps/frontend/package.json
 
-# Install production dependencies only
-RUN pnpm install --prod
+# Install only production dependencies
+RUN NODE_ENV=production pnpm install --prod
 
 # Copy built files from build stage
+WORKDIR /app
 COPY --from=base /app/packages/shared/dist ./packages/shared/dist
 COPY --from=base /app/apps/frontend/.next ./apps/frontend/.next
 COPY --from=base /app/apps/frontend/next.config.js ./apps/frontend/next.config.js
 COPY --from=base /app/apps/frontend/package.json ./apps/frontend/package.json
-# Create public directory (Next.js needs it, even if empty)
-WORKDIR /app/apps/frontend
-RUN mkdir -p public
+COPY --from=base /app/apps/frontend/public ./apps/frontend/public
 
 WORKDIR /app/apps/frontend
 

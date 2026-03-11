@@ -2,7 +2,10 @@
 FROM node:20-slim AS builder
 
 WORKDIR /app
-ENV NODE_ENV=development
+
+# IMPORTANT: Coolify passes NODE_ENV=production as --build-arg which overrides ENV.
+# We must use explicit inline NODE_ENV=development on RUN commands that need devDependencies.
+# Do NOT rely on ENV NODE_ENV=development here as it gets overridden by build-args.
 
 # Install pnpm and build dependencies
 RUN npm install -g pnpm@10
@@ -25,7 +28,8 @@ COPY apps/backend/package.json ./apps/backend/
 COPY packages/shared/package.json ./packages/shared/
 
 # Install ALL dependencies (including devDeps for building)
-RUN pnpm install
+# Force NODE_ENV=development inline to prevent Coolify's build-arg from skipping devDeps
+RUN NODE_ENV=development pnpm install
 
 # Copy source code
 COPY apps/backend ./apps/backend
@@ -38,15 +42,14 @@ WORKDIR /app
 
 # Build shared library then backend
 WORKDIR /app/packages/shared
-RUN pnpm build
+RUN NODE_ENV=development pnpm build
 
 WORKDIR /app/apps/backend
-RUN pnpm build
+RUN NODE_ENV=development pnpm build
 
 # Stage 2: Production Dependencies (Minimal)
 FROM node:20-slim AS runner-deps
 WORKDIR /app
-ENV NODE_ENV=development
 RUN npm install -g pnpm@10
 
 # Install runtime dependencies for native modules (canvas, prisma, openssl)
@@ -67,12 +70,11 @@ COPY packages/shared/package.json ./packages/shared/
 COPY apps/backend/prisma ./apps/backend/prisma
 
 # Install only production dependencies
-RUN pnpm install --prod
+RUN NODE_ENV=production pnpm install --prod
 
 # Generate Prisma Client in production node_modules
-ENV PRISMA_GENERATE_SKIP_AUTOINSTALL=true
 WORKDIR /app/apps/backend
-RUN pnpm prisma generate --schema=prisma/schema.prisma
+RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=true pnpm prisma generate --schema=prisma/schema.prisma
 WORKDIR /app
 
 # Stage 3: Runtime image
