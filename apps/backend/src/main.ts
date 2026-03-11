@@ -16,6 +16,15 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 
+const parseOrigins = (value?: string): string[] =>
+  (value || '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+const normalizeOrigin = (origin: string): string =>
+  origin.replace(/\/$/, '').toLowerCase();
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     // Reduce logging in production
@@ -66,17 +75,35 @@ async function bootstrap() {
   app.useGlobalGuards(new JwtAuthGuard(reflector));
   app.useGlobalInterceptors(new LoggingInterceptor());
 
-  const allowedOrigins = [
+  const defaultOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
-    process.env.CORS_ORIGIN,
-    process.env.FRONTEND_URL,
     'https://x1bot.cloud',
-    'https://api.n9n.archcode.space'
-  ].filter((v) => !!v) as string[];
+    'https://www.x1bot.cloud',
+    'https://api.n9n.archcode.space',
+  ];
+
+  const allowedOrigins = Array.from(
+    new Set(
+      [
+        ...defaultOrigins,
+        ...parseOrigins(process.env.CORS_ORIGIN),
+        ...parseOrigins(process.env.FRONTEND_URL),
+      ].map(normalizeOrigin),
+    ),
+  );
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // Allow non-browser clients (curl, server-to-server, health checks)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(normalizeOrigin(origin))) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`Origin not allowed by CORS: ${origin}`), false);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: [
@@ -88,6 +115,7 @@ async function bootstrap() {
       'x-hmac-signature', 
       'x-timestamp'
     ],
+    optionsSuccessStatus: 204,
   });
 
   app.useGlobalPipes(

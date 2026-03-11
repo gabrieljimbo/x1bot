@@ -8,9 +8,38 @@ import { Server, Socket } from 'socket.io';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { WorkflowEvent, EventType } from '@n9n/shared';
 
+const parseOrigins = (value?: string): string[] =>
+  (value || '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+const normalizeOrigin = (origin: string): string =>
+  origin.replace(/\/$/, '').toLowerCase();
+
+const allowedOrigins = Array.from(
+  new Set(
+    [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://x1bot.cloud',
+      'https://www.x1bot.cloud',
+      'https://api.n9n.archcode.space',
+      ...parseOrigins(process.env.CORS_ORIGIN),
+      ...parseOrigins(process.env.FRONTEND_URL),
+    ].map(normalizeOrigin),
+  ),
+);
+
 @WebSocketGateway({
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(normalizeOrigin(origin))) {
+        return callback(null, true);
+      }
+      return callback(new Error(`Origin not allowed by WS CORS: ${origin}`), false);
+    },
     credentials: true,
   },
 })
