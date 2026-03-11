@@ -104,6 +104,7 @@ export interface WorkflowExecution {
   workflowId: string;
   sessionId: string;
   contactPhone: string;
+  campaignId?: string;
   currentNodeId: string | null;
   status: ExecutionStatus;
   context: ExecutionContext;

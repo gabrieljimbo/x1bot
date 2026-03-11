@@ -57,9 +57,20 @@ const STATUS_COLORS: Record<CampaignStatus, string> = {
 
 function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () => void }) {
   const [stats, setStats] = useState<Stats | null>(null)
+  const [insights, setInsights] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
-    try { setStats(await apiClient.getCampaignStats(campaignId)) } catch { /* noop */ }
+    try {
+      const [statsData, insightsData] = await Promise.all([
+        apiClient.getCampaignStats(campaignId),
+        apiClient.getCampaignInsights(campaignId).catch(() => null)
+      ])
+      setStats(statsData)
+      setInsights(insightsData)
+    } catch { /* noop */ } finally {
+      setLoading(false)
+    }
   }, [campaignId])
 
   useEffect(() => {
@@ -70,38 +81,103 @@ function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () =
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-md">
+      <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h2 className="text-white font-bold text-lg">Progresso da Campanha</h2>
+          <h2 className="text-white font-bold text-lg">Insights da Campanha</h2>
           <div className="flex gap-2">
             <button onClick={load} className="text-gray-400 hover:text-white"><RefreshCw size={16} /></button>
             <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={20} /></button>
           </div>
         </div>
-        <div className="p-6">
-          {!stats ? (
-            <p className="text-gray-400 text-center py-6">Carregando...</p>
+        <div className="p-6 overflow-y-auto">
+          {loading && !stats ? (
+            <div className="flex justify-center py-10"><div className="w-8 h-8 border-2 border-[#00ff88]/30 border-t-[#00ff88] rounded-full animate-spin" /></div>
           ) : (
-            <div className="space-y-4">
-              <div className="relative h-3 bg-white/10 rounded-full overflow-hidden">
-                <div className="absolute inset-y-0 left-0 bg-[#00ff88] rounded-full transition-all" style={{ width: `${stats.progress}%` }} />
-              </div>
-              <p className="text-center text-[#00ff88] font-bold text-3xl">{stats.progress}%</p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Total', value: stats.total, color: 'text-white' },
-                  { label: 'Enviados', value: stats.sent, color: 'text-green-400' },
-                  { label: 'Pendentes', value: stats.pending, color: 'text-yellow-400' },
-                  { label: 'Falhos', value: stats.failed, color: 'text-red-400' },
-                  { label: 'Bloqueados', value: stats.blocked, color: 'text-orange-400' },
-                ].map(item => (
-                  <div key={item.label} className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
-                    <p className={`text-2xl font-bold ${item.color}`}>{item.value}</p>
-                    <p className="text-xs text-gray-500">{item.label}</p>
+            <div className="space-y-6">
+              {/* Progress Section */}
+              {stats && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-white font-medium">Progresso de Envio</h3>
+                    <span className="text-[#00ff88] font-bold">{stats.progress}%</span>
                   </div>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500 text-center">Atualiza a cada 5 segundos</p>
+                  <div className="relative h-3 bg-white/10 rounded-full overflow-hidden mb-4">
+                    <div className="absolute inset-y-0 left-0 bg-[#00ff88] rounded-full transition-all" style={{ width: `${stats.progress}%` }} />
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {[
+                      { label: 'Total', value: stats.total, color: 'text-white' },
+                      { label: 'Enviados', value: stats.sent, color: 'text-green-400' },
+                      { label: 'Pendentes', value: stats.pending, color: 'text-yellow-400' },
+                      { label: 'Falhas', value: stats.failed, color: 'text-red-400' },
+                      { label: 'Bloqueados', value: stats.blocked, color: 'text-orange-400' },
+                    ].map(item => (
+                      <div key={item.label} className="bg-black/30 rounded-lg p-3 text-center">
+                        <p className={`text-xl font-bold ${item.color}`}>{item.value}</p>
+                        <p className="text-xs text-gray-500 mt-1">{item.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Conversion/Funnel Section */}
+              {insights && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-5">
+                  <h3 className="text-white font-medium mb-4">Funil de Interações</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-black/30 rounded-lg p-4 flex flex-col items-center justify-center border-b-2 border-blue-500/50">
+                      <p className="text-sm text-gray-400 mb-1">Leads Alcançados</p>
+                      <p className="text-3xl font-bold text-white">{insights.totalTargeted}</p>
+                      <p className="text-xs text-blue-400 mt-2">Topo do funil</p>
+                    </div>
+                    <div className="bg-black/30 rounded-lg p-4 flex flex-col items-center justify-center border-b-2 border-purple-500/50">
+                      <p className="text-sm text-gray-400 mb-1">Interações</p>
+                      <p className="text-3xl font-bold text-white">{insights.totalInteracted}</p>
+                      <p className="text-xs text-purple-400 mt-2">
+                        {insights.totalSent > 0 ? Math.round((insights.totalInteracted / insights.totalSent) * 100) : 0}% dos enviados
+                      </p>
+                    </div>
+                    <div className="bg-black/30 rounded-lg p-4 flex flex-col items-center justify-center border-b-2 border-[#00ff88]/50">
+                      <p className="text-sm text-gray-400 mb-1">Taxa de Conversão</p>
+                      <div className="flex items-baseline gap-1">
+                        <p className="text-3xl font-bold text-[#00ff88]">{insights.conversionRate.toFixed(1)}</p>
+                        <span className="text-[#00ff88] font-bold">%</span>
+                      </div>
+                      <p className="text-xs text-[#00ff88]/70 mt-2">Leads qualificados / enviados</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Node Stats (Workflow Details) */}
+              {insights?.nodeStats?.length > 0 && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-5">
+                  <h3 className="text-white font-medium mb-4">Métricas por Etapa (Fluxo)</h3>
+                  <div className="space-y-3">
+                    {insights.nodeStats.map((stat: any) => {
+                      const successRate = stat.totalExecutions > 0 ? Math.round((stat.successCount / stat.totalExecutions) * 100) : 0;
+                      return (
+                        <div key={stat.nodeId} className="bg-black/30 rounded-lg p-4 flex items-center justify-between">
+                          <div>
+                            <p className="text-white text-sm font-medium">Nó: {stat.nodeId}</p>
+                            <p className="text-xs text-gray-500">
+                              {stat.totalExecutions} execuções • {stat.failCount} falhas
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end">
+                            <span className="text-[#00ff88] font-bold">{successRate}% sucesso</span>
+                            <div className="w-24 h-1.5 bg-white/10 rounded-full mt-1 overflow-hidden">
+                              <div className="h-full bg-[#00ff88]" style={{ width: `${successRate}%` }} />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
         </div>

@@ -550,6 +550,11 @@ export const apiClient = {
     return data;
   },
 
+  getCampaignInsights: async (id: string) => {
+    const { data } = await client.get(`/api/campaigns/${id}/insights`);
+    return data;
+  },
+
   addCampaignRecipientsFromContacts: async (id: string, tags?: string[], whatsappLabelIds?: string[]) => {
     const { data } = await client.post(`/api/campaigns/${id}/recipients/contacts`, { tags, whatsappLabelIds });
     return data;

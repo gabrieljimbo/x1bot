@@ -115,6 +115,11 @@ export class CampaignsController {
     return this.campaignsService.getCampaignStats(id);
   }
 
+  @Get(':id/insights')
+  getCampaignInsights(@Request() req: any, @Param('id') id: string) {
+    return this.campaignsService.getCampaignInsights(req.user.tenantId, id);
+  }
+
   // ─── RECIPIENTS ──────────────────────────────────────────────────────────────
 
   @Post(':id/recipients/contacts')

@@ -364,6 +364,63 @@ export class CampaignsService {
     return { total, sent, failed, blocked, pending, progress };
   }
 
+  async getCampaignInsights(tenantId: string, campaignId: string) {
+    await this.assertCampaignBelongs(tenantId, campaignId);
+
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      include: {
+        _count: {
+          select: {
+            recipients: true,
+          }
+        },
+        workflow: true,
+      }
+    });
+
+    if (!campaign) throw new NotFoundException('Campaign not found');
+
+    const [sentCount, interactedCount, nodeStats] = await Promise.all([
+      this.prisma.campaignRecipient.count({
+        where: { campaignId, status: 'sent' }
+      }),
+      this.prisma.workflowExecution.count({
+        where: { campaignId, interactionCount: { gt: 0 } }
+      }),
+      this.prisma.workflowNodeStats.findMany({
+        where: {
+          OR: [
+            { workflowId: `shadow-${campaignId}` },
+            { workflowId: campaign.workflowId || 'none' }
+          ]
+        },
+        orderBy: { totalExecutions: 'desc' }
+      })
+    ]);
+
+    // Group node stats by nodeId to merge shadow and regular workflow stats if any
+    const mergedNodeStats = nodeStats.reduce((acc, stat) => {
+      if (!acc[stat.nodeId]) {
+        acc[stat.nodeId] = { ...stat };
+      } else {
+        acc[stat.nodeId].totalExecutions += stat.totalExecutions;
+        acc[stat.nodeId].successCount += stat.successCount;
+        acc[stat.nodeId].failCount += stat.failCount;
+      }
+      return acc;
+    }, {} as Record<string, any>);
+
+    return {
+      totalTargeted: campaign._count.recipients,
+      totalSent: sentCount,
+      totalInteracted: interactedCount,
+      conversionRate: sentCount > 0 ? (interactedCount / sentCount) * 100 : 0,
+      nodeStats: Object.values(mergedNodeStats),
+      workflow: campaign.workflow,
+    };
+  }
+
   // ─── WORKER ───────────────────────────────────────────────────────────────────
 
   async processCampaign(campaignId: string) {
@@ -450,7 +507,7 @@ export class CampaignsService {
               recipient.phone,
               undefined,
               undefined,
-              { triggerType: 'CAMPAIGN_START' }
+              { triggerType: 'CAMPAIGN_START', campaignId: campaign.id }
             );
           } else {
             // Fallback: workflowId references a regular Workflow
@@ -461,7 +518,7 @@ export class CampaignsService {
               recipient.phone,
               undefined,
               undefined,
-              { triggerType: 'CAMPAIGN' },
+              { triggerType: 'CAMPAIGN', campaignId: campaign.id },
             );
           }
         } else {

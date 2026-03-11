@@ -127,6 +127,7 @@ export class ExecutionEngineService implements OnModuleInit {
       force?: boolean;
       triggerNodeId?: string;
       triggerType?: string;
+      campaignId?: string;
     }
   ): Promise<WorkflowExecution> {
     // Acquire lock to prevent duplicate executions
@@ -298,6 +299,7 @@ export class ExecutionEngineService implements OnModuleInit {
           workflowId,
           sessionId,
           contactPhone,
+          campaignId: options?.campaignId,
           currentNodeId: triggerNode.id,
           status: ExecutionStatus.RUNNING,
           context: baseContext, // Use the prepared context
