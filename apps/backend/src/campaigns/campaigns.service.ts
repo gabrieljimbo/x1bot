@@ -354,13 +354,13 @@ export class CampaignsService {
             name: `[Auto] Campanha: ${campaign.name}`,
             description: 'Workflow virtual gerado automaticamente',
             isActive: true,
-            nodes: campaignWf.nodes,
-            edges: campaignWf.edges,
+            nodes: campaignWf.nodes ? (campaignWf.nodes as any) : [],
+            edges: campaignWf.edges ? (campaignWf.edges as any) : [],
           },
           update: {
             name: `[Auto] Campanha: ${campaign.name}`,
-            nodes: campaignWf.nodes,
-            edges: campaignWf.edges,
+            nodes: campaignWf.nodes ? (campaignWf.nodes as any) : [],
+            edges: campaignWf.edges ? (campaignWf.edges as any) : [],
             isActive: true,
           }
         });
