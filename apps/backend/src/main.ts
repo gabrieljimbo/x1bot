@@ -39,6 +39,9 @@ async function bootstrap() {
   // Essential for correct IP detection and secure cookies
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
+  // Set Global API Prefix
+  app.setGlobalPrefix('api');
+
   // Security Middlewares
   app.use(helmet({
     contentSecurityPolicy: {

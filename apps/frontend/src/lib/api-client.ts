@@ -3,7 +3,7 @@ import axios from 'axios'
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
 
 const client = axios.create({
-  baseURL: API_URL,
+  baseURL: `${API_URL}/api`,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -494,17 +494,17 @@ export const apiClient = {
   },
 
   upsertApiConfig: async (provider: string, appId: string, secret: string) => {
-    const { data } = await client.post(`/api/api-configs/${provider}`, { appId, secret });
+    const { data } = await client.post(`/api-configs/${provider}`, { appId, secret });
     return data;
   },
 
   setApiConfigActive: async (provider: string, isActive: boolean) => {
-    const { data } = await client.patch(`/api/api-configs/${provider}/active`, { isActive });
+    const { data } = await client.patch(`/api-configs/${provider}/active`, { isActive });
     return data;
   },
 
   deleteApiConfig: async (provider: string) => {
-    await client.delete(`/api/api-configs/${provider}`);
+    await client.delete(`/api-configs/${provider}`);
   },
 
   // Campaigns
@@ -529,7 +529,7 @@ export const apiClient = {
   },
 
   deleteCampaign: async (id: string) => {
-    await client.delete(`/api/campaigns/${id}`);
+    await client.delete(`/campaigns/${id}`);
   },
 
   startCampaign: async (id: string) => {

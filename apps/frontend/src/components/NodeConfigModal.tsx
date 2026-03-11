@@ -278,7 +278,7 @@ function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node
                           headers['Authorization'] = `Bearer ${token}`
                         }
                         const res = await fetch(
-                          `${API_URL}/media/upload?tenantId=${tenantId}&mediaType=${mediaType}&nodeId=${node.id}&workflowId=${node.workflowId || ''}`,
+                          `${API_URL}/api/media/upload?tenantId=${tenantId}&mediaType=${mediaType}&nodeId=${node.id}&workflowId=${node.workflowId || ''}`,
                           { method: 'POST', headers, body: formData }
                         )
 
@@ -599,7 +599,7 @@ function MessageComposer({ value, onChange, placeholder, tenantId, node }: { val
                           headers['Authorization'] = `Bearer ${token}`
                         }
                         const res = await fetch(
-                          `${API_URL}/media/upload?tenantId=${tenantId}&mediaType=${activeTab}&nodeId=${node?.id}&workflowId=${(node as any)?.workflowId || ''}`,
+                          `${API_URL}/api/media/upload?tenantId=${tenantId}&mediaType=${activeTab}&nodeId=${node?.id}&workflowId=${(node as any)?.workflowId || ''}`,
                           { method: 'POST', headers, body: formData }
                         )
 
@@ -738,7 +738,7 @@ function MessageComposer({ value, onChange, placeholder, tenantId, node }: { val
                           headers['Authorization'] = `Bearer ${token}`
                         }
                         const res = await fetch(
-                          `${API_URL}/media/upload?tenantId=${tenantId}&mediaType=audio&nodeId=${node?.id}&workflowId=${(node as any)?.workflowId || ''}`,
+                          `${API_URL}/api/media/upload?tenantId=${tenantId}&mediaType=audio&nodeId=${node?.id}&workflowId=${(node as any)?.workflowId || ''}`,
                           { method: 'POST', headers, body: formData }
                         )
 
@@ -786,7 +786,7 @@ function MessageComposer({ value, onChange, placeholder, tenantId, node }: { val
                         if (token) {
                           headers['Authorization'] = `Bearer ${token}`
                         }
-                        await fetch(`${API_URL}/media/${config.uploadedMediaId}?tenantId=${tenantId}`, { method: 'DELETE', headers })
+                        await fetch(`${API_URL}/api/media/${config.uploadedMediaId}?tenantId=${tenantId}`, { method: 'DELETE', headers })
                       }
                     } catch (e) { /* ignore */ }
                     update({
