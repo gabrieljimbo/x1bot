@@ -219,6 +219,9 @@ function CampaignWorkflowEditorContent() {
   const handleChange = (n: WorkflowNode[], e: WorkflowEdge[]) => {
     nodesRef.current = n
     edgesRef.current = e
+    // Sync state for components that might rely on it
+    setNodes(n)
+    setEdges(e)
   }
 
   const handleSave = async () => {
@@ -242,8 +245,31 @@ function CampaignWorkflowEditorContent() {
       config: {},
     }
     const updated = [...nodesRef.current, newNode]
+    const currentEdges = edgesRef.current
     setNodes(updated)
+    setEdges([...currentEdges]) // Sync state
     nodesRef.current = updated
+  }
+
+  const handleDuplicateNode = (nodeId: string) => {
+    const sourceNode = nodesRef.current.find(n => n.id === nodeId)
+    if (!sourceNode) return
+
+    const newNode: WorkflowNode = {
+      id: `node-${Date.now()}`,
+      type: sourceNode.type,
+      position: {
+        x: (sourceNode.position?.x || 0) + 40,
+        y: (sourceNode.position?.y || 0) + 40,
+      },
+      config: { ...sourceNode.config },
+    }
+
+    const updatedNodes = [...nodesRef.current, newNode]
+    const currentEdges = edgesRef.current
+    setNodes(updatedNodes)
+    setEdges([...currentEdges])
+    nodesRef.current = updatedNodes
   }
 
   if (loading) {
@@ -313,6 +339,7 @@ function CampaignWorkflowEditorContent() {
               if (node.type !== CAMPAIGN_START_NODE_TYPE) setSelectedNode(node)
             }}
             onAddNode={handleAddNode}
+            onDuplicateNode={handleDuplicateNode}
           />
         </div>
       </div>
@@ -324,7 +351,9 @@ function CampaignWorkflowEditorContent() {
           onClose={() => setSelectedNode(null)}
           onSave={(nodeId, config) => {
             const updated = nodesRef.current.map(n => n.id === nodeId ? { ...n, config } : n)
+            const currentEdges = edgesRef.current
             setNodes(updated)
+            setEdges([...currentEdges])
             nodesRef.current = updated
             setSelectedNode(null)
           }}

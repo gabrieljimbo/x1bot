@@ -419,12 +419,19 @@ export default function WorkflowCanvas({
   useEffect(() => {
     const nodesChanged = initialNodes !== lastInitialNodesRef.current
     const edgesChanged = initialEdges !== lastInitialEdgesRef.current
-    if (isInitialLoad.current || nodesChanged || edgesChanged) {
-      isInitialLoad.current = false
-      lastInitialNodesRef.current = initialNodes
-      lastInitialEdgesRef.current = initialEdges
+
+    if (isInitialLoad.current || nodesChanged) {
       setNodes(buildFlowNodes(initialNodes))
+      lastInitialNodesRef.current = initialNodes
+    }
+
+    if (isInitialLoad.current || edgesChanged) {
       setEdges(buildFlowEdges(initialEdges))
+      lastInitialEdgesRef.current = initialEdges
+    }
+
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false
     }
   }, [initialNodes, initialEdges, buildFlowNodes, buildFlowEdges, setNodes, setEdges])
 
