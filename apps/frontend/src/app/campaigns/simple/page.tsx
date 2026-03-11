@@ -771,7 +771,7 @@ function SimplePageContent() {
   const load = async () => {
     try {
       setLoading(true)
-      const data = await apiClient.getCampaigns()
+      const data = await apiClient.getCampaigns(undefined, false)
       setCampaigns(data)
     } catch { /* noop */ } finally { setLoading(false) }
   }

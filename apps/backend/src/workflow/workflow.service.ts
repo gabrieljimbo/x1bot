@@ -1,5 +1,6 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CampaignType, Prisma } from '@prisma/client';
 import { Workflow, WorkflowNode, WorkflowEdge, WorkflowNodeType, TriggerManualConfig, WorkflowExecution } from '@n9n/shared';
 import { ExecutionEngineService } from '../execution/execution-engine.service';
 import { StorageService } from '../storage/storage.service';
@@ -542,10 +543,19 @@ export class WorkflowService {
     // 3. Create in target
     if (dto.targetType === 'campaign') {
       const campaign = await this.prisma.campaign.create({
-        data: { tenantId, name: dto.name, type: 'WORKFLOW' as any },
+        data: { 
+          tenantId, 
+          name: dto.name, 
+          type: CampaignType.WORKFLOW,
+          isTemplate: true // Mark as template if duplicated as a campaign workflow
+        },
       });
       await this.prisma.campaignWorkflow.create({
-        data: { campaignId: campaign.id, nodes: newNodes, edges: newEdges },
+        data: { 
+          campaignId: campaign.id, 
+          nodes: newNodes as any, 
+          edges: newEdges as any 
+        },
       });
       return { id: campaign.id, type: 'campaign' };
     } else {

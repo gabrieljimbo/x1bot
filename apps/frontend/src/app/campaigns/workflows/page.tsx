@@ -47,7 +47,7 @@ function WorkflowsPageContent() {
   const load = async () => {
     try {
       setLoading(true)
-      const data = await apiClient.getCampaigns('WORKFLOW')
+      const data = await apiClient.getCampaigns('WORKFLOW', true)
       setCampaigns(data)
     } catch { /* noop */ } finally { setLoading(false) }
   }
@@ -57,7 +57,11 @@ function WorkflowsPageContent() {
   const handleCreate = async () => {
     if (!newName.trim()) return
     try {
-      const result = await apiClient.createCampaign({ name: newName.trim(), type: 'WORKFLOW' })
+      const result = await apiClient.createCampaign({ 
+        name: newName.trim(), 
+        type: 'WORKFLOW',
+        isTemplate: true 
+      })
       setCreating(false)
       setNewName('')
       router.push(`/campaigns/workflows/${result.id}`)

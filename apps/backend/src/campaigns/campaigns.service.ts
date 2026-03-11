@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappSessionManager } from '../whatsapp/whatsapp-session-manager.service';
 import { ExecutionEngineService } from '../execution/execution-engine.service';
-import { CampaignStatus, CampaignType } from '@prisma/client';
+import { CampaignStatus, CampaignType, Prisma } from '@prisma/client';
 
 @Injectable()
 export class CampaignsService {
@@ -10,7 +10,7 @@ export class CampaignsService {
     private readonly prisma: PrismaService,
     private readonly whatsappSessionManager: WhatsappSessionManager,
     private readonly executionEngine: ExecutionEngineService,
-  ) {}
+  ) { }
 
   // ─── CRUD ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +18,7 @@ export class CampaignsService {
     name: string;
     type?: CampaignType;
     workflowId?: string;
+    isTemplate?: boolean;
     scheduledAt?: Date;
     limitPerSession?: number;
     delayMin?: number;
@@ -33,6 +34,7 @@ export class CampaignsService {
         name: dto.name,
         type: dto.type ?? CampaignType.SIMPLE,
         workflowId: dto.workflowId ?? null,
+        isTemplate: dto.isTemplate ?? false,
         scheduledAt: dto.scheduledAt,
         limitPerSession: dto.limitPerSession ?? 50,
         delayMin: dto.delayMin ?? 5,
@@ -54,12 +56,29 @@ export class CampaignsService {
       });
     }
 
+    // Copy nodes/edges from template if provided
+    if (dto.workflowId && dto.type === CampaignType.WORKFLOW) {
+      const templateWf = await this.prisma.campaignWorkflow.findUnique({
+        where: { campaignId: dto.workflowId }
+      });
+      if (templateWf) {
+        await this.prisma.campaignWorkflow.create({
+          data: {
+            campaignId: campaign.id,
+            nodes: templateWf.nodes as any,
+            edges: templateWf.edges as any,
+          }
+        });
+      }
+    }
+
     return this.getCampaignById(tenantId, campaign.id);
   }
 
   async updateCampaign(tenantId: string, campaignId: string, dto: {
     name?: string;
     workflowId?: string | null;
+    isTemplate?: boolean;
     scheduledAt?: Date | null;
     limitPerSession?: number;
     delayMin?: number;
@@ -101,9 +120,13 @@ export class CampaignsService {
     return { success: true };
   }
 
-  async getCampaigns(tenantId: string, type?: CampaignType) {
+  async getCampaigns(tenantId: string, type?: CampaignType, isTemplate?: boolean) {
     return this.prisma.campaign.findMany({
-      where: { tenantId, ...(type ? { type } : {}) },
+      where: {
+        tenantId,
+        ...(type ? { type } : {}),
+        ...(isTemplate !== undefined ? { isTemplate } : {})
+      },
       include: {
         messages: { orderBy: { order: 'asc' } },
         sessions: true,
@@ -249,7 +272,7 @@ export class CampaignsService {
 
   async getCampaignWorkflowsList(tenantId: string) {
     const campaigns = await this.prisma.campaign.findMany({
-      where: { tenantId, type: CampaignType.WORKFLOW },
+      where: { tenantId, type: CampaignType.WORKFLOW, isTemplate: true },
       include: { workflow: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -290,7 +313,7 @@ export class CampaignsService {
 
     this.processCampaign(campaignId).catch((err) => {
       console.error(`Campaign ${campaignId} failed:`, err);
-      this.prisma.campaign.update({ where: { id: campaignId }, data: { status: CampaignStatus.FAILED } }).catch(() => {});
+      this.prisma.campaign.update({ where: { id: campaignId }, data: { status: CampaignStatus.FAILED } }).catch(() => { });
     });
 
     return { success: true, status: CampaignStatus.RUNNING };
@@ -310,7 +333,7 @@ export class CampaignsService {
 
     this.processCampaign(campaignId).catch((err) => {
       console.error(`Campaign ${campaignId} resume failed:`, err);
-      this.prisma.campaign.update({ where: { id: campaignId }, data: { status: CampaignStatus.FAILED } }).catch(() => {});
+      this.prisma.campaign.update({ where: { id: campaignId }, data: { status: CampaignStatus.FAILED } }).catch(() => { });
     });
 
     return { success: true, status: CampaignStatus.RUNNING };
@@ -354,13 +377,13 @@ export class CampaignsService {
             name: `[Auto] Campanha: ${campaign.name}`,
             description: 'Workflow virtual gerado automaticamente',
             isActive: true,
-            nodes: campaignWf.nodes ? (campaignWf.nodes as any) : [],
-            edges: campaignWf.edges ? (campaignWf.edges as any) : [],
+            nodes: campaignWf.nodes ?? Prisma.JsonNull,
+            edges: campaignWf.edges ?? Prisma.JsonNull,
           },
           update: {
             name: `[Auto] Campanha: ${campaign.name}`,
-            nodes: campaignWf.nodes ? (campaignWf.nodes as any) : [],
-            edges: campaignWf.edges ? (campaignWf.edges as any) : [],
+            nodes: campaignWf.nodes ?? Prisma.JsonNull,
+            edges: campaignWf.edges ?? Prisma.JsonNull,
             isActive: true,
           }
         });
@@ -406,16 +429,16 @@ export class CampaignsService {
       try {
         if (campaign.workflowId) {
           if (shadowWorkflowId) {
-             // Execute CampaignWorkflow via shadow Workflow using ExecutionEngine
-             await this.executionEngine.startExecution(
-               campaign.tenantId,
-               shadowWorkflowId,
-               session.sessionId,
-               recipient.phone,
-               undefined,
-               undefined,
-               { triggerType: 'CAMPAIGN_START' }
-             );
+            // Execute CampaignWorkflow via shadow Workflow using ExecutionEngine
+            await this.executionEngine.startExecution(
+              campaign.tenantId,
+              shadowWorkflowId,
+              session.sessionId,
+              recipient.phone,
+              undefined,
+              undefined,
+              { triggerType: 'CAMPAIGN_START' }
+            );
           } else {
             // Fallback: workflowId references a regular Workflow
             await this.executionEngine.startExecution(

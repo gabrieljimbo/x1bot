@@ -1,5 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
+  output        = "../node_modules/.prisma/client"
   binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
@@ -528,6 +529,7 @@ model Campaign {
   name            String
   type            CampaignType        @default(SIMPLE)
   status          CampaignStatus      @default(DRAFT)
+  isTemplate      Boolean             @default(false)
   scheduledAt     DateTime?
   startedAt       DateTime?
   completedAt     DateTime?

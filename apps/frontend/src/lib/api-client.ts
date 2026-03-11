@@ -506,8 +506,8 @@ export const apiClient = {
   },
 
   // Campaigns
-  getCampaigns: async (type?: string) => {
-    const { data } = await client.get('/api/campaigns', { params: type ? { type } : {} });
+  getCampaigns: async (type?: string, isTemplate?: boolean) => {
+    const { data } = await client.get('/api/campaigns', { params: { type, isTemplate } });
     return data;
   },
 

@@ -23,8 +23,13 @@ export class CampaignsController {
   }
 
   @Get()
-  getCampaigns(@Request() req: any, @Query('type') type?: string) {
-    return this.campaignsService.getCampaigns(req.user.tenantId, type as CampaignType | undefined);
+  getCampaigns(
+    @Request() req: any,
+    @Query('type') type?: string,
+    @Query('isTemplate') isTemplate?: string,
+  ) {
+    const isTemp = isTemplate === 'true' ? true : isTemplate === 'false' ? false : undefined;
+    return this.campaignsService.getCampaigns(req.user.tenantId, type as CampaignType | undefined, isTemp);
   }
 
   // Must come before /:id routes to avoid route collision
