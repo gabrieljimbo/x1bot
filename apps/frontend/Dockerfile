@@ -12,18 +12,17 @@ COPY packages/shared ./packages/shared
 COPY apps/frontend ./apps/frontend
 
 # Install ALL dependencies (including devDeps for building)
-# Force NODE_ENV=development inline to prevent Coolify's build-arg from skipping devDeps
-RUN NODE_ENV=development pnpm install
+RUN pnpm install --prod=false
 
 # Build shared package
 WORKDIR /app/packages/shared
-RUN NODE_ENV=development pnpm build
+RUN NODE_ENV=production pnpm build
 
 # Build frontend
 WORKDIR /app/apps/frontend
 # Create public directory if it doesn't exist (Next.js may need it)
 RUN mkdir -p public
-RUN NODE_ENV=development pnpm build
+RUN NODE_ENV=production pnpm build
 
 # Production stage
 FROM node:18-alpine AS production

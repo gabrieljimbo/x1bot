@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
@@ -12,8 +12,6 @@ export const metadata: Metadata = {
   keywords: "automação whatsapp, bot whatsapp, grupos achadinhos, shopee whatsapp, mercado livre whatsapp, whatsapp marketing, infoproduto, low ticket, disparo whatsapp, funil whatsapp, chatbot whatsapp, vendas whatsapp, escalar vendas, whatsapp bot brasil, automação digital",
   authors: [{ name: "X1Bot" }],
   robots: "index, follow",
-  themeColor: "#0a0a0a",
-  viewport: "width=device-width, initial-scale=1",
   other: {
     "og:type": "website",
     "og:url": "https://x1bot.cloud",
@@ -30,6 +28,12 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://x1bot.cloud",
   }
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#0a0a0a",
 }
 
 export default function RootLayout({

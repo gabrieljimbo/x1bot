@@ -1,3 +1,5 @@
+'use client'
+
 import { memo, useState } from 'react'
 import { Handle, Position } from 'reactflow'
 import { WorkflowNodeType } from '@n9n/shared'

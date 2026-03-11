@@ -1,3 +1,5 @@
+'use client'
+
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { LogOut, User, ShieldCheck, Star, MessageSquare, Menu, X, Building2, Shield, Users, BarChart3, Target, Key, Tag, Megaphone, ShoppingBag } from 'lucide-react'

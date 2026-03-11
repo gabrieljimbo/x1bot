@@ -1,3 +1,5 @@
+'use client'
+
 import { memo, useState } from 'react'
 import { EdgeProps, getBezierPath, useReactFlow } from 'reactflow'
 import { Trash2 } from 'lucide-react'
