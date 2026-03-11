@@ -869,7 +869,12 @@ export class WorkflowService {
       _count: { executionId: true },
     });
 
-    const reachMap = new Map<string, number>(nodeReach.map((r: any) => [r.nodeId, Number(r._count.executionId)]));
+    const reachMap = new Map<string, number>(
+      nodeReach.map((r: { nodeId: string; _count: { executionId: number } }) => [
+        r.nodeId,
+        Number(r._count.executionId),
+      ]),
+    );
 
     const nodeStats = sequence.map((node: any, index: number) => {
       const count: number = Number(reachMap.get(node.id)) || 0;
