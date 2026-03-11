@@ -6,6 +6,7 @@ import { LicenseBanner } from '@/components/LicenseBanner'
 import { ExpiredAccountScreen } from '@/components/ExpiredAccountScreen'
 
 const inter = Inter({ subsets: ['latin'] })
+
 export const metadata: Metadata = {
   title: "X1Bot — Automação de WhatsApp para Vendas no Digital",
   description: "Escale suas vendas no WhatsApp com automação inteligente. Ideal para grupos de achadinhos, Shopee, Mercado Livre, infoprodutos e low ticket. Fluxos com IA, disparo em massa, funil automático e integração com Meta Ads.",
@@ -57,8 +58,3 @@ export default function RootLayout({
     </html>
   )
 }
-
-
-
-
-

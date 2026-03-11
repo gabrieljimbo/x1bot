@@ -99,7 +99,11 @@ async function bootstrap() {
       // Allow non-browser clients (curl, server-to-server, health checks)
       if (!origin) return callback(null, true);
 
-      if (allowedOrigins.includes(normalizeOrigin(origin))) {
+      const normalized = normalizeOrigin(origin);
+      if (allowedOrigins.includes(normalized) || allowedOrigins.some(o => {
+        const domain = o.replace('https://', '').replace('http://', '');
+        return normalized.endsWith('.' + domain);
+      })) {
         return callback(null, true);
       }
 
@@ -134,5 +138,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-
-

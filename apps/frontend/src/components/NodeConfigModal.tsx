@@ -271,7 +271,7 @@ function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node
                       try {
                         const formData = new FormData()
                         formData.append('file', file)
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
                         const token = localStorage.getItem('n9n_token')
                         const headers: HeadersInit = {}
                         if (token) {
@@ -592,7 +592,7 @@ function MessageComposer({ value, onChange, placeholder, tenantId, node }: { val
                       try {
                         const formData = new FormData()
                         formData.append('file', file)
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
                         const token = localStorage.getItem('n9n_token')
                         const headers: HeadersInit = {}
                         if (token) {
@@ -647,7 +647,7 @@ function MessageComposer({ value, onChange, placeholder, tenantId, node }: { val
                   onClick={async () => {
                     try {
                       if (tenantId && config.uploadedMediaId) {
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
                         const token = localStorage.getItem('n9n_token')
                         const headers: HeadersInit = {}
                         if (token) {
@@ -731,7 +731,7 @@ function MessageComposer({ value, onChange, placeholder, tenantId, node }: { val
                       try {
                         const formData = new FormData()
                         formData.append('file', file)
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
                         const token = localStorage.getItem('n9n_token')
                         const headers: HeadersInit = {}
                         if (token) {
@@ -780,7 +780,7 @@ function MessageComposer({ value, onChange, placeholder, tenantId, node }: { val
                   onClick={async () => {
                     try {
                       if (tenantId && config.uploadedMediaId) {
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
                         const token = localStorage.getItem('n9n_token')
                         const headers: HeadersInit = {}
                         if (token) {
@@ -3784,7 +3784,7 @@ export default function NodeConfigModal({
   executionData,
   executionLogs,
 }: NodeConfigModalProps) {
-  const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+  const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
   const [activeTab, setActiveTab] = useState<'parameters' | 'settings'>('parameters')
   const [config, setConfig] = useState<any>({})
   const [sessions, setSessions] = useState<any[]>([])
@@ -4234,7 +4234,7 @@ export default function NodeConfigModal({
                         try {
                           const formData = new FormData()
                           formData.append('file', file)
-                          const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                          const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
                           const token = localStorage.getItem('n9n_token')
                           const headers: HeadersInit = {}
                           if (token) {
@@ -4292,7 +4292,7 @@ export default function NodeConfigModal({
                     className="text-red-400 hover:text-red-300 text-sm px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
                     onClick={async () => {
                       try {
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
                         const token = localStorage.getItem('n9n_token')
                         const headers: HeadersInit = {}
                         if (token) {
@@ -5625,7 +5625,7 @@ export default function NodeConfigModal({
                   setLoopTestResult(null)
 
                   try {
-                    const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                    const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
                     const response = await fetch(`${API_URL}/api/workflows/${executionData.workflowId}/test-node?tenantId=${tenantId}&nodeId=${node.id}&executionId=${executionData.id}`, {
                       method: 'POST',
                       headers: {
@@ -7167,7 +7167,7 @@ return produtos;`}
                     setCommandTestResult(null)
 
                     try {
-                      const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+                      const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
                       const response = await fetch(`${API_URL}/api/workflows/${executionData.workflowId}/test-node?tenantId=${tenantId}&nodeId=${node.id}&executionId=${executionData.id}`, {
                         method: 'POST',
                         headers: {
