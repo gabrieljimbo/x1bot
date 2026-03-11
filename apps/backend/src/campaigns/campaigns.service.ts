@@ -375,13 +375,13 @@ export class CampaignsService {
     if (!campaign) return;
 
     let shadowWorkflowId: string | null = null;
-    if (campaign.type === 'WORKFLOW' && campaign.workflowId) {
+    if (campaign.type === 'WORKFLOW') {
       const campaignWf = await this.prisma.campaignWorkflow.findUnique({
-        where: { campaignId: campaign.workflowId },
+        where: { campaignId: campaign.id },
       });
-      if (campaignWf) {
+      if (campaignWf && campaignWf.nodes) {
         // Upsert shadow workflow
-        const shadowId = `shadow-${campaign.workflowId}`;
+        const shadowId = `shadow-${campaign.id}`;
         const shadowWf = await this.prisma.workflow.upsert({
           where: { id: shadowId },
           create: {
