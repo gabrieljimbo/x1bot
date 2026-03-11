@@ -80,6 +80,7 @@ async function bootstrap() {
     'http://localhost:3001',
     'https://x1bot.cloud',
     'https://www.x1bot.cloud',
+    'https://api.x1bot.cloud',
     'https://api.n9n.archcode.space',
   ];
 

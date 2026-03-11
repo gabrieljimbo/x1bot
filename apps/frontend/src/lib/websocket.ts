@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client'
 import { WorkflowEvent } from '@n9n/shared'
 
-const WS_URL = (process.env.NEXT_PUBLIC_WS_URL || 'https://api.n9n.archcode.space')?.replace(/\/$/, '')
+const WS_URL = (process.env.NEXT_PUBLIC_WS_URL || 'https://api.x1bot.cloud')?.replace(/\/$/, '')
 
 class WebSocketClient {
   private socket: Socket | null = null

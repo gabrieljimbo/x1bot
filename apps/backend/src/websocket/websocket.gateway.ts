@@ -24,6 +24,7 @@ const allowedOrigins = Array.from(
       'http://localhost:3001',
       'https://x1bot.cloud',
       'https://www.x1bot.cloud',
+      'https://api.x1bot.cloud',
       'https://api.n9n.archcode.space',
       ...parseOrigins(process.env.CORS_ORIGIN),
       ...parseOrigins(process.env.FRONTEND_URL),

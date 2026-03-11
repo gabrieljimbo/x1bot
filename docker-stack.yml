@@ -11,8 +11,8 @@ services:
       REDIS_HOST: redis_vps
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      FRONTEND_URL: https://n9n.archcode.space
-      CORS_ORIGIN: https://n9n.archcode.space
+      FRONTEND_URL: ${FRONTEND_URL:-https://x1bot.cloud}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://x1bot.cloud,https://www.x1bot.cloud}
       WHATSAPP_SESSION_PATH: /app/apps/backend/.wwebjs_auth
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
       MINIO_ENDPOINT: minio
@@ -42,7 +42,7 @@ services:
       labels:
       - traefik.enable=true
       - traefik.docker.network=traefik-public
-      - traefik.http.routers.backend-n9n.rule=Host(`api.n9n.archcode.space`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`))
+      - traefik.http.routers.backend-n9n.rule=Host(`${API_DOMAIN:-api.x1bot.cloud}`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`))
       - traefik.http.routers.backend-n9n.entrypoints=websecure
       - traefik.http.routers.backend-n9n.tls=true
       - traefik.http.routers.backend-n9n.tls.certresolver=letsencryptresolver
@@ -55,8 +55,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3040
-      NEXT_PUBLIC_API_URL: https://api.n9n.archcode.space
-      NEXT_PUBLIC_WS_URL: https://api.n9n.archcode.space
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.x1bot.cloud}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-https://api.x1bot.cloud}
 
     networks:
       - traefik-public
@@ -72,8 +72,8 @@ services:
           memory: 256M
       labels:
         - traefik.enable=true
-        - traefik.docker.network=merendinhanet
-        - traefik.http.routers.frontend-n9n.rule=Host(`n9n.archcode.space`)
+        - traefik.docker.network=traefik-public
+        - traefik.http.routers.frontend-n9n.rule=Host(`${FRONTEND_DOMAIN:-x1bot.cloud}`)
         - traefik.http.routers.frontend-n9n.entrypoints=websecure
         - traefik.http.routers.frontend-n9n.tls=true
         - traefik.http.routers.frontend-n9n.tls.certresolver=letsencryptresolver
