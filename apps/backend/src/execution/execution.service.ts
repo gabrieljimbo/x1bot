@@ -194,6 +194,7 @@ export class ExecutionService {
       workflowId: data.workflowId,
       sessionId: data.sessionId,
       contactPhone: data.contactPhone,
+      campaignId: data.campaignId,
       currentNodeId: data.currentNodeId,
       status: data.status as ExecutionStatus,
       context: data.context as ExecutionContext,

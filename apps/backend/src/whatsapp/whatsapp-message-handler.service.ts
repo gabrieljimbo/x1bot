@@ -74,6 +74,7 @@ export class WhatsappMessageHandler {
 
     // 2. Group Filtering: Check if message is from a group
     let whitelistedWorkflows: string[] = [];
+    let isGroupEnabled = false;
 
     if (isGroup) {
       // Fetch group configuration
@@ -86,14 +87,15 @@ export class WhatsappMessageHandler {
         },
       });
 
-      // 3. Whitelist Check: Discard if group not authorized or disabled
-      if (!groupConfig || !groupConfig.enabled) {
+      // 3. Whitelist Check: Mark if group is authorized
+      if (groupConfig && groupConfig.enabled) {
+        isGroupEnabled = true;
+        whitelistedWorkflows = groupConfig.workflowIds;
+        console.log(`[GROUP] Session ${sessionId}: Group authorized. Permitted workflows:`, whitelistedWorkflows);
+      } else {
         console.log(`[IGNORE] Session ${sessionId}: Group ${contactPhone} not in whitelist or disabled`);
-        return;
+        // We do not return immediately because there might be an active campaign execution waiting for a reply
       }
-
-      whitelistedWorkflows = groupConfig.workflowIds;
-      console.log(`[GROUP] Session ${sessionId}: Group authorized. Permitted workflows:`, whitelistedWorkflows);
     }
 
     // 4. ContactFlowState Check (Resume waiting nodes)
@@ -120,10 +122,13 @@ export class WhatsappMessageHandler {
         const activeExecution = await this.executionService.getExecution(tenantId, flowState.executionId);
 
         if (activeExecution) {
-          // If in a group, verify workflow is allowed
-          if (isGroup && !whitelistedWorkflows.includes(activeExecution.workflowId)) {
-            console.log(`[IGNORE] Session ${sessionId}: Active workflow ${activeExecution.workflowId} not permitted in group ${contactPhone}`);
-            return;
+          // If in a group, verify workflow is allowed OR it's a campaign
+          if (isGroup) {
+            const isCampaign = !!activeExecution.campaignId;
+            if (!isCampaign && (!isGroupEnabled || !whitelistedWorkflows.includes(activeExecution.workflowId))) {
+              console.log(`[IGNORE] Session ${sessionId}: Active workflow ${activeExecution.workflowId} not permitted in group ${contactPhone}`);
+              return;
+            }
           }
 
           const resumeText = normalizedPayload.text || '';
@@ -146,10 +151,13 @@ export class WhatsappMessageHandler {
     );
 
     if (activeExecution) {
-      // 5. Workflow Check for Groups (Resume): Ensure the active workflow is permitted in this group
-      if (isGroup && !whitelistedWorkflows.includes(activeExecution.workflowId)) {
-        console.log(`[IGNORE] Session ${sessionId}: Active workflow ${activeExecution.workflowId} not permitted in group ${contactPhone}`);
-        return;
+      // 5. Workflow Check for Groups (Resume): Ensure the active workflow is permitted in this group or it's a campaign
+      if (isGroup) {
+        const isCampaign = !!activeExecution.campaignId;
+        if (!isCampaign && (!isGroupEnabled || !whitelistedWorkflows.includes(activeExecution.workflowId))) {
+          console.log(`[IGNORE] Session ${sessionId}: Active workflow ${activeExecution.workflowId} not permitted in group ${contactPhone}`);
+          return;
+        }
       }
 
       // Resume existing execution
@@ -158,6 +166,12 @@ export class WhatsappMessageHandler {
         await this.executionEngine.resumeExecution(activeExecution, resumeText, normalizedPayload);
       }
     } else {
+      // If it's a group and not enabled, do not try to match triggers
+      if (isGroup && !isGroupEnabled) {
+        console.log(`[IGNORE] Session ${sessionId}: Group ${contactPhone} not in whitelist or disabled, ignoring triggers`);
+        return;
+      }
+
       // Try to match trigger
       await this.matchTriggerAndStart(tenantId, sessionId, contactPhone, normalizedPayload, isGroup, whitelistedWorkflows);
     }
@@ -251,16 +265,6 @@ export class WhatsappMessageHandler {
 
       // Rule: Incoming messages never trigger MANUAL, SCHEDULE or GRUPO
       // (They are already excluded because we only find WHATSAPP, KEYWORD, MESSAGE nodes above)
-
-      // Rule: TRIGGER_WHATSAPP and TRIGGER_KEYWORD never fire in groups
-      if (isGroup) {
-        if (triggerNode.type === WorkflowNodeType.TRIGGER_WHATSAPP ||
-          triggerNode.type === WorkflowNodeType.TRIGGER_KEYWORD ||
-          triggerNode.type === WorkflowNodeType.TRIGGER_MESSAGE) {
-          console.log(`[IGNORE] Session ${sessionId}: Individual-only trigger ${triggerNode.type} found in group ${contactPhone}`);
-          continue;
-        }
-      }
 
       const config = triggerNode.config;
       console.log(`[TRIGGER] Trigger config for ${workflow.name}:`, config);
