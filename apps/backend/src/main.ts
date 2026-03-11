@@ -66,27 +66,28 @@ async function bootstrap() {
   app.useGlobalGuards(new JwtAuthGuard(reflector));
   app.useGlobalInterceptors(new LoggingInterceptor());
 
-  // CORS configuration with Environment Allowlist
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
     process.env.CORS_ORIGIN,
     process.env.FRONTEND_URL,
+    'https://x1bot.cloud',
+    'https://api.n9n.archcode.space'
   ].filter(Boolean);
 
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) ||
-        (process.env.NODE_ENV !== 'production' && (origin.includes('localhost') || origin.includes('ngrok')))) {
-        callback(null, true);
-      } else {
-        console.warn('❌ CORS: Blocking origin:', origin);
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-hmac-signature', 'x-timestamp'],
+    allowedHeaders: [
+      'Content-Type', 
+      'Authorization', 
+      'X-Requested-With', 
+      'Accept',
+      'Origin',
+      'x-hmac-signature', 
+      'x-timestamp'
+    ],
   });
 
   app.useGlobalPipes(
