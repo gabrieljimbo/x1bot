@@ -39,6 +39,7 @@ import {
   RandomizerConfig,
   GroupMessageConfig,
   ExecutionStatus,
+  NotificacaoConfig,
 } from '@n9n/shared';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -330,12 +331,90 @@ export class NodeExecutorService {
       case WorkflowNodeType.PROMO_SHOPEE:
         return this.executePromoShopee(node, context, edges, sessionId, contactPhone);
 
+      case WorkflowNodeType.NOTIFICACAO:
+        return this.executeNotificacao(node, context, edges, sessionId, contactPhone);
+
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
 
       default:
         throw new Error(`Unknown node type: ${node.type}`);
     }
+  }
+
+  /**
+   * Execute NOTIFICACAO node
+   */
+  private async executeNotificacao(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    defaultSessionId?: string,
+    defaultContactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as NotificacaoConfig;
+    
+    // 1. WhatsApp Notification
+    if (config.phoneNumber && config.message) {
+      const sessionId = defaultSessionId; 
+      let phone = this.contextService.interpolate(config.phoneNumber, context).replace(/\D/g, '');
+      const message = this.contextService.interpolate(config.message, context);
+      
+      if (!phone.includes('@')) {
+        phone = `${phone}@s.whatsapp.net`;
+      }
+      
+      if (sessionId && phone) {
+        try {
+          await this.whatsappSessionManager.sendMessage(sessionId, phone, message);
+          console.log(`[NOTIFICACAO] Sent WhatsApp notification to ${phone}`);
+        } catch (e: any) {
+          console.error('[NOTIFICACAO - WhatsApp] Error:', e.message);
+        }
+      }
+    }
+
+    // 2. Pushcut API
+    if (config.usePushcut && config.pushcutNotificationName) {
+      const notificationName = this.contextService.interpolate(config.pushcutNotificationName, context);
+      const title = config.pushcutTitle ? this.contextService.interpolate(config.pushcutTitle, context) : undefined;
+      const text = config.pushcutText ? this.contextService.interpolate(config.pushcutText, context) : undefined;
+      
+      const tenantId = context.globals.tenantId || (context.variables as any)?._tenantId || (context.variables as any)?.tenantId;
+      if (tenantId) {
+        try {
+          const apiConfig = await this.prisma.tenantApiConfig.findFirst({
+            where: { tenantId, provider: 'pushcut', isActive: true },
+          });
+          
+          if (apiConfig && apiConfig.secret) {
+            const body: any = {};
+            if (title) body.title = title;
+            if (text) body.text = text;
+            
+            await fetch(`https://api.pushcut.io/v1/notifications/${notificationName}`, {
+              method: 'POST',
+              headers: {
+                'API-Key': apiConfig.secret,
+                'Content-Type': 'application/json'
+              },
+              body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined
+            });
+            console.log(`[NOTIFICACAO] Sent Pushcut notification: ${notificationName}`);
+          } else {
+            console.error('[NOTIFICACAO - Pushcut] Error: API config for Pushcut not found or inactive');
+          }
+        } catch (e: any) {
+          console.error('[NOTIFICACAO - Pushcut] Error:', e.message);
+        }
+      }
+    }
+
+    const nextEdge = edges.find((e) => e.source === node.id);
+    return {
+      nextNodeId: nextEdge ? nextEdge.target : null,
+      shouldWait: false,
+    };
   }
 
   /**

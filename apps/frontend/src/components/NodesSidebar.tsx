@@ -294,6 +294,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         description: 'Marca uma etapa importante no funil de conversão'
       },
       {
+        type: WorkflowNodeType.NOTIFICACAO,
+        label: 'Notificação',
+        icon: '🔔',
+        color: 'from-violet-500 to-purple-600',
+        bgColor: 'bg-[#22143a]',
+        borderColor: 'border-[#a855f7]',
+        description: 'Envia notificação via WhatsApp ou Pushcut (iPhone) durante o fluxo'
+      },
+      {
         type: 'END' as WorkflowNodeType,
         label: 'Finalizar',
         icon: '🏁',

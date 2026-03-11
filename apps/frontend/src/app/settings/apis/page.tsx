@@ -38,6 +38,13 @@ const PROVIDER_META: Record<string, { label: string; color: string; icon: string
         description: 'API de afiliados da Shopee para buscar e enviar ofertas de produtos automaticamente.',
         docsHint: 'Acesse: affiliate.shopee.com.br → Ferramentas → API → Criar aplicativo',
     },
+    pushcut: {
+        label: 'Pushcut',
+        color: 'text-blue-400',
+        icon: '📱',
+        description: 'API de Notificações do Pushcut para receber alertas no celular.',
+        docsHint: 'Insira qualquer valor no App ID. Apenas o Secret (API-Key) é utilizado.',
+    },
 }
 
 function providerMeta(provider: string) {
@@ -50,7 +57,7 @@ function providerMeta(provider: string) {
     }
 }
 
-const AVAILABLE_PROVIDERS = ['shopee']
+const AVAILABLE_PROVIDERS = ['shopee', 'pushcut']
 
 function ApiSettingsContent() {
     const [loading, setLoading] = useState(true)
@@ -102,13 +109,14 @@ function ApiSettingsContent() {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!formAppId.trim()) { setError('App ID é obrigatório.'); return }
+        if (editingProvider !== 'pushcut' && !formAppId.trim()) { setError('App ID é obrigatório.'); return }
         if (!editingId && !formSecret.trim()) { setError('Secret é obrigatório ao criar.'); return }
 
         try {
             setSaving(true)
             setError(null)
-            await apiClient.upsertApiConfig(editingProvider, formAppId.trim(), formSecret.trim() || '__keep__')
+            const resolvedAppId = (editingProvider === 'pushcut' && !formAppId.trim()) ? 'pushcut' : formAppId.trim()
+            await apiClient.upsertApiConfig(editingProvider, resolvedAppId, formSecret.trim() || '__keep__')
             await loadConfigs()
             setIsModalOpen(false)
         } catch (e: any) {
@@ -304,12 +312,12 @@ function ApiSettingsContent() {
                             )}
 
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">App ID</label>
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">App ID {editingProvider === 'pushcut' && '(Opcional/Ignorado)'}</label>
                                 <input
                                     type="text"
                                     value={formAppId}
                                     onChange={(e) => setFormAppId(e.target.value)}
-                                    placeholder="Seu App ID"
+                                    placeholder={editingProvider === 'pushcut' ? "pushcut-api" : "Seu App ID"}
                                     className="w-full bg-[#151515] border border-gray-800 rounded-xl px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-all font-mono"
                                 />
                             </div>

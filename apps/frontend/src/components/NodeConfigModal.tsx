@@ -3774,7 +3774,211 @@ function DroppableInput({ value, onChange, placeholder, className, type = 'text'
   )
 }
 
+
+// ────── NOTIFICACAO CONFIG ──────
+function NotificacaoNodeConfig({ config, setConfig, sessions, loading }: any) {
+  const [activeTab, setActiveTab] = useState<'whatsapp' | 'pushcut'>('whatsapp')
+  const msgRef = useRef<HTMLTextAreaElement>(null)
+  const pushcutTitleRef = useRef<HTMLInputElement>(null)
+  const pushcutTextRef = useRef<HTMLTextAreaElement>(null)
+
+  const insertAtCursor = (
+    ref: React.RefObject<HTMLTextAreaElement | HTMLInputElement | null>,
+    field: string,
+    text: string
+  ) => {
+    const el = ref.current
+    if (!el) {
+      setConfig((c: any) => ({ ...c, [field]: (c[field] || '') + text }))
+      return
+    }
+    const start = el.selectionStart ?? 0
+    const end = el.selectionEnd ?? 0
+    const current = (el as any).value || ''
+    const updated = current.substring(0, start) + text + current.substring(end)
+    setConfig((c: any) => ({ ...c, [field]: updated }))
+    setTimeout(() => {
+      el.focus()
+      el.setSelectionRange(start + text.length, start + text.length)
+    }, 0)
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Tabs */}
+      <div className="flex bg-[#0d0d0d] p-1 rounded-xl border border-gray-800">
+        <button
+          type="button"
+          onClick={() => setActiveTab('whatsapp')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'whatsapp' ? 'bg-gray-800 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          <span>💬</span> WhatsApp
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('pushcut')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'pushcut' ? 'bg-gray-800 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          <span>📱</span> Pushcut
+        </button>
+      </div>
+
+      {/* WhatsApp Tab */}
+      {activeTab === 'whatsapp' && (
+        <div className="space-y-5 animate-in fade-in duration-150">
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+            <p className="text-xs text-blue-300 leading-relaxed">
+              <strong>📲 Notificação via WhatsApp:</strong> Envia uma mensagem para um número específico durante a execução do fluxo. Útil para alertar o admin sobre novas leads ou eventos importantes.
+            </p>
+          </div>
+
+          {/* Phone number field */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+              Número para notificar
+            </label>
+            <input
+              type="text"
+              value={config.phoneNumber || ''}
+              onChange={(e) => setConfig({ ...config, phoneNumber: e.target.value })}
+              placeholder="+5511999999999"
+              className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded-xl focus:outline-none focus:border-primary text-white font-mono text-sm placeholder-gray-600"
+            />
+            <p className="text-[10px] text-gray-600">Suporta variáveis: {'{{variables.adminPhone}}'}</p>
+          </div>
+
+          {/* Message field */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Mensagem</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => insertAtCursor(msgRef, 'message', '{{contact.name}}')}
+                  title="Inserir nome do lead"
+                  className="px-2.5 py-1 bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-lg text-[10px] text-emerald-400 font-bold transition-all"
+                >
+                  + Nome do Lead
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertAtCursor(msgRef, 'message', '{{contact.phoneNumber}}')}
+                  title="Inserir telefone do lead"
+                  className="px-2.5 py-1 bg-blue-500/15 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg text-[10px] text-blue-400 font-bold transition-all"
+                >
+                  + Telefone
+                </button>
+              </div>
+            </div>
+            <textarea
+              ref={msgRef}
+              value={config.message || ''}
+              onChange={(e) => setConfig({ ...config, message: e.target.value })}
+              placeholder={'🔔 Nova lead chegou!\nNome: {{contact.name}}\nTelefone: {{contact.phoneNumber}}'}
+              rows={5}
+              className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded-xl focus:outline-none focus:border-primary text-white text-sm resize-none font-mono placeholder-gray-600"
+            />
+            <p className="text-[10px] text-gray-600">Suporta variáveis: {'{{variables.nome}}'}, {'{{contact.name}}'}, {'{{contact.phoneNumber}}'}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Pushcut Tab */}
+      {activeTab === 'pushcut' && (
+        <div className="space-y-5 animate-in fade-in duration-150">
+          <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
+            <p className="text-xs text-purple-300 leading-relaxed">
+              <strong>📱 Pushcut:</strong> Envia uma notificação para o seu iPhone via app Pushcut. Configure sua API-Key em <strong>Configurações → APIs Externas</strong> antes de usar.
+            </p>
+          </div>
+
+          <label className="flex items-center gap-3 p-4 bg-[#151515] border border-gray-700 rounded-xl cursor-pointer hover:bg-[#1a1a1a] transition-all group">
+            <div className={`relative w-11 h-6 rounded-full transition-all ${config.usePushcut ? 'bg-primary' : 'bg-gray-700'}`}>
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${config.usePushcut ? 'left-6' : 'left-1'}`} />
+            </div>
+            <div>
+              <span className="text-sm font-semibold text-white">Ativar Pushcut</span>
+              <p className="text-[10px] text-gray-500">Requer API-Key configurada nas Integrações</p>
+            </div>
+          </label>
+          <input type="checkbox" className="hidden" checked={!!config.usePushcut} onChange={(e) => setConfig({ ...config, usePushcut: e.target.checked })} />
+
+          {config.usePushcut && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              {/* Click on toggle actually toggles */}
+              <div
+                className="relative cursor-pointer"
+                onClick={() => setConfig({ ...config, usePushcut: !config.usePushcut })}
+                style={{ display: 'none' }}
+              />
+
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  Nome da Notificação Pushcut
+                </label>
+                <input
+                  type="text"
+                  value={config.pushcutNotificationName || ''}
+                  onChange={(e) => setConfig({ ...config, pushcutNotificationName: e.target.value })}
+                  placeholder="nova_lead"
+                  className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded-xl focus:outline-none focus:border-primary text-white font-mono text-sm placeholder-gray-600"
+                />
+                <p className="text-[10px] text-gray-600">Nome exato da notificação criada no app Pushcut. Suporta variáveis.</p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Título (opcional)</label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => insertAtCursor(pushcutTitleRef, 'pushcutTitle', '{{contact.name}}')} className="px-2.5 py-1 bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-lg text-[10px] text-emerald-400 font-bold transition-all">+ Nome</button>
+                    <button type="button" onClick={() => insertAtCursor(pushcutTitleRef, 'pushcutTitle', '{{contact.phoneNumber}}')} className="px-2.5 py-1 bg-blue-500/15 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg text-[10px] text-blue-400 font-bold transition-all">+ Tel</button>
+                  </div>
+                </div>
+                <input
+                  ref={pushcutTitleRef}
+                  type="text"
+                  value={config.pushcutTitle || ''}
+                  onChange={(e) => setConfig({ ...config, pushcutTitle: e.target.value })}
+                  placeholder="🔔 Nova lead: {{contact.name}}"
+                  className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded-xl focus:outline-none focus:border-primary text-white text-sm placeholder-gray-600"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Texto / Corpo (opcional)</label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => insertAtCursor(pushcutTextRef, 'pushcutText', '{{contact.name}}')} className="px-2.5 py-1 bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-lg text-[10px] text-emerald-400 font-bold transition-all">+ Nome</button>
+                    <button type="button" onClick={() => insertAtCursor(pushcutTextRef, 'pushcutText', '{{contact.phoneNumber}}')} className="px-2.5 py-1 bg-blue-500/15 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg text-[10px] text-blue-400 font-bold transition-all">+ Tel</button>
+                  </div>
+                </div>
+                <textarea
+                  ref={pushcutTextRef}
+                  value={config.pushcutText || ''}
+                  onChange={(e) => setConfig({ ...config, pushcutText: e.target.value })}
+                  placeholder={'Tel: {{contact.phoneNumber}}\nInteresse em: {{variables.produto}}'}
+                  rows={4}
+                  className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded-xl focus:outline-none focus:border-primary text-white text-sm resize-none font-mono placeholder-gray-600"
+                />
+              </div>
+
+              <a
+                href="/settings/apis"
+                target="_blank"
+                className="flex items-center gap-2 text-xs text-primary hover:text-primary/80 transition-colors"
+              >
+                ⚙️ Configurar API-Key do Pushcut →
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function NodeConfigModal({
+
   node,
   tenantId,
   onClose,
@@ -3929,6 +4133,9 @@ export default function NodeConfigModal({
 
       case WorkflowNodeType.PROMO_SHOPEE:
         return <PromoShopeeConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.NOTIFICACAO:
+        return <NotificacaoNodeConfig config={config} setConfig={setConfig} sessions={sessions} loading={loading} />
 
       case 'TRIGGER_GRUPO':
       case WorkflowNodeType.TRIGGER_GRUPO:

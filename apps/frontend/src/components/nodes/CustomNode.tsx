@@ -102,6 +102,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#8f4a1a]',
     iconBg: 'bg-gradient-to-br from-orange-500 to-orange-600',
   },
+  'NOTIFICACAO': {
+    label: 'Notificação',
+    subtitle: 'ALERTA',
+    icon: '🔔',
+    bgColor: 'bg-[#22143a]',
+    borderColor: 'border-[#a855f7]',
+    iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600',
+  },
   'HTTP_REQUEST': {
     label: 'HTTP Request',
     subtitle: 'AÇÃO',
@@ -645,6 +653,12 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
       const count = data.config.saidas?.length || 0
       const percentages = data.config.saidas?.map((s: any) => s.porcentagem).join('/') || '0'
       return `🎲 ${count} saídas: ${percentages}%`
+    }
+    if (data.type === 'NOTIFICACAO') {
+      const parts = []
+      if (data.config.phoneNumber) parts.push(`💬 ${data.config.phoneNumber}`)
+      if (data.config.usePushcut && data.config.pushcutNotificationName) parts.push(`📱 ${data.config.pushcutNotificationName}`)
+      return parts.length > 0 ? parts.join(' • ') : '🔔 Nenhuma notificação configurada'
     }
     return null
   }

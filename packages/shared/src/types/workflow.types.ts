@@ -40,6 +40,7 @@ export enum WorkflowNodeType {
   PIX_SIMPLES = 'PIX_SIMPLES',
   SEND_CONTACT = 'SEND_CONTACT',
   PROMO_SHOPEE = 'PROMO_SHOPEE',
+  NOTIFICACAO = 'NOTIFICACAO',
   END = 'END',
 }
 
@@ -630,4 +631,13 @@ export interface PixelEventConfig {
 
   // Deduplication
   eventId?: string; // supports {{variables.orderId}}
+}
+
+export interface NotificacaoConfig {
+  phoneNumber?: string; // Target phone for WhatsApp notification
+  message?: string; // Text message for WhatsApp notification
+  usePushcut?: boolean; // Toggle for Pushcut API
+  pushcutNotificationName?: string; // e.g. "nova_venda"
+  pushcutTitle?: string; // title for Pushcut
+  pushcutText?: string; // text for Pushcut
 }
