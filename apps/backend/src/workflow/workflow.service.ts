@@ -765,8 +765,10 @@ export class WorkflowService {
     mainStats.nodes.forEach((node: any, index: number) => {
       if (index > 0) {
         const prevNode = mainStats.nodes[index - 1];
-        if (prevNode.count > 0) {
-          const dropOffRate = (prevNode.count - node.count) / prevNode.count;
+        const prevCount = Number(prevNode.count) || 0;
+        const currCount = Number(node.count) || 0;
+        if (prevCount > 0) {
+          const dropOffRate = (prevCount - currCount) / prevCount;
           if (dropOffRate > maxDropOffRate) {
             maxDropOffRate = dropOffRate;
             highestDropOffNode = node.name;
@@ -785,7 +787,7 @@ export class WorkflowService {
     });
 
     const hourCounts: Record<number, number> = {};
-    executions.forEach((ex) => {
+    executions.forEach((ex: { startedAt: Date }) => {
       const hour = new Date(ex.startedAt).getHours();
       hourCounts[hour] = (hourCounts[hour] || 0) + 1;
     });
@@ -828,7 +830,7 @@ export class WorkflowService {
       select: { id: true, status: true },
     });
 
-    const executionIds = executions.map((e) => e.id);
+    const executionIds = executions.map((e: { id: string; status: string }) => e.id);
     const totalLeads = executionIds.length;
 
     // Get workflow nodes to build the funnel in order
@@ -867,11 +869,11 @@ export class WorkflowService {
       _count: { executionId: true },
     });
 
-    const reachMap = new Map(nodeReach.map(r => [r.nodeId, r._count.executionId]));
+    const reachMap = new Map<string, number>(nodeReach.map((r: any) => [r.nodeId, Number(r._count.executionId)]));
 
-    const nodeStats = sequence.map((node, index) => {
-      const count = reachMap.get(node.id) || 0;
-      const prevCount = index > 0 ? reachMap.get(sequence[index - 1].id) || 0 : totalLeads;
+    const nodeStats = sequence.map((node: any, index: number) => {
+      const count: number = Number(reachMap.get(node.id)) || 0;
+      const prevCount: number = index > 0 ? (Number(reachMap.get(sequence[index - 1].id)) || 0) : totalLeads;
 
       return {
         id: node.id,
@@ -884,7 +886,7 @@ export class WorkflowService {
       };
     });
 
-    const conversions = nodes.filter(n => n.type === 'END').reduce((acc, node) => acc + (reachMap.get(node.id) || 0), 0);
+    const conversions = nodes.filter((n: any) => n.type === 'END').reduce((acc: number, node: any) => acc + (Number(reachMap.get(node.id)) || 0), 0);
 
     return {
       totalLeads,

@@ -66,14 +66,14 @@ async function bootstrap() {
   app.useGlobalGuards(new JwtAuthGuard(reflector));
   app.useGlobalInterceptors(new LoggingInterceptor());
 
-  const allowedOrigins = [
+  const allowedOrigins: string[] = [
     'http://localhost:3000',
     'http://localhost:3001',
     process.env.CORS_ORIGIN,
     process.env.FRONTEND_URL,
     'https://x1bot.cloud',
     'https://api.n9n.archcode.space'
-  ].filter(Boolean);
+  ].filter((v): v is string => !!v);
 
   app.enableCors({
     origin: allowedOrigins,
