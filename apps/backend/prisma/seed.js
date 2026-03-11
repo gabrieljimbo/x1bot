@@ -48,7 +48,6 @@ async function main() {
     email: superAdminUser.email,
     tenantId: superAdminUser.tenantId,
     role: superAdminUser.role,
-    password: 'superadmin123', // Only for initial setup
   })
 
   // Create demo tenant
@@ -94,7 +93,6 @@ async function main() {
   console.log('Created default user:', {
     email: defaultUser.email,
     tenantId: defaultUser.tenantId,
-    password: 'demo123', // Only for initial setup
   })
 
   // Create sample workflow using upsert to avoid duplicate errors

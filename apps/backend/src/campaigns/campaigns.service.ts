@@ -56,18 +56,30 @@ export class CampaignsService {
       });
     }
 
-    // Copy nodes/edges from template if provided
-    if (dto.workflowId && dto.type === CampaignType.WORKFLOW) {
-      const templateWf = await this.prisma.campaignWorkflow.findUnique({
-        where: { campaignId: dto.workflowId }
-      });
-      if (templateWf) {
+    // Workflow-specific handling
+    if (dto.type === CampaignType.WORKFLOW) {
+      if (dto.workflowId) {
+        // Copy nodes/edges from template if provided
+        const templateWf = await this.prisma.campaignWorkflow.findUnique({
+          where: { campaignId: dto.workflowId }
+        });
+        if (templateWf) {
+          await this.prisma.campaignWorkflow.create({
+            data: {
+              campaignId: campaign.id,
+              nodes: templateWf.nodes as any,
+              edges: templateWf.edges as any,
+            }
+          });
+        }
+      } else {
+        // New empty workflow
         await this.prisma.campaignWorkflow.create({
           data: {
             campaignId: campaign.id,
-            nodes: templateWf.nodes as any,
-            edges: templateWf.edges as any,
-          }
+            nodes: [],
+            edges: [],
+          },
         });
       }
     }
@@ -143,6 +155,7 @@ export class CampaignsService {
       include: {
         messages: { orderBy: { order: 'asc' } },
         sessions: true,
+        workflow: true,
         contactLists: { include: { contactList: true } },
         _count: { select: { recipients: true } },
       },
