@@ -114,8 +114,13 @@ function getInitials(name?: string, phone?: string) {
     return (phone || '?').charAt(0)
 }
 
-function Avatar({ name, phone, size = 'md' }: { name?: string; phone?: string; size?: 'sm' | 'md' | 'lg' }) {
+function Avatar({ name, phone, avatarUrl, size = 'md' }: { name?: string; phone?: string; avatarUrl?: string; size?: 'sm' | 'md' | 'lg' }) {
     const sz = size === 'sm' ? 'w-8 h-8 text-xs' : size === 'lg' ? 'w-12 h-12 text-base' : 'w-10 h-10 text-sm'
+    if (avatarUrl) {
+        return (
+            <img src={avatarUrl} alt={name || phone || ''} className={`${sz} rounded-full object-cover flex-shrink-0`} />
+        )
+    }
     const colors = ['bg-violet-500', 'bg-indigo-500', 'bg-pink-500', 'bg-teal-500', 'bg-orange-500', 'bg-cyan-500']
     const idx = (phone || '').charCodeAt(0) % colors.length
     return (
@@ -142,7 +147,7 @@ function ConversationListItem({
             className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-white/5 transition-colors relative ${selected ? 'bg-white/[0.07] border-l-2 border-[#00ff88]' : 'border-l-2 border-transparent'}`}
         >
             <div className="relative flex-shrink-0">
-                <Avatar name={conv.contactName} phone={conv.contactPhone} />
+                <Avatar name={conv.contactName} phone={conv.contactPhone} avatarUrl={conv.contactAvatar} />
                 {conv.isGroup && (
                     <span className="absolute -bottom-0.5 -right-0.5 bg-[#111] rounded-full p-px">
                         <Users size={10} className="text-gray-400" />
@@ -305,7 +310,15 @@ function ChatArea({
         try {
             const result = await apiClient.getInboxMessages(conversation.id, cursor, 50)
             if (cursor) {
+                const node = messagesContainerRef.current
+                const oldScrollHeight = node ? node.scrollHeight : 0
                 setMessages((prev) => [...result.data, ...prev])
+                // Wait for render to finish, then adjust scroll position
+                setTimeout(() => {
+                    if (node) {
+                        node.scrollTop = node.scrollTop + (node.scrollHeight - oldScrollHeight)
+                    }
+                }, 0)
             } else {
                 setMessages(result.data)
                 setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'instant' }), 0)
@@ -377,8 +390,12 @@ function ChatArea({
         setShowFlowMenu(false)
         try {
             await apiClient.triggerInboxFlow(conversation.id, workflowId)
+            setCurrentStatus('BOT')
+            onStatusUpdate({ ...conversation, status: 'BOT', activeFlowId: workflowId })
+            alert('Fluxo disparado com sucesso!')
         } catch (e) {
             console.error(e)
+            alert('Erro ao disparar fluxo.')
         }
     }
 
@@ -412,7 +429,7 @@ function ChatArea({
                 <button onClick={onBack} className="md:hidden text-gray-400 hover:text-white p-1">
                     <ArrowLeft size={20} />
                 </button>
-                <Avatar name={conversation.contactName} phone={conversation.contactPhone} size="md" />
+                <Avatar name={conversation.contactName} phone={conversation.contactPhone} avatarUrl={conversation.contactAvatar} size="md" />
                 <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-white text-sm truncate">
                         {contactDisplay(conversation)}
@@ -633,11 +650,11 @@ function InboxContent() {
     }
 
     return (
-        <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+        <div className="h-screen bg-[#0a0a0a] flex flex-col overflow-hidden">
             <AppHeader />
 
             {/* Top bar */}
-            <div className="bg-[#111] border-b border-white/5 px-4 py-3 flex items-center gap-3 flex-shrink-0">
+            <div className="bg-[#111] border-b border-white/5 px-4 py-3 flex items-center gap-3 flex-shrink-0 z-10">
                 <div className="flex items-center gap-2">
                     <MessageSquare size={18} className="text-[#00ff88]" />
                     <h1 className="text-white font-semibold text-sm">Inbox</h1>
@@ -686,7 +703,7 @@ function InboxContent() {
             </div>
 
             {/* Main layout */}
-            <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 110px)' }}>
+            <div className="flex flex-1 overflow-hidden">
 
                 {/* ── Conversation list (left panel) ── */}
                 <div className={`${showChat ? 'hidden md:flex' : 'flex'} w-full md:w-[340px] lg:w-[380px] flex-col border-r border-white/5 flex-shrink-0`}>
