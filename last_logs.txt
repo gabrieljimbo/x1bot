@@ -1,0 +1,500 @@
+#17 52.60 .../node_modules/puppeteer postinstall: chrome-headless-shell (145.0.7632.67) downloaded to /root/.cache/puppeteer/chrome-headless-shell/linux-145.0.7632.67
+#17 55.46 .../node_modules/puppeteer postinstall: chrome (145.0.7632.67) downloaded to /root/.cache/puppeteer/chrome/linux-145.0.7632.67
+#17 55.49 .../node_modules/puppeteer postinstall: Done
+#17 55.57 .../prisma@5.22.0/node_modules/prisma preinstall$ node scripts/preinstall-entry.js
+#17 55.68 .../prisma@5.22.0/node_modules/prisma preinstall: Done
+#17 55.84 .../node_modules/@whiskeysockets/baileys preinstall$ node ./engine-requirements.js
+#17 55.90 .../node_modules/@prisma/client postinstall$ node scripts/postinstall.js
+#17 55.99 .../node_modules/@whiskeysockets/baileys preinstall: Done
+#17 56.75 .../node_modules/@prisma/client postinstall: prisma:warn We could not find your Prisma schema in the default locations (see: https://pris.ly/d/prisma-schema-location).
+#17 56.75 .../node_modules/@prisma/client postinstall: If you have a Prisma schema file in a custom path, you will need to run
+#17 56.75 .../node_modules/@prisma/client postinstall: `prisma generate --schema=./path/to/your/schema.prisma` to generate Prisma Client.
+#17 56.75 .../node_modules/@prisma/client postinstall: If you do not have a Prisma schema file yet, you can ignore this message.
+#17 56.79 .../node_modules/@prisma/client postinstall: Done
+#17 56.93  WARN  Failed to create bin at /app/node_modules/.pnpm/cosmiconfig@9.0.0_typescript@5.9.3/node_modules/cosmiconfig/node_modules/.bin/tsc. ENOENT: no such file or directory, open '/app/node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/bin/tsc'
+#17 56.93  WARN  Failed to create bin at /app/node_modules/.pnpm/cosmiconfig@9.0.0_typescript@5.9.3/node_modules/cosmiconfig/node_modules/.bin/tsserver. ENOENT: no such file or directory, open '/app/node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/bin/tsserver'
+#17 57.27  WARN  Failed to create bin at /app/apps/backend/node_modules/.bin/browserslist. ENOENT: no such file or directory, open '/app/node_modules/.pnpm/browserslist@4.28.1/node_modules/browserslist/cli.js'
+#17 57.27  WARN  Failed to create bin at /app/apps/backend/node_modules/.bin/webpack. ENOENT: no such file or directory, open '/app/node_modules/.pnpm/webpack@5.97.1/node_modules/webpack/bin/webpack.js'
+#17 57.27  WARN  Failed to create bin at /app/apps/backend/node_modules/.bin/acorn. ENOENT: no such file or directory, open '/app/node_modules/.pnpm/acorn@8.15.0/node_modules/acorn/bin/acorn'
+#17 58.04  WARN  Issues with peer dependencies found
+#17 58.04 apps/backend
+#17 58.04 ├─┬ @nest-lab/throttler-storage-redis 1.2.0
+#17 58.04 │ └── ✕ unmet peer reflect-metadata@^0.2.1: found 0.1.14
+#17 58.04 └─┬ @whiskeysockets/baileys 7.0.0-rc.9
+#17 58.04   └── ✕ unmet peer link-preview-js@^3.0.0: found 4.0.0
+#17 58.05 
+#17 58.05 dependencies:
+#17 58.05 + @nestjs/jwt 11.0.2
+#17 58.05 + @nestjs/passport 11.0.5
+#17 58.05 + @types/bcrypt 6.0.0
+#17 58.05 + @types/passport-jwt 4.0.1
+#17 58.05 + bcrypt 6.0.0
+#17 58.05 + date-fns 4.1.0
+#17 58.05 + date-fns-tz 3.2.0
+#17 58.05 + passport 0.7.0
+#17 58.05 + passport-jwt 4.0.1
+#17 58.05 
+#17 58.05 devDependencies: skipped
+#17 58.05 
+#17 58.07 Done in 57.8s using pnpm v10.32.1
+#17 DONE 58.5s
+
+#21 [builder  8/17] RUN NODE_ENV=development pnpm install
+#21 17.57 Progress: resolved 427, reused 0, downloaded 415, added 0
+#21 18.57 Progress: resolved 546, reused 0, downloaded 522, added 0
+#21 19.57 Progress: resolved 652, reused 0, downloaded 619, added 0
+#21 20.57 Progress: resolved 772, reused 0, downloaded 740, added 0
+#21 21.57 Progress: resolved 933, reused 0, downloaded 903, added 0
+#21 22.58 Progress: resolved 1045, reused 0, downloaded 1017, added 0
+#21 ...
+
+#23 [runner-deps 10/12] WORKDIR /app/apps/backend
+#23 DONE 2.5s
+
+#21 [builder  8/17] RUN NODE_ENV=development pnpm install
+#21 23.15  WARN  11 deprecated subdependencies found: @humanwhocodes/config-array@0.13.0, @humanwhocodes/object-schema@2.0.3, are-we-there-yet@2.0.0, gauge@3.0.2, glob@7.2.3, inflight@1.0.6, npmlog@5.0.1, rimraf@2.7.1, rimraf@3.0.2, tar@6.2.1, whatwg-encoding@3.1.1
+#21 23.25 Packages: +1018
+#21 23.25 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#21 23.62 Progress: resolved 1045, reused 0, downloaded 1017, added 1
+#21 24.62 Progress: resolved 1045, reused 0, downloaded 1017, added 666
+#21 25.62 Progress: resolved 1045, reused 0, downloaded 1017, added 985
+#21 26.22 Progress: resolved 1045, reused 0, downloaded 1017, added 1018, done
+#21 26.57 .../node_modules/protobufjs postinstall$ node scripts/postinstall
+#21 26.57 .../node_modules/@prisma/engines postinstall$ node scripts/postinstall.js
+#21 26.64 .../node_modules/msgpackr-extract install$ node-gyp-build-optional-packages
+#21 26.64 .../canvas@2.11.2/node_modules/canvas install$ node-pre-gyp install --fallback-to-build --update-binary
+#21 26.66 .../sharp@0.34.5/node_modules/sharp install$ node install/check.js || npm run build
+#21 26.92 .../node_modules/protobufjs postinstall: Done
+#21 ...
+
+#24 [runner-deps 11/12] RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=true pnpm prisma generate --schema=prisma/schema.prisma
+#24 1.092 Prisma schema loaded from prisma/schema.prisma
+#24 3.496 
+#24 3.496 ✔ Generated Prisma Client (v5.22.0) to ./node_modules/.prisma/client in 812ms
+#24 3.496 
+#24 3.496 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+#24 3.496 
+#24 3.496 Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+#24 3.496 
+#24 DONE 3.9s
+
+#25 [runner-deps 12/12] WORKDIR /app
+#25 DONE 0.0s
+
+#21 [builder  8/17] RUN NODE_ENV=development pnpm install
+#21 27.21 .../node_modules/protobufjs postinstall$ node scripts/postinstall
+#21 27.34 .../sharp@0.34.5/node_modules/sharp install: Done
+#21 27.34 .../node_modules/msgpackr-extract install: Done
+#21 27.41 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info it worked if it ends with ok
+#21 27.42 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info using node-pre-gyp@1.0.11
+#21 27.44 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info using node@20.20.1 | linux | x64
+#21 27.51 .../bcrypt@6.0.0/node_modules/bcrypt install$ node-gyp-build
+#21 27.53 .../node_modules/puppeteer postinstall$ node install.mjs
+#21 27.84 .../node_modules/protobufjs postinstall: Done
+#21 27.99 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp http GET https://github.com/Automattic/node-canvas/releases/download/v2.11.2/canvas-v2.11.2-node-v115-linux-glibc-x64.tar.gz
+#21 28.18 .../node_modules/tesseract.js postinstall$ opencollective-postinstall || true
+#21 28.70 .../bcrypt@6.0.0/node_modules/bcrypt install: Done
+#21 28.81 .../node_modules/tesseract.js postinstall: Thank you for using tesseract.js!
+#21 28.81 .../node_modules/tesseract.js postinstall: If you rely on this package, please consider supporting our open collective:
+#21 28.82 .../node_modules/tesseract.js postinstall: > https://opencollective.com/tesseractjs/donate
+#21 28.86 .../node_modules/tesseract.js postinstall: Done
+#21 28.91 .../node_modules/@nestjs/core postinstall$ opencollective || exit 0
+#21 29.09 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/
+#21 29.09 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libfontconfig.so.1
+#21 29.19 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libglib-2.0.so.0
+#21 29.19 .../node_modules/puppeteer postinstall: **INFO** Skipping Firefox download as instructed.
+#21 29.76 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libgmodule-2.0.so.0
+#21 29.78 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libstdc++.so.6
+#21 29.92 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libz.so.1
+#21 29.94 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/canvas.node
+#21 29.98 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/
+#21 29.99 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas.node
+#21 29.99 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/
+#21 29.99 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/
+#21 29.99 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/init.o
+#21 30.00 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/closure.o
+#21 30.00 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/backend/
+#21 30.00 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/backend/Backend.o
+#21 30.01 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/backend/PdfBackend.o
+#21 30.02 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/backend/ImageBackend.o
+#21 30.02 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/backend/SvgBackend.o
+#21 30.03 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/ImageData.o
+#21 30.04 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/bmp/
+#21 30.04 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/bmp/BMPParser.o
+#21 30.06 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/Image.o
+#21 30.07 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/CanvasGradient.o
+#21 30.07 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/Canvas.o
+#21 30.10 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/color.o
+#21 30.11 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/Backends.o
+#21 30.11 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/CanvasPattern.o
+#21 30.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/CanvasRenderingContext2d.o
+#21 30.15 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/obj.target/canvas/src/register_font.o
+#21 30.15 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libjpeg.so.62
+#21 30.19 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libexpat.so.1
+#21 30.22 .../node_modules/@nestjs/core postinstall:                            Thanks for installing nest 
+#21 30.22 .../node_modules/@nestjs/core postinstall:                  Please consider donating to our open collective
+#21 30.22 .../node_modules/@nestjs/core postinstall:                         to help us maintain this package.
+#21 30.22 .../node_modules/@nestjs/core postinstall:                                          
+#21 30.22 .../node_modules/@nestjs/core postinstall:                             Number of contributors: 0
+#21 30.23 .../node_modules/@nestjs/core postinstall:                              Number of backers: 1181
+#21 30.24 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libcairo.so.2
+#21 30.40 .../node_modules/@nestjs/core postinstall:                              Annual budget: $139,447
+#21 30.40 .../node_modules/@nestjs/core postinstall:                              Current balance: $21,562
+#21 30.40 .../node_modules/@nestjs/core postinstall:                                          
+#21 30.40 .../node_modules/@nestjs/core postinstall:              Become a partner: https://opencollective.com/nest/donate
+#21 30.41 .../node_modules/@nestjs/core postinstall:                                          
+#21 30.78 .../node_modules/@nestjs/core postinstall: Done
+#21 30.89 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libgobject-2.0.so.0
+#21 31.01 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libxml2.so.2
+#21 31.35 .../node_modules/@prisma/engines postinstall: Done
+#21 31.55 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libpango-1.0.so.0
+#21 31.64 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libpcre.so.1
+#21 31.70 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libpng16.so.16
+#21 31.73 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libfreetype.so.6
+#21 31.79 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libgio-2.0.so.0
+#21 31.98 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libgif.so.7
+#21 31.98 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libpangoft2-1.0.so.0
+#21 31.99 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libffi.so.7
+#21 31.99 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libpangocairo-1.0.so.0
+#21 32.00 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libfribidi.so.0
+#21 32.01 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/librsvg-2.so.2
+#21 33.39 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libcairo-gobject.so.2
+#21 33.42 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libharfbuzz.so.0
+#21 33.90 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libpixman-1.so.0
+#21 34.09 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/libgdk_pixbuf-2.0.so.0
+#21 34.10 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/
+#21 34.11 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/
+#21 34.11 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/
+#21 34.11 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas.node.d
+#21 34.11 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/
+#21 34.11 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/
+#21 34.11 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/color.o.d
+#21 34.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/backend/
+#21 34.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/backend/SvgBackend.o.d
+#21 34.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/backend/PdfBackend.o.d
+#21 34.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/backend/ImageBackend.o.d
+#21 34.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/backend/Backend.o.d
+#21 34.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/CanvasGradient.o.d
+#21 34.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/Canvas.o.d
+#21 34.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/bmp/
+#21 34.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/bmp/BMPParser.o.d
+#21 34.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/Image.o.d
+#21 34.12 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/register_font.o.d
+#21 34.13 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/Backends.o.d
+#21 34.13 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/CanvasPattern.o.d
+#21 34.13 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/CanvasRenderingContext2d.o.d
+#21 34.13 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info extracted file count: 70 
+#21 34.13 .../canvas@2.11.2/node_modules/canvas install: [canvas] Success: "/app/node_modules/.pnpm/canvas@2.11.2/node_modules/canvas/build/Release/canvas.node" is installed via remote
+#21 34.13 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info ok 
+#21 34.13 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/ImageData.o.d
+#21 34.14 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/init.o.d
+#21 34.14 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/obj.target/canvas/src/closure.o.d
+#21 34.14 .../canvas@2.11.2/node_modules/canvas install: node-pre-gyp info install unpacking Release/.deps/Release/canvas.node.d
+#21 34.16 .../canvas@2.11.2/node_modules/canvas install: Done
+#21 40.15 .../node_modules/puppeteer postinstall: chrome-headless-shell (145.0.7632.67) downloaded to /root/.cache/puppeteer/chrome-headless-shell/linux-145.0.7632.67
+#21 42.79 .../node_modules/puppeteer postinstall: chrome (145.0.7632.67) downloaded to /root/.cache/puppeteer/chrome/linux-145.0.7632.67
+#21 42.81 .../node_modules/puppeteer postinstall: Done
+#21 42.83 .../prisma@5.22.0/node_modules/prisma preinstall$ node scripts/preinstall-entry.js
+#21 42.88 .../prisma@5.22.0/node_modules/prisma preinstall: Done
+#21 42.94 .../node_modules/@whiskeysockets/baileys preinstall$ node ./engine-requirements.js
+#21 42.97 .../node_modules/@prisma/client postinstall$ node scripts/postinstall.js
+#21 43.01 .../node_modules/@whiskeysockets/baileys preinstall: Done
+#21 ...
+
+#26 [production  6/15] COPY --from=runner-deps --chown=node:node /app/node_modules ./node_modules
+#26 ...
+
+#21 [builder  8/17] RUN NODE_ENV=development pnpm install
+#21 43.62 .../node_modules/@prisma/client postinstall: prisma:warn We could not find your Prisma schema in the default locations (see: https://pris.ly/d/prisma-schema-location).
+#21 43.62 .../node_modules/@prisma/client postinstall: If you have a Prisma schema file in a custom path, you will need to run
+#21 43.62 .../node_modules/@prisma/client postinstall: `prisma generate --schema=./path/to/your/schema.prisma` to generate Prisma Client.
+#21 43.62 .../node_modules/@prisma/client postinstall: If you do not have a Prisma schema file yet, you can ignore this message.
+#21 43.63 .../node_modules/@prisma/client postinstall: Done
+#21 44.90  WARN  Issues with peer dependencies found
+#21 44.90 apps/backend
+#21 44.90 ├─┬ @nest-lab/throttler-storage-redis 1.2.0
+#21 44.90 │ └── ✕ unmet peer reflect-metadata@^0.2.1: found 0.1.14
+#21 44.90 └─┬ @whiskeysockets/baileys 7.0.0-rc.9
+#21 44.90   └── ✕ unmet peer link-preview-js@^3.0.0: found 4.0.0
+#21 44.90 
+#21 44.90 dependencies:
+#21 44.90 + @nestjs/jwt 11.0.2
+#21 44.90 + @nestjs/passport 11.0.5
+#21 44.90 + @types/bcrypt 6.0.0
+#21 44.90 + @types/passport-jwt 4.0.1
+#21 44.90 + bcrypt 6.0.0
+#21 44.90 + date-fns 4.1.0
+#21 44.90 + date-fns-tz 3.2.0
+#21 44.90 + passport 0.7.0
+#21 44.90 + passport-jwt 4.0.1
+#21 44.90 
+#21 44.90 devDependencies:
+#21 44.90 + concurrently 8.2.2
+#21 44.90 + typescript 5.9.3
+#21 44.90 
+#21 44.93 Done in 44.6s using pnpm v10.32.1
+#21 DONE 45.3s
+
+#27 [builder  9/17] COPY apps/backend ./apps/backend
+#27 DONE 1.2s
+
+#26 [production  6/15] COPY --from=runner-deps --chown=node:node /app/node_modules ./node_modules
+#26 ...
+
+#28 [builder 10/17] COPY packages/shared ./packages/shared
+#28 DONE 0.1s
+
+#29 [builder 11/17] WORKDIR /app/apps/backend
+#29 DONE 0.0s
+
+#30 [builder 12/17] RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=true npx prisma generate --schema=prisma/schema.prisma
+#30 1.374 Prisma schema loaded from prisma/schema.prisma
+#30 3.222 
+#30 3.222 ✔ Generated Prisma Client (v5.22.0) to ./node_modules/.prisma/client in 593ms
+#30 3.222 
+#30 3.222 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+#30 3.222 
+#30 3.222 Tip: Easily identify and fix slow SQL queries in your app. Optimize helps you enhance your visibility: https://pris.ly/--optimize
+#30 3.222 
+#30 DONE 3.6s
+
+#26 [production  6/15] COPY --from=runner-deps --chown=node:node /app/node_modules ./node_modules
+#26 ...
+
+#31 [builder 13/17] WORKDIR /app
+#31 DONE 0.0s
+
+#32 [builder 14/17] WORKDIR /app/packages/shared
+#32 DONE 0.0s
+
+#33 [builder 15/17] RUN NODE_ENV=development pnpm build
+#33 0.483 
+#33 0.483 > @n9n/shared@1.0.0 build /app/packages/shared
+#33 0.483 > tsc
+#33 0.483 
+#33 DONE 2.8s
+
+#26 [production  6/15] COPY --from=runner-deps --chown=node:node /app/node_modules ./node_modules
+#26 ...
+
+#34 [builder 16/17] WORKDIR /app/apps/backend
+#34 DONE 0.0s
+
+#35 [builder 17/17] RUN NODE_ENV=development pnpm build
+#35 0.565 
+#35 0.565 > @n9n/backend@1.0.0 build /app/apps/backend
+#35 0.565 > nest build
+#35 0.565 
+#35 ...
+
+#26 [production  6/15] COPY --from=runner-deps --chown=node:node /app/node_modules ./node_modules
+#26 DONE 13.6s
+
+#36 [production  7/15] COPY --from=runner-deps --chown=node:node /app/apps/backend/node_modules ./apps/backend/node_modules
+#36 DONE 0.6s
+
+#35 [builder 17/17] RUN NODE_ENV=development pnpm build
+#35 9.376 src/api-configs/api-configs.service.ts:40:29 - error TS7006: Parameter 'c' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 40         return configs.find(c => c.isActive) || configs[0] || null;
+#35 9.376                                ~
+#35 9.376 src/auth/auth.service.ts:43:58 - error TS7006: Parameter 'tx' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 43     const result = await this.prisma.$transaction(async (tx) => {
+#35 9.376                                                             ~~
+#35 9.376 src/campaigns/campaigns.controller.ts:8:10 - error TS2305: Module '"@prisma/client"' has no exported member 'CampaignType'.
+#35 9.376 
+#35 9.376 8 import { CampaignType } from '@prisma/client';
+#35 9.376            ~~~~~~~~~~~~
+#35 9.376 src/campaigns/campaigns.service.ts:5:10 - error TS2305: Module '"@prisma/client"' has no exported member 'CampaignStatus'.
+#35 9.376 
+#35 9.376 5 import { CampaignStatus, CampaignType, Prisma } from '@prisma/client';
+#35 9.376            ~~~~~~~~~~~~~~
+#35 9.376 src/campaigns/campaigns.service.ts:5:26 - error TS2305: Module '"@prisma/client"' has no exported member 'CampaignType'.
+#35 9.376 
+#35 9.376 5 import { CampaignStatus, CampaignType, Prisma } from '@prisma/client';
+#35 9.376                            ~~~~~~~~~~~~
+#35 9.376 src/campaigns/campaigns.service.ts:179:20 - error TS7006: Parameter 'c' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 179       all.forEach((c) => phoneSet.add(c.contactPhone));
+#35 9.376                        ~
+#35 9.376 src/campaigns/campaigns.service.ts:186:30 - error TS7006: Parameter 'c' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 186         contactTags.forEach((c) => phoneSet.add(c.contactPhone));
+#35 9.376                                  ~
+#35 9.376 src/campaigns/campaigns.service.ts:192:42 - error TS7006: Parameter 's' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 192         const sessionIds = sessions.map((s) => s.id);
+#35 9.376                                              ~
+#35 9.376 src/campaigns/campaigns.service.ts:198:31 - error TS7006: Parameter 'cl' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 198           chatLabels.forEach((cl) => {
+#35 9.376                                   ~~
+#35 9.376 src/campaigns/campaigns.service.ts:226:71 - error TS7006: Parameter 'i' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 226     const added = await this._upsertRecipients(campaignId, items.map((i) => ({ phone: i.phone, name: i.name ?? undefined })));
+#35 9.376                                                                           ~
+#35 9.376 src/campaigns/campaigns.service.ts:243:50 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 243     const existingPhones = new Set(existing.map((r) => r.phone));
+#35 9.376                                                      ~
+#35 9.376 src/campaigns/campaigns.service.ts:292:26 - error TS7006: Parameter 'c' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 292     return campaigns.map(c => ({
+#35 9.376                              ~
+#35 9.376 src/campaigns/campaigns.service.ts:393:47 - error TS2339: Property 'JsonNull' does not exist on type 'typeof Prisma'.
+#35 9.376 
+#35 9.376 393             nodes: campaignWf.nodes ?? Prisma.JsonNull,
+#35 9.376                                                   ~~~~~~~~
+#35 9.376 src/campaigns/campaigns.service.ts:394:47 - error TS2339: Property 'JsonNull' does not exist on type 'typeof Prisma'.
+#35 9.376 
+#35 9.376 394             edges: campaignWf.edges ?? Prisma.JsonNull,
+#35 9.376                                                   ~~~~~~~~
+#35 9.376 src/campaigns/campaigns.service.ts:398:47 - error TS2339: Property 'JsonNull' does not exist on type 'typeof Prisma'.
+#35 9.376 
+#35 9.376 398             nodes: campaignWf.nodes ?? Prisma.JsonNull,
+#35 9.376                                                   ~~~~~~~~
+#35 9.376 src/campaigns/campaigns.service.ts:399:47 - error TS2339: Property 'JsonNull' does not exist on type 'typeof Prisma'.
+#35 9.376 
+#35 9.376 399             edges: campaignWf.edges ?? Prisma.JsonNull,
+#35 9.376                                                   ~~~~~~~~
+#35 9.376 src/campaigns/campaigns.service.ts:407:57 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 407     let pendingRecipients = campaign.recipients.filter((r) => r.status === 'pending');
+#35 9.376                                                             ~
+#35 9.376 src/campaigns/campaigns.service.ts:515:24 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 515     return result.map((r) => ({ tag: r.tag, count: Number(r.count) }));
+#35 9.376                            ~
+#35 9.376 src/campaigns/campaigns.service.ts:520:38 - error TS7006: Parameter 's' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 520     const sessionIds = sessions.map((s) => s.id);
+#35 9.376                                          ~
+#35 9.376 src/campaigns/campaigns.service.ts:532:24 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 532     return result.map((r) => ({
+#35 9.376                            ~
+#35 9.376 src/campaigns/campaigns.service.ts:562:24 - error TS7006: Parameter 'g' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 562     return configs.map(g => ({
+#35 9.376                            ~
+#35 9.376 src/campaigns/campaigns.service.ts:623:50 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 623       const sentPhones = new Set(alreadySent.map(r => r.phone));
+#35 9.376                                                      ~
+#35 9.376 src/campaigns/campaigns.service.ts:632:49 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 632     const existingPhones = new Set(existing.map(r => r.phone));
+#35 9.376                                                     ~
+#35 9.376 src/campaigns/contact-lists.service.ts:59:51 - error TS7006: Parameter 'c' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 59     const contacts = [...new Set(contactTags.map((c) => c.contactPhone))].map((phone) => ({ phone }));
+#35 9.376                                                      ~
+#35 9.376 src/campaigns/contact-lists.service.ts:60:38 - error TS2345: Argument of type '{ phone: unknown; }[]' is not assignable to parameter of type '{ phone: string; name?: string | undefined; }[]'.
+#35 9.376   Type '{ phone: unknown; }' is not assignable to type '{ phone: string; name?: string | undefined; }'.
+#35 9.376     Types of property 'phone' are incompatible.
+#35 9.376       Type 'unknown' is not assignable to type 'string'.
+#35 9.376 
+#35 9.376 60     return this._addContacts(listId, contacts);
+#35 9.376                                         ~~~~~~~~
+#35 9.376 src/campaigns/contact-lists.service.ts:74:50 - error TS7006: Parameter 'c' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 74     const existingPhones = new Set(existing.map((c) => c.phone));
+#35 9.376                                                     ~
+#35 9.376 src/execution/node-executor.service.ts:2670:54 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 2670       const sentIds = new Set(alreadySentRecords.map(r => r.productId));
+#35 9.376                                                           ~
+#35 9.376 src/execution/node-executor.service.ts:3228:49 - error TS7006: Parameter 's' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 3228         const sentUrlSet = new Set(sentUrls.map(s => s.productUrl));
+#35 9.376                                                      ~
+#35 9.376 src/inbox/inbox.controller.ts:4:10 - error TS2305: Module '"@prisma/client"' has no exported member 'ConversationStatus'.
+#35 9.376 
+#35 9.376 4 import { ConversationStatus } from '@prisma/client';
+#35 9.376            ~~~~~~~~~~~~~~~~~~
+#35 9.376 src/inbox/inbox.service.ts:11:10 - error TS2305: Module '"@prisma/client"' has no exported member 'ConversationStatus'.
+#35 9.376 
+#35 9.376 11 import { ConversationStatus as PrismaConvStatus, MessageStatus as PrismaMsgStatus, Conversation, Message } from '@prisma/client';
+#35 9.376             ~~~~~~~~~~~~~~~~~~
+#35 9.376 src/inbox/inbox.service.ts:11:50 - error TS2305: Module '"@prisma/client"' has no exported member 'MessageStatus'.
+#35 9.376 
+#35 9.376 11 import { ConversationStatus as PrismaConvStatus, MessageStatus as PrismaMsgStatus, Conversation, Message } from '@prisma/client';
+#35 9.376                                                     ~~~~~~~~~~~~~
+#35 9.376 src/inbox/inbox.service.ts:11:84 - error TS2305: Module '"@prisma/client"' has no exported member 'Conversation'.
+#35 9.376 
+#35 9.376 11 import { ConversationStatus as PrismaConvStatus, MessageStatus as PrismaMsgStatus, Conversation, Message } from '@prisma/client';
+#35 9.376                                                                                       ~~~~~~~~~~~~
+#35 9.376 src/inbox/inbox.service.ts:11:98 - error TS2305: Module '"@prisma/client"' has no exported member 'Message'.
+#35 9.376 
+#35 9.376 11 import { ConversationStatus as PrismaConvStatus, MessageStatus as PrismaMsgStatus, Conversation, Message } from '@prisma/client';
+#35 9.376                                                                                                     ~~~~~~~
+#35 9.376 src/user/user.service.ts:261:23 - error TS7006: Parameter 'user' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 261     return users.map((user) => {
+#35 9.376                           ~~~~
+#35 9.376 src/whatsapp/whatsapp-message-handler.service.ts:7:10 - error TS2305: Module '"@prisma/client"' has no exported member 'MessageStatus'.
+#35 9.376 
+#35 9.376 7 import { MessageStatus } from '@prisma/client';
+#35 9.376            ~~~~~~~~~~~~~
+#35 9.376 src/whatsapp/whatsapp-message-handler.service.ts:190:21 - error TS7006: Parameter 'a' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 190     workflows.sort((a, b) => {
+#35 9.376                         ~
+#35 9.376 src/whatsapp/whatsapp-message-handler.service.ts:190:24 - error TS7006: Parameter 'b' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 190     workflows.sort((a, b) => {
+#35 9.376                            ~
+#35 9.376 src/whatsapp/whatsapp.service.ts:142:38 - error TS7006: Parameter 'id' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 142       const removed = oldIds.filter((id) => !newIds.includes(id));
+#35 9.376                                          ~~
+#35 9.376 src/whatsapp/whatsapp.service.ts:321:39 - error TS7006: Parameter 'a' implicitly has an 'any' type.
+#35 9.376 
+#35 9.376 321     const labelIds = associations.map(a => a.labelId);
+#35 9.376                                           ~
+#35 9.376 src/workflow/workflow.service.ts:3:10 - error TS2305: Module '"@prisma/client"' has no exported member 'CampaignType'.
+#35 9.376 
+#35 9.376 3 import { CampaignType, Prisma } from '@prisma/client';
+#35 9.376            ~~~~~~~~~~~~
+#35 9.376 
+#35 9.380 Found 40 error(s).
+#35 9.380 
+#35 9.459  ELIFECYCLE  Command failed with exit code 1.
+#35 ERROR: process "/bin/sh -c NODE_ENV=development pnpm build" did not complete successfully: exit code: 1
+------
+ > [builder 17/17] RUN NODE_ENV=development pnpm build:
+9.376 321     const labelIds = associations.map(a => a.labelId);
+9.376                                           ~
+9.376 src/workflow/workflow.service.ts:3:10 - error TS2305: Module '"@prisma/client"' has no exported member 'CampaignType'.
+9.376 
+9.376 3 import { CampaignType, Prisma } from '@prisma/client';
+9.376            ~~~~~~~~~~~~
+9.376 
+9.380 Found 40 error(s).
+9.380 
+9.459  ELIFECYCLE  Command failed with exit code 1.
+------
+Dockerfile:48
+--------------------
+  46 |     
+  47 |     WORKDIR /app/apps/backend
+  48 | >>> RUN NODE_ENV=development pnpm build
+  49 |     
+  50 |     # Stage 2: Production Dependencies (Minimal)
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c NODE_ENV=development pnpm build" did not complete successfully: exit code: 1
+exit status 1
+[stderr] Error type: RuntimeException
+[stderr] Error code: 0
+[stderr] Location: /var/www/html/app/Traits/ExecuteRemoteCommand.php:243
+[stderr] Stack trace (first 5 lines):
+[stderr] #0 /var/www/html/app/Traits/ExecuteRemoteCommand.php(104): App\Jobs\ApplicationDeploymentJob->executeCommandWithProcess()
+[stderr] #1 /var/www/html/vendor/laravel/framework/src/Illuminate/Collections/Traits/EnumeratesValues.php(275): App\Jobs\ApplicationDeploymentJob->{closure:App\Traits\ExecuteRemoteCommand::execute_remote_command():71}()
+[stderr] #2 /var/www/html/app/Traits/ExecuteRemoteCommand.php(71): Illuminate\Support\Collection->each()
+[stderr] #3 /var/www/html/app/Jobs/ApplicationDeploymentJob.php(3202): App\Jobs\ApplicationDeploymentJob->execute_remote_command()
+[stderr] #4 /var/www/html/app/Jobs/ApplicationDeploymentJob.php(864): App\Jobs\ApplicationDeploymentJob->build_image()
+[stderr] ========================================
+[stderr] Deployment failed. Removing the new version of your application.
+[stdout] Gracefully shutting down build container: jw1wd82uqxhpyd71xkp3xazf
+[stdout] jw1wd82uqxhpyd71xkp3xazf
