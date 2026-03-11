@@ -7,7 +7,7 @@ import { ContactListsService } from './contact-lists.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CampaignType } from '@prisma/client';
 
-@Controller('api/campaigns')
+@Controller('campaigns')
 @UseGuards(JwtAuthGuard)
 export class CampaignsController {
   constructor(
@@ -174,7 +174,7 @@ export class CampaignsController {
   }
 }
 
-@Controller('api/contact-lists')
+@Controller('contact-lists')
 @UseGuards(JwtAuthGuard)
 export class ContactListsController {
   constructor(private readonly contactListsService: ContactListsService) {}

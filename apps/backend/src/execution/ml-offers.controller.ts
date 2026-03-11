@@ -2,7 +2,7 @@ import { Controller, Post, Get } from '@nestjs/common';
 import { MlOffersService } from './ml-offers.service';
 import { Public } from '../auth/decorators/public.decorator';
 
-@Controller('api/ml-offers')
+@Controller('ml-offers')
 export class MlOffersController {
     constructor(private readonly mlOffersService: MlOffersService) { }
 

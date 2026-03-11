@@ -24,7 +24,7 @@ import { Public } from '../auth/decorators/public.decorator';
 import { CurrentUser } from '../auth/decorators/user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-@Controller('api')
+@Controller()
 @UseGuards(JwtAuthGuard)
 export class WorkflowController {
   constructor(

@@ -7,7 +7,7 @@ import { TenantService } from './tenant.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/user.decorator';
 
-@Controller('api/tenant')
+@Controller('tenant')
 @UseGuards(JwtAuthGuard)
 export class TenantMeController {
   constructor(private readonly tenantService: TenantService) {}

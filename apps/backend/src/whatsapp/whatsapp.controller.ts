@@ -15,7 +15,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../auth/types/roles.enum';
 
-@Controller('api/whatsapp')
+@Controller('whatsapp')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class WhatsappController {
     constructor(private readonly whatsappService: WhatsappService) { }
