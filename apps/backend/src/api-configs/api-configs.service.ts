@@ -69,4 +69,48 @@ export class ApiConfigsService {
             where: { tenantId_provider: { tenantId, provider } },
         });
     }
+
+    async getPushcutNotifications(tenantId: string) {
+        const config = await this.getByProvider(tenantId, 'pushcut');
+        if (!config || !config.secret || !config.isActive) {
+            throw new Error('Pushcut API Key not configured or inactive');
+        }
+
+        try {
+            const response = await fetch('https://api.pushcut.io/v1/notifications', {
+                headers: { 'API-Key': config.secret },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Pushcut API error: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            console.error('[PUSHCUT] Error fetching notifications:', error.message);
+            throw error;
+        }
+    }
+
+    async getPushcutDevices(tenantId: string) {
+        const config = await this.getByProvider(tenantId, 'pushcut');
+        if (!config || !config.secret || !config.isActive) {
+            throw new Error('Pushcut API Key not configured or inactive');
+        }
+
+        try {
+            const response = await fetch('https://api.pushcut.io/v1/devices', {
+                headers: { 'API-Key': config.secret },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Pushcut API error: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            console.error('[PUSHCUT] Error fetching devices:', error.message);
+            throw error;
+        }
+    }
 }

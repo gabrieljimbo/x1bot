@@ -44,4 +44,16 @@ export class ApiConfigsController {
     delete(@Request() req: any, @Param('provider') provider: string) {
         return this.service.delete(req.user.tenantId, provider);
     }
+
+    /** Proxy to fetch Pushcut notifications */
+    @Get('pushcut/notifications')
+    getPushcutNotifications(@Request() req: any) {
+        return this.service.getPushcutNotifications(req.user.tenantId);
+    }
+
+    /** Proxy to fetch Pushcut devices */
+    @Get('pushcut/devices')
+    getPushcutDevices(@Request() req: any) {
+        return this.service.getPushcutDevices(req.user.tenantId);
+    }
 }

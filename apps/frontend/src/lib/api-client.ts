@@ -532,6 +532,16 @@ export const apiClient = {
     await client.delete(`/campaigns/${id}`);
   },
 
+  getPushcutNotifications: async () => {
+    const { data } = await client.get('/api-configs/pushcut/notifications');
+    return data;
+  },
+
+  getPushcutDevices: async () => {
+    const { data } = await client.get('/api-configs/pushcut/devices');
+    return data;
+  },
+
   startCampaign: async (id: string) => {
     const { data } = await client.post(`/campaigns/${id}/start`);
     return data;

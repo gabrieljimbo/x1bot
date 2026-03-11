@@ -640,4 +640,5 @@ export interface NotificacaoConfig {
   pushcutNotificationName?: string; // e.g. "nova_venda"
   pushcutTitle?: string; // title for Pushcut
   pushcutText?: string; // text for Pushcut
+  pushcutDevices?: string[]; // devices to send notification to
 }

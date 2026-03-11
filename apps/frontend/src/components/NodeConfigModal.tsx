@@ -3778,9 +3778,38 @@ function DroppableInput({ value, onChange, placeholder, className, type = 'text'
 // ────── NOTIFICACAO CONFIG ──────
 function NotificacaoNodeConfig({ config, setConfig, sessions, loading }: any) {
   const [activeTab, setActiveTab] = useState<'whatsapp' | 'pushcut'>('whatsapp')
+  const [pushcutNotifications, setPushcutNotifications] = useState<any[]>([])
+  const [pushcutDevices, setPushcutDevices] = useState<any[]>([])
+  const [loadingPushcut, setLoadingPushcut] = useState(false)
+  const [pushcutError, setPushcutError] = useState<string | null>(null)
+
   const msgRef = useRef<HTMLTextAreaElement>(null)
   const pushcutTitleRef = useRef<HTMLInputElement>(null)
   const pushcutTextRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (activeTab === 'pushcut' && config.usePushcut) {
+      loadPushcutData()
+    }
+  }, [activeTab, config.usePushcut])
+
+  const loadPushcutData = async () => {
+    try {
+      setLoadingPushcut(true)
+      setPushcutError(null)
+      const [notifications, devices] = await Promise.all([
+        apiClient.getPushcutNotifications(),
+        apiClient.getPushcutDevices(),
+      ])
+      setPushcutNotifications(notifications)
+      setPushcutDevices(devices)
+    } catch (error: any) {
+      console.error('Error loading Pushcut data:', error)
+      setPushcutError(error.response?.data?.message || 'Erro ao carregar dados do Pushcut. Verifique sua API Key nas Configurações.')
+    } finally {
+      setLoadingPushcut(false)
+    }
+  }
 
   const insertAtCursor = (
     ref: React.RefObject<HTMLTextAreaElement | HTMLInputElement | null>,
@@ -3892,7 +3921,10 @@ function NotificacaoNodeConfig({ config, setConfig, sessions, loading }: any) {
             </p>
           </div>
 
-          <label className="flex items-center gap-3 p-4 bg-[#151515] border border-gray-700 rounded-xl cursor-pointer hover:bg-[#1a1a1a] transition-all group">
+          <label 
+            htmlFor="pushcut-toggle"
+            className="flex items-center gap-3 p-4 bg-[#151515] border border-gray-700 rounded-xl cursor-pointer hover:bg-[#1a1a1a] transition-all group"
+          >
             <div className={`relative w-11 h-6 rounded-full transition-all ${config.usePushcut ? 'bg-primary' : 'bg-gray-700'}`}>
               <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${config.usePushcut ? 'left-6' : 'left-1'}`} />
             </div>
@@ -3901,29 +3933,84 @@ function NotificacaoNodeConfig({ config, setConfig, sessions, loading }: any) {
               <p className="text-[10px] text-gray-500">Requer API-Key configurada nas Integrações</p>
             </div>
           </label>
-          <input type="checkbox" className="hidden" checked={!!config.usePushcut} onChange={(e) => setConfig({ ...config, usePushcut: e.target.checked })} />
+          <input 
+            id="pushcut-toggle"
+            type="checkbox" 
+            className="hidden" 
+            checked={!!config.usePushcut} 
+            onChange={(e) => setConfig({ ...config, usePushcut: e.target.checked })} 
+          />
+
+          {pushcutError && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+              <p className="text-xs text-red-400">{pushcutError}</p>
+            </div>
+          )}
 
           {config.usePushcut && (
-            <div className="space-y-4 animate-in fade-in duration-150">
-              {/* Click on toggle actually toggles */}
-              <div
-                className="relative cursor-pointer"
-                onClick={() => setConfig({ ...config, usePushcut: !config.usePushcut })}
-                style={{ display: 'none' }}
-              />
+            <div className={`space-y-4 animate-in fade-in duration-150 ${loadingPushcut ? 'opacity-50 pointer-events-none' : ''}`}>
+              
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center justify-between">
+                  <span>Nome da Notificação</span>
+                  {loadingPushcut && <span className="text-[10px] animate-pulse">Carregando...</span>}
+                </label>
+                <div className="relative">
+                  <select
+                    value={config.pushcutNotificationName || ''}
+                    onChange={(e) => setConfig({ ...config, pushcutNotificationName: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded-xl focus:outline-none focus:border-primary text-white text-sm appearance-none"
+                  >
+                    <option value="">Selecione uma notificação...</option>
+                    {pushcutNotifications.map(n => (
+                      <option key={n.id} value={n.id}>{n.id}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">▼</div>
+                </div>
+                {!pushcutNotifications.length && !loadingPushcut && (
+                  <p className="text-[10px] text-yellow-500/70">Nenhuma notificação encontrada no Pushcut. Crie uma no app primeiro.</p>
+                )}
+              </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
-                  Nome da Notificação Pushcut
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center justify-between">
+                  <span>Dispositivos para Notificar</span>
                 </label>
-                <input
-                  type="text"
-                  value={config.pushcutNotificationName || ''}
-                  onChange={(e) => setConfig({ ...config, pushcutNotificationName: e.target.value })}
-                  placeholder="nova_lead"
-                  className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded-xl focus:outline-none focus:border-primary text-white font-mono text-sm placeholder-gray-600"
-                />
-                <p className="text-[10px] text-gray-600">Nome exato da notificação criada no app Pushcut. Suporta variáveis.</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {(config.pushcutDevices || []).map((devId: string) => {
+                    const dev = pushcutDevices.find(d => d.id === devId);
+                    return (
+                      <div key={devId} className="flex items-center gap-1.5 px-2 py-1 bg-primary/20 border border-primary/30 rounded-lg text-[10px] text-primary-light">
+                        <span>{dev?.name || devId}</span>
+                        <button 
+                          onClick={() => setConfig({ ...config, pushcutDevices: config.pushcutDevices.filter((d: string) => d !== devId) })}
+                          className="hover:text-white"
+                        >✕</button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="relative">
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      const current = config.pushcutDevices || [];
+                      if (!current.includes(e.target.value)) {
+                        setConfig({ ...config, pushcutDevices: [...current, e.target.value] });
+                      }
+                    }}
+                    className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded-xl focus:outline-none focus:border-primary text-white text-sm appearance-none"
+                  >
+                    <option value="">Adicionar dispositivo...</option>
+                    <option value="All Devices">Todos os Dispositivos</option>
+                    {pushcutDevices.map(d => (
+                      <option key={d.id} value={d.id}>{d.name || d.id}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">▼</div>
+                </div>
               </div>
 
               <div className="space-y-2">

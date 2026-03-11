@@ -379,7 +379,10 @@ export class NodeExecutorService {
       const notificationName = this.contextService.interpolate(config.pushcutNotificationName, context);
       const title = config.pushcutTitle ? this.contextService.interpolate(config.pushcutTitle, context) : undefined;
       const text = config.pushcutText ? this.contextService.interpolate(config.pushcutText, context) : undefined;
-      
+      const devices = config.pushcutDevices && config.pushcutDevices.length > 0 
+        ? config.pushcutDevices.filter(d => d !== 'All Devices') 
+        : undefined;
+
       const tenantId = context.globals.tenantId || (context.variables as any)?._tenantId || (context.variables as any)?.tenantId;
       if (tenantId) {
         try {
@@ -391,6 +394,7 @@ export class NodeExecutorService {
             const body: any = {};
             if (title) body.title = title;
             if (text) body.text = text;
+            if (devices && devices.length > 0) body.devices = devices;
             
             await fetch(`https://api.pushcut.io/v1/notifications/${notificationName}`, {
               method: 'POST',
@@ -400,7 +404,7 @@ export class NodeExecutorService {
               },
               body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined
             });
-            console.log(`[NOTIFICACAO] Sent Pushcut notification: ${notificationName}`);
+            console.log(`[NOTIFICACAO] Sent Pushcut notification: ${notificationName} to ${devices ? devices.join(', ') : 'all devices'}`);
           } else {
             console.error('[NOTIFICACAO - Pushcut] Error: API config for Pushcut not found or inactive');
           }
