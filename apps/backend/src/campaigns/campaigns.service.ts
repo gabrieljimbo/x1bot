@@ -833,7 +833,7 @@ export class CampaignsService {
     });
 
     // Try to fill missing names from local conversations
-    const phonesWithNoName = participants.filter(p => !p.name).map(p => p.phone);
+    const phonesWithNoName = participants.filter((p: any) => !p.name).map((p: any) => p.phone);
     if (phonesWithNoName.length > 0) {
       const conversations = await this.prisma.conversation.findMany({
         where: {
@@ -844,8 +844,8 @@ export class CampaignsService {
         select: { contactPhone: true, contactName: true }
       });
 
-      const nameMap = new Map(conversations.map(c => [c.contactPhone, c.contactName]));
-      participants.forEach(p => {
+      const nameMap = new Map(conversations.map((c: any) => [c.contactPhone, c.contactName]));
+      participants.forEach((p: any) => {
         if (!p.name && nameMap.has(p.phone)) {
           p.name = nameMap.get(p.phone);
         }
