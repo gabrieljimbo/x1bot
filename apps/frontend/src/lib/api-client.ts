@@ -684,9 +684,11 @@ export const apiClient = {
     return data;
   },
 
-  getGroupParticipants: async (sessionId: string, groupJid: string) => {
-    const { data } = await client.get(`/campaigns/groups/${encodeURIComponent(groupJid)}/participants`, { params: { sessionId } });
-    return data as { phone: string; name: string | null; isAdmin: boolean; isSuperAdmin: boolean }[];
+  getGroupParticipants: async (sessionId: string, groupJid: string, workflowId?: string) => {
+    const { data } = await client.get(`/campaigns/groups/${encodeURIComponent(groupJid)}/participants`, { 
+      params: { sessionId, workflowId } 
+    });
+    return data as { phone: string; name: string | null; isAdmin: boolean; isSuperAdmin: boolean; alreadyExecuted?: boolean }[];
   },
 
   addCampaignRecipientsFromGroup: async (id: string, body: {

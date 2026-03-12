@@ -68,8 +68,9 @@ export class CampaignsController {
     @Request() req: any,
     @Param('groupJid') groupJid: string,
     @Query('sessionId') sessionId: string,
+    @Query('workflowId') workflowId?: string,
   ) {
-    return this.campaignsService.getGroupParticipants(req.user.tenantId, sessionId, groupJid);
+    return this.campaignsService.getGroupParticipants(req.user.tenantId, sessionId, groupJid, workflowId);
   }
 
   @Post('blacklist')

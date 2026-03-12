@@ -633,7 +633,7 @@ export class CampaignsService {
     return this.whatsappSessionManager.syncGroups(sessionId);
   }
 
-  async getGroupParticipants(tenantId: string, sessionId: string, groupJid: string) {
+  async getGroupParticipants(tenantId: string, sessionId: string, groupJid: string, workflowId?: string) {
     // Verify session belongs to tenant
     const session = await this.prisma.whatsappSession.findFirst({
       where: { id: sessionId, tenantId },
@@ -641,8 +641,7 @@ export class CampaignsService {
     if (!session) throw new NotFoundException('Session not found');
 
     const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId, groupJid);
-
-    return (metadata.participants || []).map((p: any) => {
+    const participants = (metadata.participants || []).map((p: any) => {
       const phone = p.id.split('@')[0];
       return {
         phone,
@@ -651,6 +650,24 @@ export class CampaignsService {
         isSuperAdmin: p.admin === 'superadmin',
       };
     });
+
+    if (workflowId) {
+      const executions = await this.prisma.workflowExecution.findMany({
+        where: {
+          tenantId,
+          workflowId,
+          contactPhone: { in: participants.map((p: any) => p.phone) },
+        },
+        select: { contactPhone: true },
+      });
+      const executedPhones = new Set(executions.map((e) => e.contactPhone));
+      return participants.map((p: any) => ({
+        ...p,
+        alreadyExecuted: executedPhones.has(p.phone),
+      }));
+    }
+
+    return participants;
   }
 
   async addRecipientsFromGroup(
@@ -680,14 +697,28 @@ export class CampaignsService {
       participants = participants.filter((p: any) => !p.isAdmin);
     }
 
-    // Check send history: filter out phones already sent in this campaign
+    // Check send history: filter out phones already sent in this campaign OR already executed the workflow
     if (!options.allowResend) {
       const alreadySent = await this.prisma.campaignRecipient.findMany({
         where: { campaignId, status: 'sent' },
         select: { phone: true },
       });
       const sentPhones = new Set(alreadySent.map(r => r.phone));
-      participants = participants.filter((p: any) => !sentPhones.has(p.phone));
+      
+      let executedPhones = new Set<string>();
+      if (campaign.workflowId) {
+        const executions = await this.prisma.workflowExecution.findMany({
+          where: {
+            tenantId,
+            workflowId: campaign.workflowId,
+            contactPhone: { in: participants.map((p: any) => p.phone) }
+          },
+          select: { contactPhone: true }
+        });
+        executedPhones = new Set(executions.map(e => e.contactPhone));
+      }
+
+      participants = participants.filter((p: any) => !sentPhones.has(p.phone) && !executedPhones.has(p.phone));
     }
 
     // Upsert recipients (avoid duplicates in this campaign)

@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, Play, Pause, Trash2, Edit2, BarChart2, X,
-  Send, Upload, Phone, List, RefreshCw, Tag, Smartphone, Shuffle, AlignJustify, GitBranch, Users
+  Send, Upload, Phone, List, RefreshCw, Tag, Smartphone, Shuffle, AlignJustify, GitBranch, Users,
+  AlertCircle, Info, History, CheckCircle2
 } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { AuthGuard } from '@/components/AuthGuard'
@@ -190,9 +191,10 @@ interface InternalTag { tag: string; count: number }
 interface WaLabel { id: string; name: string; color: string; count: number }
 
 function CampaignDrawer({
-  initial, onSave, onClose,
+  initial, onSave, onClose, setStatusMessage
 }: {
-  initial?: Campaign; onSave: (data: any) => Promise<any>; onClose: () => void
+  initial?: Campaign; onSave: (data: any) => Promise<any>; onClose: () => void;
+  setStatusMessage: (msg: { type: 'error' | 'success' | 'info'; text: string } | null) => void
 }) {
   const [tab, setTab] = useState<'content' | 'recipients' | 'sessions' | 'settings'>('content')
   const [sessions, setSessions] = useState<Session[]>([])
@@ -216,12 +218,13 @@ function CampaignDrawer({
   const [groupSessionId, setGroupSessionId] = useState('')
   const [groups, setGroups] = useState<{ groupId: string; name: string; sessionId: string }[]>([])
   const [selectedGroupJid, setSelectedGroupJid] = useState('')
-  const [groupParticipants, setGroupParticipants] = useState<{ phone: string; name: string | null; isAdmin: boolean; isSuperAdmin: boolean }[]>([])
+  const [groupParticipants, setGroupParticipants] = useState<{ phone: string; name: string | null; isAdmin: boolean; isSuperAdmin: boolean; alreadyExecuted?: boolean }[]>([])
   const [selectedGroupPhones, setSelectedGroupPhones] = useState<Set<string>>(new Set())
   const [excludeAdmins, setExcludeAdmins] = useState(false)
   const [allowResend, setAllowResend] = useState(false)
   const [loadingGroups, setLoadingGroups] = useState(false)
   const [loadingParticipants, setLoadingParticipants] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const [form, setForm] = useState({
     name: initial?.name ?? '',
@@ -277,14 +280,20 @@ function CampaignDrawer({
     setLoadingParticipants(true)
     setGroupParticipants([])
     setSelectedGroupPhones(new Set())
-    apiClient.getGroupParticipants(groupSessionId, selectedGroupJid)
+    apiClient.getGroupParticipants(groupSessionId, selectedGroupJid, campaignType === 'WORKFLOW' ? selectedWorkflowId : undefined)
       .then(participants => {
         setGroupParticipants(participants)
-        setSelectedGroupPhones(new Set(participants.map(p => p.phone)))
+        // Initial selection: all visible (respecting excludeAdmins and allowResend)
+        const toSelect = participants.filter(p => {
+          const skipAdmin = excludeAdmins && p.isAdmin
+          const skipExecuted = !allowResend && p.alreadyExecuted
+          return !skipAdmin && !skipExecuted
+        }).map(p => p.phone)
+        setSelectedGroupPhones(new Set(toSelect))
       })
       .catch(() => {})
       .finally(() => setLoadingParticipants(false))
-  }, [selectedGroupJid, groupSessionId])
+  }, [selectedGroupJid, groupSessionId, selectedWorkflowId, campaignType])
 
   const toggleTag = (tag: string) =>
     setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
@@ -298,9 +307,10 @@ function CampaignDrawer({
   ].reduce((a, b) => a + b, 0)
 
   const handleSave = async () => {
-    if (!form.name.trim()) return alert('Nome é obrigatório')
-    if (campaignType === 'WORKFLOW' && !selectedWorkflowId) return alert('Selecione um fluxo')
+    if (!form.name.trim()) return setStatusMessage({ type: 'error', text: 'Nome da campanha é obrigatório' })
+    if (campaignType === 'WORKFLOW' && !selectedWorkflowId) return setStatusMessage({ type: 'error', text: 'Selecione um fluxo para esta campanha' })
     setSaving(true)
+    setStatusMessage(null)
     try {
       const payload = {
         ...form,
@@ -310,13 +320,30 @@ function CampaignDrawer({
         messages: campaignType === 'SIMPLE' ? form.messages.filter(m => m.content || m.mediaUrl) : [],
       }
       const result = await onSave(payload)
-      if (result?.id) setCampaignId(result.id)
+      if (result?.id) {
+        setCampaignId(result.id)
+        setStatusMessage({ type: 'success', text: 'Campanha salva com sucesso! Agora você pode adicionar destinatários.' })
+      }
     } catch (e: any) {
-      alert(e?.response?.data?.message || 'Erro ao salvar')
+      setStatusMessage({ type: 'error', text: e?.response?.data?.message || 'Erro ao salvar campanha' })
     } finally {
       setSaving(false)
     }
   }
+
+  // Update selection when toggles change
+  useEffect(() => {
+    if (groupParticipants.length === 0) return
+    const visible = getVisibleParticipants()
+    setSelectedGroupPhones(prev => {
+      const next = new Set(prev)
+      const visiblePhones = new Set(visible.map(p => p.phone))
+      prev.forEach(phone => {
+        if (!visiblePhones.has(phone)) next.delete(phone)
+      })
+      return next
+    })
+  }, [excludeAdmins, allowResend, groupParticipants])
 
   const toggleGroupPhone = (phone: string) => {
     setSelectedGroupPhones(prev => {
@@ -348,12 +375,35 @@ function CampaignDrawer({
   const getVisibleParticipants = () => {
     let list = groupParticipants
     if (excludeAdmins) list = list.filter(p => !p.isAdmin)
+    if (!allowResend) list = list.filter(p => !p.alreadyExecuted)
     return list
+  }
+
+  const handleExportToList = async () => {
+    const phones = [...selectedGroupPhones]
+    if (phones.length === 0) return setStatusMessage({ type: 'info', text: 'Selecione ao menos um contato do grupo' })
+    const listName = prompt('Nome da nova lista:', `Export ${selectedGroupJid} ${new Date().toLocaleDateString()}`)
+    if (!listName) return
+    setExporting(true)
+    try {
+      const newList = await apiClient.createContactList(listName)
+      const contactsToAdd = groupParticipants
+        .filter(p => selectedGroupPhones.has(p.phone))
+        .map(p => ({ phone: p.phone, name: p.name || undefined }))
+      await apiClient.addContactsManually(newList.id, contactsToAdd)
+      setStatusMessage({ type: 'success', text: `Lista "${listName}" criada com ${contactsToAdd.length} contatos.` })
+      apiClient.getContactLists().then(setContactLists).catch(() => {})
+    } catch (e: any) {
+      setStatusMessage({ type: 'error', text: 'Erro ao exportar: ' + (e?.response?.data?.message || e.message) })
+    } finally {
+      setExporting(false)
+    }
   }
 
   const handleAddRecipients = async () => {
     const id = campaignId
-    if (!id) return alert('Salve a campanha primeiro')
+    if (!id) return setStatusMessage({ type: 'info', text: 'Por favor, salve a campanha antes de adicionar destinatários' })
+    setStatusMessage(null)
     try {
       let result: any
       if (recipientMode === 'phones') {
@@ -363,7 +413,7 @@ function CampaignDrawer({
       } else if (recipientMode === 'inbox') {
         result = await apiClient.addCampaignRecipientsFromContacts(id, selectedTags, selectedLabelIds)
       } else if (recipientMode === 'group') {
-        if (!groupSessionId || !selectedGroupJid) return alert('Selecione uma sessão e um grupo')
+        if (!groupSessionId || !selectedGroupJid) return setStatusMessage({ type: 'error', text: 'Selecione uma sessão e um grupo' })
         result = await apiClient.addCampaignRecipientsFromGroup(id, {
           sessionId: groupSessionId,
           groupJid: selectedGroupJid,
@@ -372,12 +422,13 @@ function CampaignDrawer({
           selectedPhones: [...selectedGroupPhones],
         })
       } else {
-        if (!selectedListId) return alert('Selecione uma lista')
+        if (!selectedListId) return setStatusMessage({ type: 'error', text: 'Selecione uma lista de contatos' })
         result = await apiClient.addCampaignRecipientsFromList(id, selectedListId)
       }
       setRecipientResult(`${result.added} adicionados. Total: ${result.total}`)
+      setStatusMessage({ type: 'success', text: `${result.added} destinatários adicionados com sucesso!` })
     } catch (e: any) {
-      setRecipientResult('Erro: ' + (e?.response?.data?.message || e.message))
+      setStatusMessage({ type: 'error', text: 'Erro: ' + (e?.response?.data?.message || e.message) })
     }
   }
 
@@ -621,7 +672,7 @@ function CampaignDrawer({
                               const updated = await apiClient.getCampaignGroups(groupSessionId);
                               setGroups(updated);
                             } catch (e: any) {
-                              alert('Erro ao sincronizar: ' + (e?.response?.data?.message || e.message));
+                              setStatusMessage({ type: 'error', text: 'Erro ao sincronizar: ' + (e?.response?.data?.message || e.message) })
                             } finally {
                               setLoadingGroups(false);
                             }
@@ -700,15 +751,24 @@ function CampaignDrawer({
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-xs text-gray-400 font-medium">
-                            {getVisibleParticipants().length} participantes
+                            {getVisibleParticipants().length} participantes disponíveis
                             {excludeAdmins && groupParticipants.some(p => p.isAdmin) && (
-                              <span className="text-yellow-500"> ({groupParticipants.filter(p => p.isAdmin).length} admins excluídos)</span>
+                              <span className="text-yellow-500"> ({groupParticipants.filter(p => p.isAdmin).length} admins ocultos)</span>
+                            )}
+                            {!allowResend && groupParticipants.some(p => p.alreadyExecuted) && (
+                              <span className="text-orange-500"> ({groupParticipants.filter(p => p.alreadyExecuted).length} já receberam)</span>
                             )}
                           </p>
-                          <button onClick={toggleAllGroupPhones}
-                            className="text-xs text-[#00ff88] hover:text-[#00dd77] transition">
-                            {getVisibleParticipants().every(p => selectedGroupPhones.has(p.phone)) ? 'Desmarcar todos' : 'Selecionar todos'}
-                          </button>
+                          <div className="flex gap-2">
+                            <button onClick={handleExportToList} disabled={exporting || selectedGroupPhones.size === 0}
+                              className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded border border-white/10 text-gray-300 transition flex items-center gap-1 disabled:opacity-50">
+                              <Users size={10} /> {exporting ? 'Exportando...' : 'Exportar para Lista'}
+                            </button>
+                            <button onClick={toggleAllGroupPhones}
+                              className="text-xs text-[#00ff88] hover:text-[#00dd77] transition">
+                              {getVisibleParticipants().length > 0 && getVisibleParticipants().every(p => selectedGroupPhones.has(p.phone)) ? 'Desmarcar todos' : 'Selecionar todos'}
+                            </button>
+                          </div>
                         </div>
                         <div className="max-h-[240px] overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                           {getVisibleParticipants().map(p => (
@@ -721,27 +781,43 @@ function CampaignDrawer({
                               <input type="checkbox" checked={selectedGroupPhones.has(p.phone)}
                                 onChange={() => toggleGroupPhone(p.phone)} className="accent-[#00ff88] flex-shrink-0" />
                               <div className="flex-1 min-w-0">
-                                <p className="text-white text-sm truncate">{p.name || p.phone}</p>
-                                {p.name && <p className="text-gray-500 text-xs font-mono">{p.phone}</p>}
+                          <div className="flex items-center justify-between mb-0">
+                                  <p className="text-white text-sm truncate">{p.name || p.phone}</p>
+                                  {p.alreadyExecuted && (
+                                    <span className="text-[10px] text-gray-500 flex items-center gap-1 font-medium italic">
+                                      <History size={10} /> Já enviado
+                                    </span>
+                                  )}
+                                </div>
+                                {p.name && <p className="text-gray-500 text-[11px] font-mono">{p.phone}</p>}
                               </div>
                               {p.isAdmin && (
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold flex-shrink-0 ${
                                   p.isSuperAdmin
-                                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                                    : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                    ? 'bg-yellow-500/10 text-yellow-500/70 border border-yellow-500/20'
+                                    : 'bg-blue-500/10 text-blue-500/70 border border-blue-500/20'
                                 }`}>
-                                  {p.isSuperAdmin ? '⭐ Super Admin' : '👑 Admin'}
+                                  {p.isSuperAdmin ? 'SUPER' : 'ADMIN'}
                                 </span>
                               )}
                             </label>
                           ))}
                         </div>
-                        <p className="text-xs text-[#00ff88] mt-2 font-medium">
-                          {selectedGroupPhones.size} selecionados de {getVisibleParticipants().length}
-                        </p>
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
+                          <p className="text-[11px] text-[#00ff88] font-medium">
+                            {selectedGroupPhones.size} selecionados de {getVisibleParticipants().length}
+                          </p>
+                          <button onClick={handleExportToList} disabled={exporting || selectedGroupPhones.size === 0}
+                            className="text-[10px] text-gray-400 hover:text-white transition flex items-center gap-1 disabled:opacity-30">
+                            <Users size={12} /> {exporting ? 'Exportando...' : 'Exportar para lista'}
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <p className="text-gray-500 text-sm text-center py-4">Nenhum participante encontrado</p>
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
+                        <Users size={24} className="text-gray-600 mx-auto mb-2 opacity-50" />
+                        <p className="text-gray-500 text-xs">Nenhum participante disponível no momento</p>
+                      </div>
                     )
                   )}
                 </div>
@@ -867,6 +943,7 @@ function SimplePageContent() {
   const [showDrawer, setShowDrawer] = useState(false)
   const [editing, setEditing] = useState<Campaign | null>(null)
   const [statsId, setStatsId] = useState<string | null>(null)
+  const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success' | 'info'; text: string } | null>(null)
 
   const load = async () => {
     try {
@@ -900,6 +977,21 @@ function SimplePageContent() {
       <div className="flex">
         <CampaignsSidebar />
         <div className="flex-1 p-8">
+          {statusMessage && (
+            <div className={`mb-6 p-4 rounded-xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${
+              statusMessage.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-500' :
+              statusMessage.type === 'success' ? 'bg-[#00ff88]/10 border-[#00ff88]/20 text-[#00ff88]' :
+              'bg-blue-500/10 border-blue-500/20 text-blue-400'
+            }`}>
+              {statusMessage.type === 'error' ? <AlertCircle size={20} /> : 
+               statusMessage.type === 'success' ? <CheckCircle2 size={20} /> : <Info size={20} />}
+              <p className="text-sm font-medium">{statusMessage.text}</p>
+              <button onClick={() => setStatusMessage(null)} className="ml-auto opacity-50 hover:opacity-100">
+                <X size={18} />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-bold text-white">Campanhas</h1>
@@ -917,7 +1009,7 @@ function SimplePageContent() {
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <Send size={48} className="text-gray-600 mb-4" />
               <p className="text-gray-400 font-medium">Nenhuma campanha criada</p>
-              <p className="text-gray-600 text-sm mt-1">Clique em "Nova Campanha" para começar</p>
+              <p className="text-gray-600 text-sm mt-1">Clique em &quot;Nova Campanha&quot; para começar</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -950,7 +1042,7 @@ function SimplePageContent() {
                     </button>
                     {(campaign.status === 'DRAFT' || campaign.status === 'PAUSED') && (
                       <button
-                        onClick={() => campaign.status === 'PAUSED' ? apiClient.resumeCampaign(campaign.id).then(load) : apiClient.startCampaign(campaign.id).then(load).catch(e => alert(e?.response?.data?.message || 'Erro'))}
+                        onClick={() => campaign.status === 'PAUSED' ? apiClient.resumeCampaign(campaign.id).then(load) : apiClient.startCampaign(campaign.id).then(load).catch(e => setStatusMessage({ type: 'error', text: e?.response?.data?.message || 'Erro ao iniciar campanha' }))}
                         className="p-2 text-green-400 hover:bg-green-500/10 rounded-lg transition" title={campaign.status === 'PAUSED' ? 'Retomar' : 'Iniciar'}>
                         <Play size={16} />
                       </button>
@@ -982,6 +1074,7 @@ function SimplePageContent() {
           initial={editing ?? undefined}
           onSave={handleSave}
           onClose={() => { setShowDrawer(false); setEditing(null) }}
+          setStatusMessage={setStatusMessage}
         />
       )}
       {statsId && <StatsModal campaignId={statsId} onClose={() => setStatsId(null)} />}
