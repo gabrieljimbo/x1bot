@@ -25,6 +25,7 @@ export class WhatsappMessageHandler {
     contactPhone: string,
     payload: TriggerMessagePayload | string,
     skipTrigger: boolean = false,
+    ownJid?: string,
   ): Promise<void> {
     // Normalize payload
     const normalizedPayload: TriggerMessagePayload = typeof payload === 'string'
@@ -67,8 +68,11 @@ export class WhatsappMessageHandler {
 
     // 1. Loop Protection & Skip Trigger: Ignore messages from bot itself for workflow triggering
     // or if skipTrigger is explicitly requested (e.g. for history sync)
-    if (normalizedPayload.fromMe || skipTrigger) {
-      console.log(`[IGNORE] Session ${sessionId}: Ignoring message fromMe: ${normalizedPayload.fromMe} or skipTrigger: ${skipTrigger} (loop protection/manual skip)`);
+    const isFromMe = normalizedPayload.fromMe;
+    const isToMe = ownJid && (contactPhone === ownJid || contactPhone.split('@')[0] === ownJid.split('@')[0]);
+
+    if (isFromMe || isToMe || skipTrigger) {
+      console.log(`[IGNORE] Session ${sessionId}: Ignoring message. fromMe: ${isFromMe}, toMe: ${isToMe}, skipTrigger: ${skipTrigger} (loop protection/self-message)`);
       return;
     }
 

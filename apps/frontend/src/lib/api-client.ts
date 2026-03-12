@@ -2,8 +2,10 @@ import axios from 'axios'
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
 
+const baseURL = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`
+
 const client = axios.create({
-  baseURL: `${API_URL}/api`,
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },

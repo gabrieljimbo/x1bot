@@ -161,7 +161,7 @@ function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () =
                       return (
                         <div key={stat.nodeId} className="bg-black/30 rounded-lg p-4 flex items-center justify-between">
                           <div>
-                            <p className="text-white text-sm font-medium">Nó: {stat.nodeId}</p>
+                            <p className="text-white text-sm font-medium">{stat.nodeName || `Nó: ${stat.nodeId}`}</p>
                             <p className="text-xs text-gray-500">
                               {stat.totalExecutions} execuções • {stat.failCount} falhas
                             </p>

@@ -993,6 +993,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   private async handleIncomingMessage(tenantId: string, sessionId: string, msg: WAMessage, skipTrigger: boolean = false): Promise<void> {
     const contactPhone = msg.key.remoteJid!;
     const messageId = msg.key.id!;
+    const sessionClient = this.sessions.get(sessionId);
 
     try {
       // --- Meta Ads Detection ---
@@ -1050,7 +1051,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       // Attach pushName so inbox can store contactName
       (payload as any).contactName = msg.pushName || undefined;
 
-      await this.messageHandler.handleMessage(tenantId, sessionId, contactPhone, payload, skipTrigger);
+      await this.messageHandler.handleMessage(tenantId, sessionId, contactPhone, payload, skipTrigger, sessionClient?.ownJid);
     } catch (error) {
       console.error('[BAILEYS] Error processing incoming message:', error);
     }

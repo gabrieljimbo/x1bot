@@ -381,45 +381,104 @@ export class CampaignsService {
 
     if (!campaign) throw new NotFoundException('Campaign not found');
 
-    const [sentCount, interactedCount, nodeStats] = await Promise.all([
+    const [sentCount, interactedCount] = await Promise.all([
       this.prisma.campaignRecipient.count({
         where: { campaignId, status: 'sent' }
       }),
       this.prisma.workflowExecution.count({
         where: { campaignId, interactionCount: { gt: 0 } }
-      }),
-      this.prisma.workflowNodeStats.findMany({
-        where: {
-          OR: [
-            { workflowId: `shadow-${campaignId}` },
-            { workflowId: campaign.workflowId || 'none' }
-          ]
-        },
-        orderBy: { totalExecutions: 'desc' }
       })
     ]);
 
-    // Group node stats by nodeId to merge shadow and regular workflow stats if any
-    const mergedNodeStats = nodeStats.reduce((acc, stat) => {
-      if (!acc[stat.nodeId]) {
-        acc[stat.nodeId] = { ...stat };
-      } else {
-        acc[stat.nodeId].totalExecutions += stat.totalExecutions;
-        acc[stat.nodeId].successCount += stat.successCount;
-        acc[stat.nodeId].failCount += stat.failCount;
+    const nodeStatsMap: Record<string, any> = {};
+
+    if (campaign.workflowId) {
+      const executions = await this.prisma.workflowExecution.findMany({
+        where: { campaignId },
+        select: { id: true, status: true, currentNodeId: true }
+      });
+
+      const execIds = executions.map(e => e.id);
+
+      if (execIds.length > 0) {
+        // Fetch Execution Logs accurately reflecting the executed paths
+        const logs = await this.prisma.executionLog.findMany({
+          where: { executionId: { in: execIds }, eventType: { in: ['EXECUTION_STARTED', 'NODE_EXECUTED'] } },
+          select: { executionId: true, nodeId: true, eventType: true, createdAt: true },
+          orderBy: { createdAt: 'asc' }
+        });
+
+        // Group the visited nodes per execution
+        const nodeVisitsByExec: Record<string, string[]> = {};
+        for (const log of logs) {
+          if (!nodeVisitsByExec[log.executionId]) nodeVisitsByExec[log.executionId] = [];
+          if (log.nodeId && !nodeVisitsByExec[log.executionId].includes(log.nodeId)) {
+             nodeVisitsByExec[log.executionId].push(log.nodeId);
+          }
+        }
+
+        const workflowNodes = (campaign.workflow?.nodes as any[]) || [];
+        const nodeMap = new Map(workflowNodes.map(n => [n.id, n.data?.label || n.type]));
+
+        Object.keys(nodeVisitsByExec).forEach(execId => {
+          const visitedNodes = nodeVisitsByExec[execId];
+          const execution = executions.find(e => e.id === execId);
+          if (!execution) return;
+
+          visitedNodes.forEach((nodeId, index) => {
+             if (!nodeStatsMap[nodeId]) {
+                 nodeStatsMap[nodeId] = { 
+                    nodeId, 
+                    nodeName: nodeMap.get(nodeId) || `Nó: ${nodeId}`,
+                    totalExecutions: 0, 
+                    successCount: 0, 
+                    failCount: 0 
+                 };
+             }
+             nodeStatsMap[nodeId].totalExecutions++;
+             
+             const isLastNode = index === visitedNodes.length - 1;
+             
+             if (isLastNode) {
+               if (execution.status === 'COMPLETED') {
+                  nodeStatsMap[nodeId].successCount++;
+               } else if (['ERROR', 'FAILED', 'EXPIRED'].includes(execution.status)) {
+                  nodeStatsMap[nodeId].failCount++;
+               }
+             } else {
+               nodeStatsMap[nodeId].successCount++;
+             }
+          });
+          
+          // Check if currentNodeId differs from the historical path (e.g. paused at a node without producing a log)
+          if (['RUNNING', 'WAITING'].includes(execution.status) && execution.currentNodeId ) {
+             if (!visitedNodes.includes(execution.currentNodeId)) {
+               if (!nodeStatsMap[execution.currentNodeId]) {
+                   nodeStatsMap[execution.currentNodeId] = { 
+                      nodeId: execution.currentNodeId, 
+                      nodeName: nodeMap.get(execution.currentNodeId) || `Nó: ${execution.currentNodeId}`,
+                      totalExecutions: 0, 
+                      successCount: 0, 
+                      failCount: 0 
+                   };
+               }
+               nodeStatsMap[execution.currentNodeId].totalExecutions++;
+             }
+          }
+        });
       }
-      return acc;
-    }, {} as Record<string, any>);
+    }
 
     return {
       totalTargeted: campaign._count.recipients,
       totalSent: sentCount,
       totalInteracted: interactedCount,
       conversionRate: sentCount > 0 ? (interactedCount / sentCount) * 100 : 0,
-      nodeStats: Object.values(mergedNodeStats),
+      nodeStats: Object.values(nodeStatsMap).sort((a: any, b: any) => b.totalExecutions - a.totalExecutions),
       workflow: campaign.workflow,
     };
   }
+
 
   // ─── WORKER ───────────────────────────────────────────────────────────────────
 
