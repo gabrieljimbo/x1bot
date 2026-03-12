@@ -190,6 +190,9 @@ export interface SendMediaConfig {
   delay?: number; // milliseconds
   sessionId?: string; // Optional: Override session
   to?: string; // Optional: Override recipient (phone number)
+  uploadedMediaId?: string;
+  uploadedFileName?: string;
+  uploadedFileSize?: number;
 }
 
 export interface SendButtonsConfig {
@@ -236,6 +239,9 @@ export interface WaitReplyConfig {
   remarketingMessageType?: 'text' | 'image' | 'audio' | 'video';
   remarketingMessage?: string;
   remarketingMediaUrl?: string; // used for image/audio
+  remarketingUploadedMediaId?: string;
+  remarketingUploadedFileName?: string;
+  remarketingUploadedFileSize?: number;
   remarketingTimeoutAmount?: number;
   remarketingTimeoutUnit?: 'seconds' | 'minutes' | 'hours' | 'days';
 
@@ -396,6 +402,9 @@ export interface RmktConfig {
   sendAudioAsVoice?: boolean;
   retries?: number; // default 2
   retryDelayMs?: number; // default 30000
+  uploadedMediaId?: string;
+  uploadedFileName?: string;
+  uploadedFileSize?: number;
 }
 
 export interface PixConfig {

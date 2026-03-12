@@ -5149,12 +5149,106 @@ export default function NodeConfigModal({
                     <input
                       type="text"
                       value={config.remarketingMediaUrl || ''}
-                      onChange={(e) => setConfig({ ...config, remarketingMediaUrl: e.target.value })}
+                      onChange={(e) => setConfig({ ...config, remarketingMediaUrl: e.target.value, remarketingUploadedMediaId: undefined })}
                       placeholder="https://example.com/arquivo.png"
                       className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white text-sm font-mono"
+                      disabled={!!config.remarketingUploadedMediaId}
                     />
+
+                    {/* File upload section for WAIT_REPLY Remarketing */}
+                    {!config.remarketingUploadedMediaId ? (
+                      <div className="mt-3">
+                        <div className="flex items-center gap-2 my-2">
+                          <div className="flex-1 h-px bg-gray-700"></div>
+                          <span className="text-xs text-gray-500">ou</span>
+                          <div className="flex-1 h-px bg-gray-700"></div>
+                        </div>
+                        <label className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#151515] border border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-[#1a1a1a] transition-colors">
+                          <span className="text-sm text-gray-300">📎 Upload de arquivo</span>
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept={
+                              config.remarketingMessageType === 'image' ? '.jpg,.jpeg,.png,.webp' :
+                                config.remarketingMessageType === 'audio' ? '.mp3,.ogg,.aac' :
+                                  config.remarketingMessageType === 'video' ? '.mp4' : '*'
+                            }
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+
+                              const mediaType = config.remarketingMessageType || 'image'
+                              const sizeLimits: Record<string, number> = {
+                                image: 5 * 1024 * 1024,
+                                audio: 10 * 1024 * 1024,
+                                video: 50 * 1024 * 1024,
+                              }
+
+                              if (file.size > (sizeLimits[mediaType] || 5 * 1024 * 1024)) {
+                                const maxMB = Math.round((sizeLimits[mediaType] || 5 * 1024 * 1024) / (1024 * 1024))
+                                alert(`Arquivo muito grande. Máximo para ${mediaType}: ${maxMB}MB`)
+                                e.target.value = ''
+                                return
+                              }
+
+                              try {
+                                const targetWorkflowId = workflowId || (node as any).workflowId || '';
+                                const data = await apiClient.uploadMedia(file, tenantId, mediaType, node.id, targetWorkflowId);
+                                setConfig({
+                                  ...config,
+                                  remarketingMediaUrl: data.url,
+                                  remarketingUploadedMediaId: data.id,
+                                  remarketingUploadedFileName: data.originalName,
+                                  remarketingUploadedFileSize: data.size,
+                                })
+                              } catch (err: any) {
+                                alert(err.response?.data?.message || err.message || 'Erro ao fazer upload do arquivo')
+                              }
+                              e.target.value = ''
+                            }}
+                          />
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1.5">
+                          {config.remarketingMessageType === 'image' ? 'JPG, PNG, WEBP — máx 5MB' :
+                            config.remarketingMessageType === 'audio' ? 'MP3, OGG, AAC — máx 10MB' :
+                              config.remarketingMessageType === 'video' ? 'MP4 — máx 50MB' : ''}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-[#1a1a2e] border border-primary/30 rounded-lg">
+                        <span className="text-xl">
+                          {config.remarketingMessageType === 'image' ? '🖼️' :
+                            config.remarketingMessageType === 'audio' ? '🎵' : '🎥'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-200 truncate">{config.remarketingUploadedFileName || 'Arquivo'}</p>
+                          <p className="text-xs text-gray-500">
+                            {config.remarketingUploadedFileSize ? `${(config.remarketingUploadedFileSize / 1024).toFixed(1)} KB` : ''}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="text-red-400 hover:text-red-300 text-sm px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                          onClick={async () => {
+                            try {
+                              await apiClient.deleteMedia(config.remarketingUploadedMediaId, tenantId)
+                            } catch (e) { /* ignore */ }
+                            setConfig({
+                              ...config,
+                              remarketingMediaUrl: '',
+                              remarketingUploadedMediaId: undefined,
+                              remarketingUploadedFileName: undefined,
+                              remarketingUploadedFileSize: undefined,
+                            })
+                          }}
+                        >
+                          🗑️ Remover
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
+
 
                 <div>
                   <label className="block text-sm font-medium mb-2 text-gray-200">
@@ -5341,10 +5435,103 @@ export default function NodeConfigModal({
                   <input
                     type="text"
                     value={config.mediaUrl || ''}
-                    onChange={(e) => setConfig({ ...config, mediaUrl: e.target.value })}
+                    onChange={(e) => setConfig({ ...config, mediaUrl: e.target.value, uploadedMediaId: undefined })}
                     placeholder="https://exemplo.com/imagem.jpg"
                     className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500 font-mono text-sm"
+                    disabled={!!config.uploadedMediaId}
                   />
+
+                  {/* File upload section for RMKT */}
+                  {!config.uploadedMediaId ? (
+                    <div className="mt-3">
+                      <div className="flex items-center gap-2 my-2">
+                        <div className="flex-1 h-px bg-gray-700"></div>
+                        <span className="text-xs text-gray-500">ou</span>
+                        <div className="flex-1 h-px bg-gray-700"></div>
+                      </div>
+                      <label className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#151515] border border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-[#1a1a1a] transition-colors">
+                        <span className="text-sm text-gray-300">📎 Upload de arquivo</span>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept={
+                            config.messageType === 'image' ? '.jpg,.jpeg,.png,.webp' :
+                              config.messageType === 'audio' ? '.mp3,.ogg,.aac' :
+                                config.messageType === 'video' ? '.mp4' : '*'
+                          }
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+
+                            const mediaType = config.messageType || 'image'
+                            const sizeLimits: Record<string, number> = {
+                              image: 5 * 1024 * 1024,
+                              audio: 10 * 1024 * 1024,
+                              video: 50 * 1024 * 1024,
+                            }
+
+                            if (file.size > (sizeLimits[mediaType] || 5 * 1024 * 1024)) {
+                              const maxMB = Math.round((sizeLimits[mediaType] || 5 * 1024 * 1024) / (1024 * 1024))
+                              alert(`Arquivo muito grande. Máximo para ${mediaType}: ${maxMB}MB`)
+                              e.target.value = ''
+                              return
+                            }
+
+                            try {
+                              const targetWorkflowId = workflowId || (node as any).workflowId || '';
+                              const data = await apiClient.uploadMedia(file, tenantId, mediaType, node.id, targetWorkflowId);
+                              setConfig({
+                                ...config,
+                                mediaUrl: data.url,
+                                uploadedMediaId: data.id,
+                                uploadedFileName: data.originalName,
+                                uploadedFileSize: data.size,
+                              })
+                            } catch (err: any) {
+                              alert(err.response?.data?.message || err.message || 'Erro ao fazer upload do arquivo')
+                            }
+                            e.target.value = ''
+                          }}
+                        />
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1.5">
+                        {config.messageType === 'image' ? 'JPG, PNG, WEBP — máx 5MB' :
+                          config.messageType === 'audio' ? 'MP3, OGG, AAC — máx 10MB' :
+                            config.messageType === 'video' ? 'MP4 — máx 50MB' : ''}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-[#1a1a2e] border border-primary/30 rounded-lg">
+                      <span className="text-xl">
+                        {config.messageType === 'image' ? '🖼️' :
+                          config.messageType === 'audio' ? '🎵' : '🎥'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-200 truncate">{config.uploadedFileName || 'Arquivo'}</p>
+                        <p className="text-xs text-gray-500">
+                          {config.uploadedFileSize ? `${(config.uploadedFileSize / 1024).toFixed(1)} KB` : ''}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="text-red-400 hover:text-red-300 text-sm px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                        onClick={async () => {
+                          try {
+                            await apiClient.deleteMedia(config.uploadedMediaId, tenantId)
+                          } catch (e) { /* ignore */ }
+                          setConfig({
+                            ...config,
+                            mediaUrl: '',
+                            uploadedMediaId: undefined,
+                            uploadedFileName: undefined,
+                            uploadedFileSize: undefined,
+                          })
+                        }}
+                      >
+                        🗑️ Remover
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {['image', 'video'].includes(config.messageType) && (
                   <div>
@@ -5376,6 +5563,7 @@ export default function NodeConfigModal({
                 )}
               </div>
             )}
+
 
             <div className="space-y-4 pt-4 border-t border-gray-700/50">
               <div className="flex items-center justify-between">
