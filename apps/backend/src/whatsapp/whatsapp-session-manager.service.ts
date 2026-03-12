@@ -753,6 +753,10 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
+      if (!sessionClient.socket) {
+        throw new Error('Conexão com WhatsApp não está pronta (socket ausente)');
+      }
+
       // Fetch all participating groups from Baileys
       const groups = await sessionClient.socket.groupFetchAllParticipating();
       const groupList = Object.values(groups).map((g) => ({

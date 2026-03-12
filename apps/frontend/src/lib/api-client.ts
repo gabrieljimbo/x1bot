@@ -691,7 +691,7 @@ export const apiClient = {
   },
 
   syncCampaignGroups: async (sessionId: string) => {
-    const { data } = await client.post('/campaigns/groups/sync', null, { params: { sessionId } });
+    const { data } = await client.post('/campaigns/groups/sync', { sessionId });
     return data;
   },
 

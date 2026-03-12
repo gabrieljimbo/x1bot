@@ -2,6 +2,7 @@ import {
   Controller, Get, Post, Put, Delete,
   Param, Body, Query, UseGuards, Request,
 } from '@nestjs/common';
+import { Tenant } from '../auth/decorators/tenant.decorator';
 import { CampaignsService } from './campaigns.service';
 import { ContactListsService } from './contact-lists.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -59,8 +60,8 @@ export class CampaignsController {
   }
 
   @Post('groups/sync')
-  syncGroups(@Request() req: any, @Query('sessionId') sessionId: string) {
-    return this.campaignsService.syncGroups(req.user.tenantId, sessionId);
+  syncGroups(@Tenant() tenantId: string, @Body('sessionId') sessionId: string) {
+    return this.campaignsService.syncGroups(tenantId, sessionId);
   }
 
   @Get('groups/:groupJid/participants')

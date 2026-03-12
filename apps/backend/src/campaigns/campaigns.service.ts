@@ -797,12 +797,21 @@ export class CampaignsService {
   }
 
   async syncGroups(tenantId: string, sessionId: string) {
+    console.log(`[CAMPAIGNS] Syncing groups for tenant ${tenantId}, session ${sessionId}`);
     const session = await this.prisma.whatsappSession.findFirst({
       where: { id: sessionId, tenantId },
     });
-    if (!session) throw new NotFoundException('Session not found');
+    if (!session) {
+      console.error(`[CAMPAIGNS] Session ${sessionId} not found for tenant ${tenantId}`);
+      throw new NotFoundException('Sessão não encontrada');
+    }
 
-    return this.whatsappSessionManager.syncGroups(sessionId);
+    try {
+      return await this.whatsappSessionManager.syncGroups(sessionId);
+    } catch (error: any) {
+      console.error(`[CAMPAIGNS] Sync Groups Error:`, error.message);
+      throw new BadRequestException(error.message || 'Erro ao sincronizar grupos');
+    }
   }
 
   async getGroupParticipants(tenantId: string, sessionId: string, groupJid: string, workflowId?: string) {
