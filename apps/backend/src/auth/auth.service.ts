@@ -139,6 +139,9 @@ export class AuthService {
       (user as any).licenseStatus = 'TRIAL';
     }
 
+    // Revoke all existing sessions for this user (Single Session Enforcement)
+    await this.revokeAllUserTokens(user.id);
+
     // Generate tokens
     const tokens = await this.generateTokens(user.id, user.tenantId, user.email, (user as any).role || UserRole.ADMIN);
 
@@ -163,7 +166,8 @@ export class AuthService {
    * Generates Access and Refresh tokens with rotation strategy
    */
   async generateTokens(userId: string, tenantId: string, email: string, role: string) {
-    const payload = { sub: userId, email, tenantId, role };
+    const sid = uuidv4();
+    const payload = { sub: userId, email, tenantId, role, sid };
     const refreshTokenId = uuidv4();
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -179,7 +183,10 @@ export class AuthService {
 
     // Store refresh token metadata in Redis for rotation/revocation
     const ttl = 7 * 24 * 60 * 60; // default 7 days in seconds
-    await this.redisService.setWithTTL(`auth:refresh:${userId}:${refreshTokenId}`, '1', ttl);
+    await this.redisService.setWithTTL(`auth:refresh:${userId}:${refreshTokenId}`, sid, ttl);
+    
+    // Store the current active session ID for this user
+    await this.redisService.set(`auth:active_sid:${userId}`, sid);
 
     return { accessToken, refreshToken };
   }
@@ -235,6 +242,7 @@ export class AuthService {
 
   async revokeAllUserTokens(userId: string) {
     await this.asyncDeleteKeys(`auth:refresh:${userId}:*`);
+    await this.redisService.delete(`auth:active_sid:${userId}`);
   }
 
   async validateUser(userId: string) {

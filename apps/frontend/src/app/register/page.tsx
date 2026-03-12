@@ -1,137 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
-import Link from 'next/link'
 
 export default function RegisterPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
-  const [tenantName, setTenantName] = useState('')
-  const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const { register } = useAuth()
   const router = useRouter()
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setIsLoading(true)
-
-    if (!tenantName.trim()) {
-      setError('Tenant name is required')
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      await register(email, password, name || undefined, tenantName)
-      router.push('/')
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to register. Please try again.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  
+  // Temporarily disabled registration - Redirecting to login
+  useEffect(() => {
+    router.push('/login')
+  }, [router])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-surface border border-border rounded-lg p-8">
-          <div className="mb-8 text-center">
-            <img src="/logo-escrita.png" alt="X1Bot" className="h-10 w-auto mx-auto" />
-            <p className="text-gray-400">Create your account</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="bg-red-500/10 border border-red-500 text-red-500 rounded p-3 text-sm">
-                {error}
-              </div>
-            )}
-
-            <div>
-              <label htmlFor="tenantName" className="block text-sm font-medium mb-2">
-                Tenant Name *
-              </label>
-              <input
-                id="tenantName"
-                type="text"
-                value={tenantName}
-                onChange={(e) => setTenantName(e.target.value)}
-                required
-                className="w-full px-4 py-2 bg-background border border-border rounded focus:outline-none focus:border-primary"
-                placeholder="My Company"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium mb-2">
-                Your Name
-              </label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-2 bg-background border border-border rounded focus:outline-none focus:border-primary"
-                placeholder="John Doe"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium mb-2">
-                Email *
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-2 bg-background border border-border rounded focus:outline-none focus:border-primary"
-                placeholder="your@email.com"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-2">
-                Password *
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-4 py-2 bg-background border border-border rounded focus:outline-none focus:border-primary"
-                placeholder="••••••••"
-              />
-              <p className="mt-1 text-xs text-gray-400">Minimum 6 characters</p>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full px-4 py-2 bg-primary text-black rounded hover:bg-primary/80 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              {isLoading ? 'Creating account...' : 'Register'}
-            </button>
-          </form>
-
-          <div className="mt-6 text-center text-sm text-gray-400">
-            Already have an account?{' '}
-            <Link href="/login" className="text-primary hover:underline">
-              Login
-            </Link>
-          </div>
-        </div>
+      <div className="text-center">
+        <p className="text-gray-400">Redirecionando para o login...</p>
       </div>
     </div>
   )
 }
-
-

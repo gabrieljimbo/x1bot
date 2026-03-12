@@ -39,6 +39,9 @@ const REFRESH_TOKEN_KEY = 'n9n_refresh_token'
 const USER_KEY = 'n9n_user'
 const TENANT_KEY = 'n9n_tenant'
 
+// 60 minutes of inactivity before logout
+const INACTIVITY_TIMEOUT = 60 * 60 * 1000 
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [tenant, setTenant] = useState<Tenant | null>(null)
@@ -76,7 +79,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  const login = async (email: string, password: string) => {
+  // Stabilize functions to avoid unnecessary effect re-runs
+  const logout = React.useCallback(() => {
+    setToken(null)
+    setUser(null)
+    setTenant(null)
+
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+    localStorage.removeItem(USER_KEY)
+    localStorage.removeItem(TENANT_KEY)
+
+    apiClient.setToken(null)
+
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login'
+    }
+  }, [])
+
+  // Inactivity tracking
+  useEffect(() => {
+    if (!token || !user) return
+
+    const resetTimer = () => {
+      localStorage.setItem('n9n_last_activity', Date.now().toString())
+    }
+
+    const checkInactivity = () => {
+      const lastActivity = localStorage.getItem('n9n_last_activity')
+      if (lastActivity) {
+        const inactiveTime = Date.now() - parseInt(lastActivity)
+        if (inactiveTime > INACTIVITY_TIMEOUT) {
+          console.log('User inactive for too long. Logging out...')
+          logout()
+        }
+      } else {
+        resetTimer()
+      }
+    }
+
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart']
+    events.forEach(event => window.addEventListener(event, resetTimer))
+
+    const interval = setInterval(checkInactivity, 60000)
+
+    return () => {
+      events.forEach(event => window.removeEventListener(event, resetTimer))
+      clearInterval(interval)
+    }
+  }, [token, user, logout])
+
+  const login = React.useCallback(async (email: string, password: string) => {
     const response = await apiClient.login(email, password)
 
     setToken(response.accessToken)
@@ -89,9 +142,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(TENANT_KEY, JSON.stringify(response.tenant))
 
     apiClient.setToken(response.accessToken)
-  }
+  }, [])
 
-  const register = async (email: string, password: string, name?: string, tenantName?: string) => {
+  const register = React.useCallback(async (email: string, password: string, name?: string, tenantName?: string) => {
     const response = await apiClient.register(email, password, name, tenantName || '')
 
     setToken(response.accessToken)
@@ -104,25 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(TENANT_KEY, JSON.stringify(response.tenant))
 
     apiClient.setToken(response.accessToken)
-  }
-
-  const logout = () => {
-    setToken(null)
-    setUser(null)
-    setTenant(null)
-
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(REFRESH_TOKEN_KEY)
-    localStorage.removeItem(USER_KEY)
-    localStorage.removeItem(TENANT_KEY)
-
-    apiClient.setToken(null)
-
-    // Redirect to login page
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login'
-    }
-  }
+  }, [])
 
   return (
     <AuthContext.Provider

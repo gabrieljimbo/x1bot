@@ -60,11 +60,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.client.del(key);
   }
 
-  /**
-   * Set value with TTL
-   */
   async setWithTTL(key: string, value: string, ttlSeconds: number): Promise<void> {
     await this.client.setex(key, ttlSeconds, value);
+  }
+
+  /**
+   * Set value without TTL (use with caution)
+   */
+  async set(key: string, value: string): Promise<void> {
+    await this.client.set(key, value);
   }
 
   /**
