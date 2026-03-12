@@ -5107,8 +5107,8 @@ export default function NodeConfigModal({
                   <label className="block text-sm font-medium mb-2 text-gray-200">
                     Tipo de Mensagem
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['text', 'image', 'audio'].map((type) => (
+                  <div className="grid grid-cols-4 gap-2">
+                    {['text', 'image', 'audio', 'video'].map((type) => (
                       <button
                         key={type}
                         type="button"
@@ -5124,6 +5124,7 @@ export default function NodeConfigModal({
                         {type === 'text' && '📝 Texto'}
                         {type === 'image' && '📸 Imagem'}
                         {type === 'audio' && '🎵 Áudio'}
+                        {type === 'video' && '🎥 Vídeo'}
                       </button>
                     ))}
                   </div>
@@ -5142,7 +5143,7 @@ export default function NodeConfigModal({
                   </div>
                 )}
 
-                {['image', 'audio'].includes(config.remarketingMessageType || 'text') && (
+                {['image', 'audio', 'video'].includes(config.remarketingMessageType || 'text') && (
                   <div>
                     <label className="block text-sm font-medium mb-2 text-gray-200">URL da Mídia (Remarketing)</label>
                     <input
@@ -5290,8 +5291,8 @@ export default function NodeConfigModal({
               <label className="block text-sm font-medium mb-2 text-gray-200">
                 Tipo de Mensagem
               </label>
-              <div className="grid grid-cols-3 gap-2">
-                {['text', 'image', 'audio'].map((type) => (
+              <div className="grid grid-cols-4 gap-2">
+                {['text', 'image', 'audio', 'video'].map((type) => (
                   <button
                     key={type}
                     type="button"
@@ -5307,6 +5308,7 @@ export default function NodeConfigModal({
                     {type === 'text' && '📝 Texto'}
                     {type === 'image' && '📸 Imagem'}
                     {type === 'audio' && '🎵 Áudio'}
+                    {type === 'video' && '🎥 Vídeo'}
                   </button>
                 ))}
               </div>
@@ -5330,7 +5332,7 @@ export default function NodeConfigModal({
               </div>
             )}
 
-            {(config.messageType === 'image' || config.messageType === 'audio') && (
+            {(['image', 'audio', 'video'].includes(config.messageType)) && (
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-2 text-gray-200">
@@ -5344,7 +5346,7 @@ export default function NodeConfigModal({
                     className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500 font-mono text-sm"
                   />
                 </div>
-                {config.messageType === 'image' && (
+                {['image', 'video'].includes(config.messageType) && (
                   <div>
                     <label className="block text-sm font-medium mb-2 text-gray-200">
                       Legenda (Opcional)
@@ -5353,7 +5355,7 @@ export default function NodeConfigModal({
                       type="text"
                       value={config.caption || ''}
                       onChange={(e) => setConfig({ ...config, caption: e.target.value })}
-                      placeholder="Legenda da imagem..."
+                      placeholder={config.messageType === 'video' ? "Legenda do vídeo..." : "Legenda da imagem..."}
                       className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500 text-sm"
                     />
                   </div>

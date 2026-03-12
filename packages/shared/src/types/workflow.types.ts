@@ -233,7 +233,7 @@ export interface WaitReplyConfig {
 
   // Remarketing configuration
   enableRemarketing?: boolean;
-  remarketingMessageType?: 'text' | 'image' | 'audio';
+  remarketingMessageType?: 'text' | 'image' | 'audio' | 'video';
   remarketingMessage?: string;
   remarketingMediaUrl?: string; // used for image/audio
   remarketingTimeoutAmount?: number;
@@ -388,7 +388,7 @@ export interface PixRecognitionConfig {
 export interface RmktConfig {
   amount: number;
   unit: 'seconds' | 'minutes' | 'hours' | 'days';
-  messageType: 'text' | 'image' | 'audio';
+  messageType: 'text' | 'image' | 'audio' | 'video';
   text?: string;
   mediaUrl?: string; // supports {{variables.name}} syntax
   caption?: string; // supports {{variables.name}} syntax
