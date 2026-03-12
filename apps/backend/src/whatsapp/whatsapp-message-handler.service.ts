@@ -155,30 +155,56 @@ export class WhatsappMessageHandler {
         }
       }
 
+      // Fallback 3: Heuristic LID Matching (for WhatsApp Business Privacy / Ads)
+      // When a user replies and WhatsApp hides their real JID behind a @lid,
+      // and they didn't quote a previous message, we try to match them to the most recent WAITING execution
+      // in the same session. Essential for campaign testing and single-user flows.
+      if (!finalFlowState && contactPhone.includes('@lid')) {
+        console.log(`[STATE] Session ${sessionId}: Received anonymous @lid response without quote (${contactPhone}). Attempting heuristic match...`);
+        
+        const latestWaitingState = await this.prisma.contactFlowState.findFirst({
+          where: {
+            sessionId: sessionId
+          },
+          orderBy: {
+            updatedAt: 'desc'
+          }
+        });
+
+        // Ensure the latest waiting state belongs to a real JID (not another @lid)
+        if (latestWaitingState && !latestWaitingState.contactPhone.includes('@lid')) {
+          console.log(`[STATE] Session ${sessionId}: Heuristically matching @lid ${contactPhone} to real JID ${latestWaitingState.contactPhone}`);
+          finalFlowState = latestWaitingState;
+        }
+      }
+
       if (finalFlowState) {
         const oldPhone = finalFlowState.contactPhone;
         const oldSession = finalFlowState.sessionId;
 
-        console.log(`[STATE] Session ${sessionId}: Migrating ContactFlowState from ${oldPhone} (${oldSession}) to ${contactPhone} (${sessionId})`);
+        // Skip migration if it's the exact same identity (protect against unnecessary constraint errors)
+        if (oldPhone !== contactPhone || oldSession !== sessionId) {
+          console.log(`[STATE] Session ${sessionId}: Migrating ContactFlowState from ${oldPhone} (${oldSession}) to ${contactPhone} (${sessionId})`);
 
-        // Handle unique constraint: delete any existing state for the NEW identity before migrating the OLD one
-        await this.prisma.contactFlowState.deleteMany({
-          where: { sessionId, contactPhone }
-        }).catch(() => { });
+          // Handle unique constraint: delete any existing state for the NEW identity before migrating the OLD one
+          await this.prisma.contactFlowState.deleteMany({
+            where: { sessionId, contactPhone }
+          }).catch(() => { });
 
-        // Update the state to the current identity
-        finalFlowState = await this.prisma.contactFlowState.update({
-          where: { id: finalFlowState.id },
-          data: { sessionId, contactPhone },
-        });
-
-        // Also update the associated execution identity if it exists
-        const executionId = finalFlowState.executionId;
-        if (executionId) {
-          await this.prisma.workflowExecution.update({
-            where: { id: executionId },
+          // Update the state to the current identity
+          finalFlowState = await this.prisma.contactFlowState.update({
+            where: { id: finalFlowState.id },
             data: { sessionId, contactPhone },
-          }).catch((e) => console.error(`[STATE] Failed to migrate execution ${executionId}:`, e));
+          });
+
+          // Also update the associated execution identity if it exists
+          const executionId = finalFlowState.executionId;
+          if (executionId) {
+            await this.prisma.workflowExecution.update({
+              where: { id: executionId },
+              data: { sessionId, contactPhone },
+            }).catch((e) => console.error(`[STATE] Failed to migrate execution ${executionId}:`, e));
+          }
         }
       }
     }
