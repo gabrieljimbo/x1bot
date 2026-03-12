@@ -57,18 +57,23 @@ const STATUS_COLORS: Record<CampaignStatus, string> = {
 }
 
 function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () => void }) {
+  const [activeTab, setActiveTab] = useState<'stats' | 'leads'>('stats')
   const [stats, setStats] = useState<Stats | null>(null)
   const [insights, setInsights] = useState<any>(null)
+  const [recipients, setRecipients] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     try {
-      const [statsData, insightsData] = await Promise.all([
+      const [statsData, insightsData, recipientsData] = await Promise.all([
         apiClient.getCampaignStats(campaignId),
-        apiClient.getCampaignInsights(campaignId).catch(() => null)
+        apiClient.getCampaignInsights(campaignId).catch(() => null),
+        apiClient.getCampaignRecipients(campaignId).catch(() => [])
       ])
       setStats(statsData)
       setInsights(insightsData)
+      setRecipients(recipientsData)
     } catch { /* noop */ } finally {
       setLoading(false)
     }
@@ -76,25 +81,48 @@ function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () =
 
   useEffect(() => {
     load()
-    const iv = setInterval(load, 5000)
+    const iv = setInterval(load, 10000) // Increase interval for less pressure
     return () => clearInterval(iv)
   }, [load])
+
+  const filteredRecipients = recipients.filter(r => 
+    r.phone.includes(search) || (r.name && r.name.toLowerCase().includes(search.toLowerCase()))
+  )
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
       <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h2 className="text-white font-bold text-lg">Insights da Campanha</h2>
+          <div>
+            <h2 className="text-white font-bold text-lg">Insights da Campanha</h2>
+            <p className="text-xs text-gray-500 mt-1">Acompanhamento em tempo real dos seus disparos</p>
+          </div>
           <div className="flex gap-2">
-            <button onClick={load} className="text-gray-400 hover:text-white"><RefreshCw size={16} /></button>
-            <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={20} /></button>
+            <button onClick={load} className="text-gray-400 hover:text-white p-2 hover:bg-white/5 rounded-lg transition"><RefreshCw size={18} /></button>
+            <button onClick={onClose} className="text-gray-400 hover:text-white p-2 hover:bg-white/5 rounded-lg transition"><X size={22} /></button>
           </div>
         </div>
-        <div className="p-6 overflow-y-auto">
+
+        <div className="flex border-b border-white/10">
+          <button 
+            onClick={() => setActiveTab('stats')}
+            className={`flex-1 py-3 text-sm font-medium transition ${activeTab === 'stats' ? 'text-[#00ff88] border-b-2 border-[#00ff88]' : 'text-gray-500 hover:text-white'}`}
+          >
+            Estatísticas Gerais
+          </button>
+          <button 
+            onClick={() => setActiveTab('leads')}
+            className={`flex-1 py-3 text-sm font-medium transition ${activeTab === 'leads' ? 'text-[#00ff88] border-b-2 border-[#00ff88]' : 'text-gray-500 hover:text-white'}`}
+          >
+            Lista de Leads ({recipients.length})
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
           {loading && !stats ? (
-            <div className="flex justify-center py-10"><div className="w-8 h-8 border-2 border-[#00ff88]/30 border-t-[#00ff88] rounded-full animate-spin" /></div>
-          ) : (
-            <div className="space-y-6">
+            <div className="flex justify-center py-20"><div className="w-8 h-8 border-2 border-[#00ff88]/30 border-t-[#00ff88] rounded-full animate-spin" /></div>
+          ) : activeTab === 'stats' ? (
+            <div className="space-y-6 animate-in fade-in duration-300">
               {/* Progress Section */}
               {stats && (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-5">
@@ -103,7 +131,7 @@ function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () =
                     <span className="text-[#00ff88] font-bold">{stats.progress}%</span>
                   </div>
                   <div className="relative h-3 bg-white/10 rounded-full overflow-hidden mb-4">
-                    <div className="absolute inset-y-0 left-0 bg-[#00ff88] rounded-full transition-all" style={{ width: `${stats.progress}%` }} />
+                    <div className="absolute inset-y-0 left-0 bg-[#00ff88] rounded-full transition-all duration-1000" style={{ width: `${stats.progress}%` }} />
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     {[
@@ -113,9 +141,9 @@ function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () =
                       { label: 'Falhas', value: stats.failed, color: 'text-red-400' },
                       { label: 'Bloqueados', value: stats.blocked, color: 'text-orange-400' },
                     ].map(item => (
-                      <div key={item.label} className="bg-black/30 rounded-lg p-3 text-center">
+                      <div key={item.label} className="bg-black/30 rounded-lg p-3 text-center border border-white/5">
                         <p className={`text-xl font-bold ${item.color}`}>{item.value}</p>
-                        <p className="text-xs text-gray-500 mt-1">{item.label}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1 font-medium">{item.label}</p>
                       </div>
                     ))}
                   </div>
@@ -199,7 +227,60 @@ function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () =
                   </div>
                 </div>
               )}
+            </div>
+          ) : (
+            <div className="space-y-4 animate-in fade-in duration-300">
+              <div className="relative">
+                <input 
+                  type="text" 
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Pesquisar por número ou nome..."
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-[#00ff88]/50 transition"
+                />
+              </div>
 
+              {filteredRecipients.length === 0 ? (
+                <div className="py-10 text-center text-gray-500">
+                   <p>Nenhum lead encontrado.</p>
+                </div>
+              ) : (
+                <div className="border border-white/10 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-white/5 text-gray-400 text-xs uppercase tracking-wider">
+                      <tr>
+                        <th className="px-5 py-3 font-medium">Lead</th>
+                        <th className="px-5 py-3 font-medium">Status</th>
+                        <th className="px-5 py-3 font-medium">Data/Hora</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {filteredRecipients.map((r: any) => (
+                        <tr key={r.id} className="hover:bg-white/[0.02] transition">
+                          <td className="px-5 py-4">
+                            <p className="text-white font-medium">{r.name || r.phone}</p>
+                            {r.name && <p className="text-gray-500 text-[10px] font-mono">{r.phone}</p>}
+                            {r.sourceGroup && <p className="text-[10px] text-blue-400 mt-1 flex items-center gap-1"><Users size={10} /> De grupo</p>}
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              r.status === 'sent' ? 'bg-green-500/20 text-green-400' :
+                              r.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                              'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {r.status === 'sent' ? 'Enviado' : r.status === 'failed' ? 'Falha' : 'Pendente'}
+                            </span>
+                            {r.error && <p className="text-red-500 text-[10px] mt-1 max-w-[150px] truncate" title={r.error}>{r.error}</p>}
+                          </td>
+                          <td className="px-5 py-4 text-gray-500 text-xs">
+                            {r.sentAt ? new Date(r.sentAt).toLocaleString() : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -246,6 +327,8 @@ function CampaignDrawer({
   const [loadingGroups, setLoadingGroups] = useState(false)
   const [loadingParticipants, setLoadingParticipants] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [currentRecipients, setCurrentRecipients] = useState<any[]>([])
+  const [loadingRecipients, setLoadingRecipients] = useState(false)
 
   const [form, setForm] = useState({
     name: initial?.name ?? '',
@@ -316,6 +399,23 @@ function CampaignDrawer({
       .finally(() => setLoadingParticipants(false))
   }, [selectedGroupJid, groupSessionId, selectedWorkflowId, campaignType])
 
+  const loadCurrentRecipients = useCallback(async () => {
+    if (!campaignId) return
+    setLoadingRecipients(true)
+    try {
+      const data = await apiClient.getCampaignRecipients(campaignId)
+      setCurrentRecipients(data)
+    } catch { /* noop */ } finally {
+      setLoadingRecipients(false)
+    }
+  }, [campaignId])
+
+  useEffect(() => {
+    if (tab === 'recipients' && campaignId) {
+      loadCurrentRecipients()
+    }
+  }, [tab, campaignId, loadCurrentRecipients])
+
   const toggleTag = (tag: string) =>
     setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
 
@@ -349,7 +449,7 @@ function CampaignDrawer({
         sessionIds,
         type: campaignType,
         workflowId: campaignType === 'WORKFLOW' ? selectedWorkflowId : null,
-        scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : undefined,
+        scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null,
         messages: campaignType === 'SIMPLE' ? form.messages.filter(m => m.content || m.mediaUrl) : [],
       }
       const result = await onSave(payload, keepOpen)
@@ -472,6 +572,10 @@ function CampaignDrawer({
       }
       setRecipientResult(`${result.added} adicionados. Total: ${result.total}`)
       setStatusMessage({ type: 'success', text: `Sucesso! ${result.added} destinatários foram adicionados à campanha.` })
+      loadCurrentRecipients()
+      setPhonesText('')
+      setCsvText('')
+      setSelectedGroupPhones(new Set())
     } catch (e: any) {
       setStatusMessage({ type: 'error', text: 'Erro: ' + (e?.response?.data?.message || e.message) })
     } finally {
@@ -868,10 +972,60 @@ function CampaignDrawer({
               )}
 
               <button onClick={handleAddRecipients}
-                className="w-full py-2 bg-[#00ff88]/10 border border-[#00ff88]/30 rounded-lg text-[#00ff88] text-sm font-medium hover:bg-[#00ff88]/20 transition">
-                Adicionar Destinatários
+                disabled={saving || (recipientMode === 'phones' && !phonesText.trim()) || (recipientMode === 'csv' && !csvText.trim()) || (recipientMode === 'group' && selectedGroupPhones.size === 0) || (recipientMode === 'list' && !selectedListId)}
+                className="w-full py-2 bg-[#00ff88]/10 border border-[#00ff88]/30 rounded-lg text-[#00ff88] text-sm font-medium hover:bg-[#00ff88]/20 transition disabled:opacity-50">
+                {saving ? 'Adicionando...' : 'Confirmar e Adicionar Destinatários'}
               </button>
-              {recipientResult && <p className="text-xs text-green-400">{recipientResult}</p>}
+              {recipientResult && <p className="text-xs text-green-400 text-center font-medium">{recipientResult}</p>}
+
+              {/* Current Recipients List */}
+              {campaignId && (
+                <div className="mt-8 border-t border-white/10 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-white text-sm font-bold flex items-center gap-2">
+                       <Users size={16} className="text-[#00ff88]" /> 
+                       Leads já adicionados ({currentRecipients.length})
+                    </h3>
+                    {loadingRecipients && <div className="w-4 h-4 border-2 border-[#00ff88]/30 border-t-[#00ff88] rounded-full animate-spin" />}
+                  </div>
+
+                  {currentRecipients.length === 0 ? (
+                    <div className="bg-black/20 border border-dashed border-white/5 rounded-xl p-8 text-center">
+                      <p className="text-gray-600 text-xs italic">Nenhum lead configurado ainda.</p>
+                    </div>
+                  ) : (
+                    <div className="bg-black/30 border border-white/5 rounded-xl overflow-hidden max-h-[300px] overflow-y-auto custom-scrollbar">
+                      <table className="w-full text-[11px] text-left">
+                        <thead className="bg-white/5 text-gray-400 uppercase tracking-wider font-bold">
+                          <tr>
+                            <th className="px-4 py-2">Lead</th>
+                            <th className="px-4 py-2 text-right">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {currentRecipients.map((r: any) => (
+                            <tr key={r.id} className="hover:bg-white/[0.02]">
+                              <td className="px-4 py-2">
+                                <p className="text-gray-300 font-medium">{r.name || r.phone}</p>
+                                {r.name && <p className="text-gray-600 font-mono scale-90 origin-left">{r.phone}</p>}
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase ${
+                                  r.status === 'sent' ? 'bg-green-500/10 text-green-500/80' :
+                                  r.status === 'failed' ? 'bg-red-500/10 text-red-500/80' :
+                                  'bg-white/5 text-gray-500'
+                                }`}>
+                                  {r.status === 'sent' ? 'Enviado' : r.status === 'failed' ? 'Falha' : 'Pendente'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 

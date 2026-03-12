@@ -728,6 +728,11 @@ export const apiClient = {
     return data as { phone: string; name: string | null; sentAt: string }[];
   },
 
+  getCampaignRecipients: async (id: string) => {
+    const { data } = await client.get(`/campaigns/${id}/recipients`);
+    return data as { id: string; phone: string; name: string | null; status: string; sentAt: string | null; error: string | null }[];
+  },
+
   getCampaignWorkflow: async (id: string) => {
     const { data } = await client.get(`/campaigns/${id}/workflow`);
     return data;

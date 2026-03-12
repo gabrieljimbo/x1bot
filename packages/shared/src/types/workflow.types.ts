@@ -164,6 +164,7 @@ export interface TriggerMessagePayload {
     url: string;
   } | null;
   timestamp: number;
+  quotedMessageId?: string;
 }
 
 export interface TriggerScheduleConfig {

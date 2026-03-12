@@ -132,22 +132,54 @@ export class WhatsappMessageHandler {
         },
       });
 
-      if (finalFlowState) {
-        console.log(`[STATE] Session ${sessionId}: Found active ContactFlowState for ${contactPhone} on DIFFERENT session ${finalFlowState.sessionId}, migrating...`);
-        // If message arrived on a different session, we should migrate the state for future messages
-        // But for Prisma, we need to handle the unique constraint
-        await this.prisma.contactFlowState.deleteMany({
+      // Fallback 2: Match by quoted message ID (LID / Identity resolution)
+      if (!finalFlowState && normalizedPayload.quotedMessageId) {
+        const quotedMsg = await this.prisma.message.findFirst({
           where: {
-            sessionId,
-            contactPhone
-          }
+            whatsappMessageId: normalizedPayload.quotedMessageId,
+            conversation: { tenantId },
+          },
+          include: { conversation: true },
+        });
+
+        if (quotedMsg) {
+          console.log(`[STATE] Session ${sessionId}: Found quoted message ${normalizedPayload.quotedMessageId}, resolving identity to original contact ${quotedMsg.conversation.contactPhone}`);
+          finalFlowState = await this.prisma.contactFlowState.findUnique({
+            where: {
+              sessionId_contactPhone: {
+                sessionId: quotedMsg.conversation.sessionId,
+                contactPhone: quotedMsg.conversation.contactPhone,
+              },
+            },
+          });
+        }
+      }
+
+      if (finalFlowState) {
+        const oldPhone = finalFlowState.contactPhone;
+        const oldSession = finalFlowState.sessionId;
+
+        console.log(`[STATE] Session ${sessionId}: Migrating ContactFlowState from ${oldPhone} (${oldSession}) to ${contactPhone} (${sessionId})`);
+
+        // Handle unique constraint: delete any existing state for the NEW identity before migrating the OLD one
+        await this.prisma.contactFlowState.deleteMany({
+          where: { sessionId, contactPhone }
         }).catch(() => { });
 
-        // Update the existing state to the current session
-        await this.prisma.contactFlowState.update({
+        // Update the state to the current identity
+        finalFlowState = await this.prisma.contactFlowState.update({
           where: { id: finalFlowState.id },
-          data: { sessionId },
+          data: { sessionId, contactPhone },
         });
+
+        // Also update the associated execution identity if it exists
+        const executionId = finalFlowState.executionId;
+        if (executionId) {
+          await this.prisma.workflowExecution.update({
+            where: { id: executionId },
+            data: { sessionId, contactPhone },
+          }).catch((e) => console.error(`[STATE] Failed to migrate execution ${executionId}:`, e));
+        }
       }
     }
 

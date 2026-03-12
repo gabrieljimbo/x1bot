@@ -183,6 +183,11 @@ export class CampaignsController {
     return this.campaignsService.getCampaignSendHistory(req.user.tenantId, id);
   }
 
+  @Get(':id/recipients')
+  getRecipients(@Request() req: any, @Param('id') id: string) {
+    return this.campaignsService.getCampaignRecipients(req.user.tenantId, id);
+  }
+
   // ─── WORKFLOW ─────────────────────────────────────────────────────────────────
 
   @Get(':id/workflow')

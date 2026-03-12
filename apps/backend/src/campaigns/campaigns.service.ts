@@ -259,9 +259,24 @@ export class CampaignsService {
 
   async resetCampaign(tenantId: string, campaignId: string) {
     await this.assertCampaignBelongs(tenantId, campaignId);
+    
+    // Reset recipients status to allow re-sending
+    await this.prisma.campaignRecipient.updateMany({
+      where: { campaignId },
+      data: { 
+        status: 'pending', 
+        sentAt: null, 
+        error: null 
+      },
+    });
+
     return this.prisma.campaign.update({
       where: { id: campaignId },
-      data: { status: CampaignStatus.DRAFT },
+      data: { 
+        status: CampaignStatus.DRAFT,
+        startedAt: null,
+        completedAt: null,
+      },
     });
   }
 
@@ -589,10 +604,31 @@ export class CampaignsService {
 
         const nodeMap = new Map<string, string>();
         for (const n of workflowNodes) {
-          let name = n.data?.label || n.data?.name;
+          let name: string = n.data?.label || n.data?.name || n.data?.displayName || '';
           
-          if (!name && n.type === 'MARK_STAGE') {
-            name = n.data?.stageName ? `Etapa: ${n.data.stageName}` : 'Marcar Etapa';
+          if (n.type === 'MARK_STAGE' || n.type === 'SET_STAGE') {
+            const stage = n.data?.stageName || n.data?.name || n.data?.label;
+            name = stage ? `🚩 Etapa: ${stage}` : 'Marcar Etapa';
+          } else if (n.type === 'WAIT' || n.type === 'DELAY' || n.type === 'GRUPO_WAIT') {
+            const amount = n.data?.amount || n.data?.delay || n.data?.waitTime || n.data?.duration;
+            const unit = n.data?.unit || 'seconds';
+            const unitMap: any = { seconds: 'seg', minutes: 'min', hours: 'h', days: 'd', s: 'seg', m: 'min' };
+            name = `⏳ Aguardar ${amount}${unitMap[unit] || unit}`;
+          } else if (n.type === 'WAIT_REPLY' || n.type === 'ASK') {
+            name = `📩 Aguardar Resposta`;
+            const timeout = n.data?.timeoutAmount || n.data?.timeout;
+            if (timeout) name += ` (${timeout}s)`;
+          } else if (n.type === 'SEND_MESSAGE' || n.type === 'SEND_TEXT') {
+            const text = n.data?.text || n.data?.content;
+            if (text && (!name || name === n.type)) {
+              name = text.length > 25 ? text.substring(0, 25) + '...' : text;
+            }
+          } else if (n.type === 'SEND_MEDIA') {
+            const caption = n.data?.caption;
+            const type = n.data?.mediaType || 'Mídia';
+            if (!name || name === n.type) {
+              name = caption ? `🖼️ ${caption.substring(0, 20)}...` : `🏷️ Enviar ${type}`;
+            }
           }
           
           if (!name) {
@@ -1043,6 +1079,17 @@ export class CampaignsService {
     });
 
     return sentRecipients;
+  }
+
+  async getCampaignRecipients(tenantId: string, campaignId: string) {
+    await this.assertCampaignBelongs(tenantId, campaignId);
+
+    const recipients = await this.prisma.campaignRecipient.findMany({
+      where: { campaignId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return recipients;
   }
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────────

@@ -1154,6 +1154,18 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       return { messageId, from, fromMe: !!msg.key.fromMe, type: 'text', text: '', media: null, timestamp };
     }
 
+    // Extract quoted message ID if exists
+    const contextInfo = m.extendedTextMessage?.contextInfo ||
+      (m as any).imageMessage?.contextInfo ||
+      (m as any).videoMessage?.contextInfo ||
+      (m as any).audioMessage?.contextInfo ||
+      (m as any).documentMessage?.contextInfo ||
+      (m as any).buttonsResponseMessage?.contextInfo ||
+      (m as any).listResponseMessage?.contextInfo ||
+      (m as any).templateButtonReplyMessage?.contextInfo ||
+      (m as any).interactiveResponseMessage?.contextInfo;
+    const quotedMessageId = contextInfo?.stanzaId;
+
     // Get text content from various Baileys message types
     let text = m.conversation ||
       m.extendedTextMessage?.text ||
@@ -1224,10 +1236,11 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
             url: uploadResult.url,
           },
           timestamp,
+          quotedMessageId,
         };
       } catch (error: any) {
         console.error('[BAILEYS] Media download failed:', error.message);
-        return { messageId, from, fromMe: !!msg.key.fromMe, type: 'text', text, media: null, timestamp };
+        return { messageId, from, fromMe: !!msg.key.fromMe, type: 'text', text, media: null, timestamp, quotedMessageId };
       }
     }
 
@@ -1239,6 +1252,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       text,
       media: null,
       timestamp,
+      quotedMessageId,
     };
   }
 
