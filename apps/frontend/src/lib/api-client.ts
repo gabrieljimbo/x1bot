@@ -1,8 +1,12 @@
 import axios from 'axios'
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
-const baseURL = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`
+// The backend is hosted behind Traefik which strips the first /api from proxy.
+// With app.setGlobalPrefix('api'), the server expects to receive /api/something
+// If we hit $API_URL/something (like /api/something), Traefik strips /api and backend gets /something => 404.
+// Thus we must always hit $API_URL/api/something (like /api/api/something).
+const baseURL = `${API_URL}/api`;
 
 const client = axios.create({
   baseURL,
