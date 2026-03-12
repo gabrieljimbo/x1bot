@@ -1,7 +1,17 @@
 import { io, Socket } from 'socket.io-client'
 import { WorkflowEvent } from '@n9n/shared'
 
+
 const WS_URL = (process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
+let wsOrigin = WS_URL;
+let wsPath = '/socket.io';
+try {
+  const urlObj = new URL(WS_URL);
+  wsOrigin = urlObj.origin;
+  if (urlObj.pathname && urlObj.pathname !== '/') {
+    wsPath = urlObj.pathname + '/socket.io';
+  }
+} catch(e) {}
 
 class WebSocketClient {
   private socket: Socket | null = null
@@ -16,9 +26,10 @@ class WebSocketClient {
 
     const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('n9n_token') : null)
 
-    console.log('Connecting to WebSocket:', WS_URL, 'with tenantId:', tenantId)
+    console.log('Connecting to WebSocket origin:', wsOrigin, 'path:', wsPath, 'with tenantId:', tenantId)
 
-    this.socket = io(WS_URL, {
+    this.socket = io(wsOrigin, {
+      path: wsPath,
       query: { tenantId },
       auth: authToken ? { token: authToken } : undefined,
       transports: ['websocket', 'polling'],

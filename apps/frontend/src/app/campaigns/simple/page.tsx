@@ -539,8 +539,8 @@ function CampaignDrawer({
     }
   }
 
-  const handleAddRecipients = async () => {
-    let id = campaignId
+  const handleAddRecipients = async (forceId?: string) => {
+    let id = forceId || campaignId
     if (!id) {
       // If no ID yet, try to save first (internal save, keep drawer open)
       id = await handleSave(true)
@@ -1171,7 +1171,14 @@ function CampaignDrawer({
 
         <div className="p-5 border-t border-white/10 flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition">Cancelar</button>
-          <button onClick={() => handleSave(false)} disabled={saving}
+          <button onClick={async () => {
+            const savedId = await handleSave(true);
+            if (savedId) {
+              const hasRecips = (recipientMode === 'phones' && phonesText.trim()) || (recipientMode === 'csv' && csvText.trim()) || (recipientMode === 'group' && selectedGroupPhones.size > 0) || (recipientMode === 'list' && selectedListId);
+              if (hasRecips) { await handleAddRecipients(savedId); }
+              onClose();
+            }
+          }} disabled={saving}
             className="px-5 py-2 bg-[#00ff88] text-black font-bold rounded-lg text-sm hover:bg-[#00dd77] transition disabled:opacity-50">
             {saving ? 'Salvando...' : 'Salvar'}
           </button>
