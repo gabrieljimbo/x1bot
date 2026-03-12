@@ -116,6 +116,16 @@ export class CampaignsController {
     return this.campaignsService.resumeCampaign(req.user.tenantId, id);
   }
 
+  @Post(':id/duplicate')
+  duplicateCampaign(@Request() req: any, @Param('id') id: string) {
+    return this.campaignsService.duplicateCampaign(req.user.tenantId, id);
+  }
+
+  @Post(':id/reset')
+  resetCampaign(@Request() req: any, @Param('id') id: string) {
+    return this.campaignsService.resetCampaign(req.user.tenantId, id);
+  }
+
   @Get(':id/stats')
   async getCampaignStats(@Request() req: any, @Param('id') id: string) {
     await this.campaignsService.getCampaignById(req.user.tenantId, id);

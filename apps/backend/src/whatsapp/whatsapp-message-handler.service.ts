@@ -113,19 +113,64 @@ export class WhatsappMessageHandler {
       },
     });
 
-    if (flowState) {
-      if (new Date() > flowState.expiresAt) {
+    // 4. ContactFlowState Check (Resume waiting nodes)
+    let finalFlowState = flowState;
+
+    if (!finalFlowState) {
+      // Fallback 1: Search for this phone in ANY session of this tenant
+      // (This handles cases where the lead responds to a different session than the one that started the flow)
+      const tenantSessions = await this.prisma.whatsappSession.findMany({
+        where: { tenantId },
+        select: { id: true },
+      });
+      const sessionIds = tenantSessions.map(s => s.id);
+
+      finalFlowState = await this.prisma.contactFlowState.findFirst({
+        where: {
+          sessionId: { in: sessionIds },
+          contactPhone: { contains: contactPhone.split('@')[0] }, // Flexible match for @s.whatsapp.net or @lid
+        },
+      });
+
+      if (finalFlowState) {
+        console.log(`[STATE] Session ${sessionId}: Found active ContactFlowState for ${contactPhone} on DIFFERENT session ${finalFlowState.sessionId}, migrating...`);
+        // If message arrived on a different session, we should migrate the state for future messages
+        // But for Prisma, we need to handle the unique constraint
+        await this.prisma.contactFlowState.deleteMany({
+          where: {
+            sessionId,
+            contactPhone
+          }
+        }).catch(() => { });
+
+        // Update the existing state to the current session
+        await this.prisma.contactFlowState.update({
+          where: { id: finalFlowState.id },
+          data: { sessionId },
+        });
+      }
+    }
+
+    if (finalFlowState) {
+      if (new Date() > finalFlowState.expiresAt) {
         // State expired, delete it and proceed to match triggers
         console.log(`[STATE] Session ${sessionId}: ContactFlowState for ${contactPhone} expired, deleting`);
         await this.prisma.contactFlowState.delete({
-          where: { id: flowState.id },
+          where: { id: finalFlowState.id },
         });
-      } else if (flowState.executionId) {
+      } else if (finalFlowState.executionId) {
         // State is active, load execution and resume
-        console.log(`[STATE] Session ${sessionId}: Found active ContactFlowState for ${contactPhone}, resuming execution ${flowState.executionId}`);
-        const activeExecution = await this.executionService.getExecution(tenantId, flowState.executionId);
+        console.log(`[STATE] Session ${sessionId}: Found active ContactFlowState for ${contactPhone}, resuming execution ${finalFlowState.executionId}`);
+        const activeExecution = await this.executionService.getExecution(tenantId, finalFlowState.executionId);
 
         if (activeExecution) {
+          // If execution was on a different session, update it to the current one
+          if (activeExecution.sessionId !== sessionId) {
+            console.log(`[STATE] Migrating execution ${activeExecution.id} session from ${activeExecution.sessionId} to ${sessionId}`);
+            await this.executionService.updateExecution(activeExecution.id, { sessionId } as any);
+            activeExecution.sessionId = sessionId;
+          }
+
           // If in a group, verify workflow is allowed OR it's a campaign
           if (isGroup) {
             const isCampaign = !!activeExecution.campaignId;
@@ -139,20 +184,38 @@ export class WhatsappMessageHandler {
           await this.executionEngine.resumeExecution(activeExecution, resumeText, normalizedPayload);
           return; // Stop processing further here
         } else {
-          console.log(`[STATE] Session ${sessionId}: Execution ${flowState.executionId} not found, deleting state`);
+          console.log(`[STATE] Session ${sessionId}: Execution ${finalFlowState.executionId} not found, deleting state`);
           await this.prisma.contactFlowState.delete({
-            where: { id: flowState.id },
+            where: { id: finalFlowState.id },
           });
         }
       }
     }
 
     // Check for active execution (Fallback/Legacy check)
-    const activeExecution = await this.executionService.getActiveExecution(
+    let activeExecution = await this.executionService.getActiveExecution(
       tenantId,
       sessionId,
       contactPhone,
     );
+
+    if (!activeExecution) {
+      // Fallback 2: Direct lookup by tenant and phone (cross-session)
+      const allActive = await this.prisma.workflowExecution.findFirst({
+        where: {
+          tenantId,
+          contactPhone: { contains: contactPhone.split('@')[0] },
+          status: { in: ['RUNNING', 'WAITING'] },
+        },
+        orderBy: { startedAt: 'desc' }
+      });
+
+      if (allActive) {
+        console.log(`[FALLBACK] Found active execution ${allActive.id} on session ${allActive.sessionId}, migrating to ${sessionId}`);
+        await this.executionService.updateExecution(allActive.id, { sessionId } as any);
+        activeExecution = await this.executionService.getExecution(tenantId, allActive.id);
+      }
+    }
 
     if (activeExecution) {
       // 5. Workflow Check for Groups (Resume): Ensure the active workflow is permitted in this group or it's a campaign
@@ -168,6 +231,7 @@ export class WhatsappMessageHandler {
       if (activeExecution.status === ExecutionStatus.WAITING) {
         const resumeText = normalizedPayload.text || '';
         await this.executionEngine.resumeExecution(activeExecution, resumeText, normalizedPayload);
+        return;
       }
     } else {
       // If it's a group and not enabled, do not try to match triggers

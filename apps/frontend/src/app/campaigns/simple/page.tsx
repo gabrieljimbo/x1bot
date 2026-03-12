@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, Play, Pause, Trash2, Edit2, BarChart2, X,
   Send, Upload, Phone, List, RefreshCw, Tag, Smartphone, Shuffle, AlignJustify, GitBranch, Users,
-  AlertCircle, Info, History, CheckCircle2
+  AlertCircle, Info, History, CheckCircle2, Copy, RotateCcw
 } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { AuthGuard } from '@/components/AuthGuard'
@@ -1017,6 +1017,27 @@ function SimplePageContent() {
     await load()
   }
 
+  const handleDuplicate = async (id: string) => {
+    try {
+      await apiClient.duplicateCampaign(id)
+      await load()
+      setStatusMessage({ type: 'success', text: 'Campanha duplicada com sucesso!' })
+    } catch (e: any) {
+      setStatusMessage({ type: 'error', text: 'Erro ao duplicar: ' + (e?.response?.data?.message || e.message) })
+    }
+  }
+
+  const handleReset = async (id: string) => {
+    if (!confirm('Deseja reativar esta campanha? Ela voltará para o estado de rascunho.')) return
+    try {
+      await apiClient.resetCampaign(id)
+      await load()
+      setStatusMessage({ type: 'success', text: 'Campanha reativada! Agora você pode editá-la ou iniciá-la novamente.' })
+    } catch (e: any) {
+      setStatusMessage({ type: 'error', text: 'Erro ao reativar: ' + (e?.response?.data?.message || e.message) })
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <AppHeader />
@@ -1098,6 +1119,16 @@ function SimplePageContent() {
                         <Pause size={16} />
                       </button>
                     )}
+                    {['COMPLETED', 'FAILED', 'SCHEDULED'].includes(campaign.status) && (
+                      <button onClick={() => handleReset(campaign.id)}
+                        className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition" title="Reativar">
+                        <RotateCcw size={16} />
+                      </button>
+                    )}
+                    <button onClick={() => handleDuplicate(campaign.id)}
+                      className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition" title="Duplicar">
+                      <Copy size={16} />
+                    </button>
                     <button onClick={() => { setEditing(campaign); setShowDrawer(true) }}
                       className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition" title="Editar">
                       <Edit2 size={16} />

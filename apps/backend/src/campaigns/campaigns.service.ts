@@ -190,6 +190,81 @@ export class CampaignsService {
     return campaign;
   }
 
+  async duplicateCampaign(tenantId: string, campaignId: string) {
+    const original = await this.prisma.campaign.findFirst({
+      where: { id: campaignId, tenantId },
+      include: {
+        messages: true,
+        sessions: true,
+        workflow: true,
+      },
+    });
+
+    if (!original) throw new NotFoundException('Campanha original não encontrada');
+
+    // Create cloned campaign
+    const clone = await this.prisma.campaign.create({
+      data: {
+        tenantId,
+        name: `${original.name} (Cópia)`,
+        type: original.type,
+        workflowId: original.workflowId,
+        isTemplate: original.isTemplate,
+        limitPerSession: original.limitPerSession,
+        delayMin: original.delayMin,
+        delayMax: original.delayMax,
+        randomOrder: original.randomOrder,
+        excludeBlocked: original.excludeBlocked,
+        status: CampaignStatus.DRAFT,
+      },
+    });
+
+    // Clone sessions
+    if (original.sessions.length > 0) {
+      await this.prisma.campaignSession.createMany({
+        data: original.sessions.map(s => ({
+          campaignId: clone.id,
+          sessionId: s.sessionId,
+        })),
+      });
+    }
+
+    // Clone messages
+    if (original.messages.length > 0) {
+      await this.prisma.campaignMessage.createMany({
+        data: original.messages.map(m => ({
+          campaignId: clone.id,
+          order: m.order,
+          type: m.type,
+          content: m.content,
+          mediaUrl: m.mediaUrl,
+          caption: m.caption,
+        })),
+      });
+    }
+
+    // Clone campaign-specific workflow
+    if (original.workflow) {
+      await this.prisma.campaignWorkflow.create({
+        data: {
+          campaignId: clone.id,
+          nodes: original.workflow.nodes as any,
+          edges: original.workflow.edges as any,
+        },
+      });
+    }
+
+    return this.getCampaignById(tenantId, clone.id);
+  }
+
+  async resetCampaign(tenantId: string, campaignId: string) {
+    await this.assertCampaignBelongs(tenantId, campaignId);
+    return this.prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: CampaignStatus.DRAFT },
+    });
+  }
+
   // ─── RECIPIENTS ──────────────────────────────────────────────────────────────
 
   async addRecipientsFromContacts(campaignId: string, tenantId: string, filters: { tags?: string[]; whatsappLabelIds?: string[] }) {
@@ -514,7 +589,17 @@ export class CampaignsService {
 
         const nodeMap = new Map<string, string>();
         for (const n of workflowNodes) {
-          nodeMap.set(n.id, n.data?.label || n.data?.name || n.type || `Nó ${n.id.substring(0, 6)}`);
+          let name = n.data?.label || n.data?.name;
+          
+          if (!name && n.type === 'MARK_STAGE') {
+            name = n.data?.stageName ? `Etapa: ${n.data.stageName}` : 'Marcar Etapa';
+          }
+          
+          if (!name) {
+            name = n.type || `Nó ${n.id.substring(0, 6)}`;
+          }
+          
+          nodeMap.set(n.id, name);
         }
 
         const initStat = (nodeId: string) => {

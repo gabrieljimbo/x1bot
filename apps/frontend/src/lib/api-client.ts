@@ -645,6 +645,16 @@ export const apiClient = {
     return data;
   },
 
+  duplicateCampaign: async (id: string) => {
+    const { data } = await client.post(`/campaigns/${id}/duplicate`);
+    return data;
+  },
+
+  resetCampaign: async (id: string) => {
+    const { data } = await client.post(`/campaigns/${id}/reset`);
+    return data;
+  },
+
   getCampaignStats: async (id: string) => {
     const { data } = await client.get(`/campaigns/${id}/stats`);
     return data;
