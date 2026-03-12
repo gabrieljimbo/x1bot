@@ -4,6 +4,7 @@ import { WhatsappSessionManager } from '../whatsapp/whatsapp-session-manager.ser
 import { ExecutionEngineService } from '../execution/execution-engine.service';
 import { CampaignStatus, CampaignType, Prisma } from '@prisma/client';
 import { StorageService } from '../storage/storage.service';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class CampaignsService {
@@ -13,6 +14,47 @@ export class CampaignsService {
     private readonly executionEngine: ExecutionEngineService,
     private readonly storageService: StorageService,
   ) { }
+
+  private processingCampaigns = new Set<string>();
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleCampaignScheduler() {
+    const now = new Date();
+    
+    // 1. Auto-start scheduled campaigns
+    const toStart = await this.prisma.campaign.findMany({
+      where: {
+        status: CampaignStatus.SCHEDULED,
+        scheduledAt: { lte: now }
+      }
+    });
+
+    for (const c of toStart) {
+      console.log(`[CAMPAIGN SCHEDULER] Starting scheduled campaign: ${c.name} (${c.id})`);
+      await this.prisma.campaign.update({
+        where: { id: c.id },
+        data: { status: CampaignStatus.RUNNING, startedAt: now }
+      });
+      this.processCampaign(c.id).catch(err => console.error(`[CAMPAIGN SCHEDULER] Error starting ${c.id}:`, err));
+    }
+
+    // 2. Auto-resume running campaigns (important for DAILY limits or server restarts)
+    const running = await this.prisma.campaign.findMany({
+      where: { status: CampaignStatus.RUNNING }
+    });
+
+    for (const c of running) {
+      if (!this.processingCampaigns.has(c.id)) {
+        const hasPending = await this.prisma.campaignRecipient.count({
+          where: { campaignId: c.id, status: 'pending' }
+        });
+        
+        if (hasPending > 0) {
+          this.processCampaign(c.id).catch(err => console.error(`[CAMPAIGN SCHEDULER] Error resuming ${c.id}:`, err));
+        }
+      }
+    }
+  }
 
   // ─── CRUD ────────────────────────────────────────────────────────────────────
 
@@ -27,6 +69,8 @@ export class CampaignsService {
     delayMax?: number;
     randomOrder?: boolean;
     excludeBlocked?: boolean;
+    limitType?: any;
+    dailyResetTime?: string;
     sessionIds?: string[];
     messages?: { order: number; type: string; content?: string; mediaUrl?: string; caption?: string }[];
   }) {
@@ -43,7 +87,9 @@ export class CampaignsService {
         delayMax: dto.delayMax ?? 30,
         randomOrder: dto.randomOrder ?? true,
         excludeBlocked: dto.excludeBlocked ?? true,
-      },
+        limitType: (dto.limitType ?? 'TOTAL') as any,
+        dailyResetTime: dto.dailyResetTime ?? '00:00',
+      } as any,
     });
 
     if (dto.sessionIds && dto.sessionIds.length > 0) {
@@ -99,13 +145,15 @@ export class CampaignsService {
     delayMax?: number;
     randomOrder?: boolean;
     excludeBlocked?: boolean;
+    limitType?: any;
+    dailyResetTime?: string;
     sessionIds?: string[];
     messages?: { order: number; type: string; content?: string; mediaUrl?: string; caption?: string }[];
   }) {
     await this.assertCampaignBelongs(tenantId, campaignId);
     const { sessionIds, messages, ...rest } = dto;
 
-    await this.prisma.campaign.update({ where: { id: campaignId }, data: rest });
+    await this.prisma.campaign.update({ where: { id: campaignId }, data: rest as any });
 
     if (sessionIds !== undefined) {
       await this.prisma.campaignSession.deleteMany({ where: { campaignId } });
@@ -224,8 +272,11 @@ export class CampaignsService {
         delayMax: original.delayMax,
         randomOrder: original.randomOrder,
         excludeBlocked: original.excludeBlocked,
+        limitType: (original as any).limitType as any,
+        dailyResetTime: (original as any).dailyResetTime ?? '00:00',
         status: CampaignStatus.DRAFT,
-      },
+      } as any,
+      include: { messages: true, workflow: true, sessions: true }
     });
 
     // Clone sessions
@@ -499,20 +550,28 @@ export class CampaignsService {
 
   async startCampaign(tenantId: string, campaignId: string) {
     const campaign = await this.getCampaignById(tenantId, campaignId);
-    if (campaign.status === CampaignStatus.RUNNING) throw new BadRequestException('Campaign is already running');
+    if ([CampaignStatus.RUNNING, CampaignStatus.SCHEDULED].map(s => s.toString()).includes(campaign.status)) {
+      throw new BadRequestException('Campaign is already running or scheduled');
+    }
     if (!campaign.sessions || campaign.sessions.length === 0) throw new BadRequestException('Campaign has no sessions configured');
+
+    const now = new Date();
+    const isScheduled = campaign.scheduledAt && new Date(campaign.scheduledAt) > now;
+    const status = isScheduled ? CampaignStatus.SCHEDULED : CampaignStatus.RUNNING;
 
     await this.prisma.campaign.update({
       where: { id: campaignId },
-      data: { status: CampaignStatus.RUNNING, startedAt: new Date() },
+      data: { status, startedAt: isScheduled ? null : now, completedAt: null },
     });
 
-    this.processCampaign(campaignId).catch((err) => {
-      console.error(`Campaign ${campaignId} failed:`, err);
-      this.prisma.campaign.update({ where: { id: campaignId }, data: { status: CampaignStatus.FAILED } }).catch(() => { });
-    });
+    if (!isScheduled) {
+      this.processCampaign(campaignId).catch((err) => {
+        console.error(`Campaign ${campaignId} failed:`, err);
+        this.prisma.campaign.update({ where: { id: campaignId }, data: { status: CampaignStatus.FAILED } }).catch(() => { });
+      });
+    }
 
-    return { success: true, status: CampaignStatus.RUNNING };
+    return { success: true, status: status as any };
   }
 
   async pauseCampaign(tenantId: string, campaignId: string) {
@@ -726,10 +785,14 @@ export class CampaignsService {
   // ─── WORKER ───────────────────────────────────────────────────────────────────
 
   async processCampaign(campaignId: string) {
-    const campaign = await this.prisma.campaign.findUnique({
-      where: { id: campaignId },
-      include: { recipients: true, sessions: true, messages: { orderBy: { order: 'asc' } } },
-    });
+    if (this.processingCampaigns.has(campaignId)) return;
+    this.processingCampaigns.add(campaignId);
+
+    try {
+      const campaign = await this.prisma.campaign.findUnique({
+        where: { id: campaignId },
+        include: { recipients: { where: { status: 'pending' } }, sessions: true, messages: { orderBy: { order: 'asc' } } },
+      });
     // campaign.workflowId is now available directly from the model
     if (!campaign) return;
 
@@ -771,10 +834,12 @@ export class CampaignsService {
       }
     }
     let sessionIndex = 0;
+    const now = new Date();
+    const todayThreshold = this.getResetThresholdInUTC((campaign as any).dailyResetTime);
 
     for (const recipient of pendingRecipients) {
       const current = await this.prisma.campaign.findUnique({ where: { id: campaignId } });
-      if (!current || current.status !== CampaignStatus.RUNNING) break;
+      if (!current || (current.status as string) !== CampaignStatus.RUNNING) break;
 
       if (campaign.excludeBlocked) {
         const blocked = await this.isBlacklisted(campaign.tenantId, recipient.phone);
@@ -788,14 +853,26 @@ export class CampaignsService {
       let session = campaign.sessions[sessionIndex % Math.max(campaign.sessions.length, 1)];
       if (!session) break;
 
-      const sessionSentCount = await this.prisma.campaignLog.count({
-        where: { campaignId, sessionId: session.sessionId, status: 'sent' },
-      });
+      const where: any = {
+        campaignId,
+        sessionId: session.sessionId,
+        status: 'sent',
+      };
 
-      if (sessionSentCount >= campaign.limitPerSession) {
-        sessionIndex++;
-        if (sessionIndex >= campaign.sessions.length) break;
-        session = campaign.sessions[sessionIndex];
+      if ((campaign as any).limitType === 'DAILY') {
+        where.sentAt = { gte: todayThreshold };
+      }
+
+      const sessionSentCount = await this.prisma.campaignLog.count({ where });
+
+        if (sessionSentCount >= (campaign as any).limitPerSession) {
+          sessionIndex++;
+          if (sessionIndex >= campaign.sessions.length) {
+            console.log(`[CampaignsService] All sessions exhausted for campaign ${campaignId} (${(campaign as any).limitType} limit)`);
+            break; // Stop for now
+          }
+        // Try next session
+        continue;
       }
 
       try {
@@ -860,7 +937,19 @@ export class CampaignsService {
 
     const finalState = await this.prisma.campaign.findUnique({ where: { id: campaignId } });
     if (finalState && finalState.status === CampaignStatus.RUNNING) {
-      await this.prisma.campaign.update({ where: { id: campaignId }, data: { status: CampaignStatus.COMPLETED, completedAt: new Date() } });
+      const hasPending = await this.prisma.campaignRecipient.count({
+        where: { campaignId, status: 'pending' }
+      });
+      
+      if (hasPending === 0) {
+        await this.prisma.campaign.update({ 
+          where: { id: campaignId }, 
+          data: { status: CampaignStatus.COMPLETED, completedAt: new Date() } 
+        });
+      }
+    }
+    } finally {
+      this.processingCampaigns.delete(campaignId);
     }
   }
 
@@ -1109,5 +1198,41 @@ export class CampaignsService {
     const campaign = await this.prisma.campaign.findFirst({ where: { id: campaignId, tenantId } });
     if (!campaign) throw new NotFoundException('Campaign not found');
     return campaign;
+  }
+
+  private getResetThresholdInUTC(resetTimeStr: string): Date {
+    const [hours, minutes] = (resetTimeStr || '00:00').split(':').map(Number);
+    const now = new Date();
+    
+    // Get current time components in São Paulo
+    const spNowFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', second: 'numeric',
+      hour12: false
+    });
+    const parts = spNowFormatter.formatToParts(now);
+    const sp: any = {};
+    parts.forEach(p => sp[p.type] = p.value);
+    
+    const spHour = parseInt(sp.hour);
+    const spMin = parseInt(sp.minute);
+
+    const minutesSinceMidnightSP = spHour * 60 + spMin;
+    const resetMinutes = hours * 60 + minutes;
+    
+    const threshold = new Date(now);
+    let diffMinutes = minutesSinceMidnightSP - resetMinutes;
+    
+    // If we're before the reset time today, the last reset was yesterday
+    if (diffMinutes < 0) {
+      diffMinutes += 24 * 60;
+    }
+    
+    threshold.setMinutes(threshold.getMinutes() - diffMinutes);
+    threshold.setSeconds(0, 0);
+    threshold.setMilliseconds(0);
+    
+    return threshold;
   }
 }

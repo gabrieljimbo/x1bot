@@ -23,10 +23,12 @@ interface Campaign {
   startedAt?: string
   completedAt?: string
   limitPerSession: number
+  limitType: 'TOTAL' | 'DAILY'
   delayMin: number
   delayMax: number
   randomOrder: boolean
   excludeBlocked: boolean
+  dailyResetTime: string
   createdAt: string
   messages: { id: string; order: number; type: string; content?: string; mediaUrl?: string; caption?: string }[]
   sessions: { id: string; sessionId: string }[]
@@ -337,6 +339,8 @@ function CampaignDrawer({
     delayMax: initial?.delayMax ?? 30,
     randomOrder: initial?.randomOrder ?? true,
     excludeBlocked: initial?.excludeBlocked ?? true,
+    limitType: initial?.limitType ?? 'TOTAL',
+    dailyResetTime: initial?.dailyResetTime ?? '00:00',
     scheduledAt: initial?.scheduledAt ? initial.scheduledAt.slice(0, 16) : '',
     sessionIds: initial?.sessions?.map(s => s.sessionId) ?? [],
     messages: (initial?.messages ?? [{ order: 0, type: 'text', content: '', mediaUrl: '', caption: '' }]) as { id?: string; order: number; type: string; content?: string; mediaUrl?: string; caption?: string }[],
@@ -1045,11 +1049,44 @@ function CampaignDrawer({
                   </div>
                 </label>
               ))}
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Limite de envios por sessão</label>
-                <input type="number" min={1} value={form.limitPerSession}
-                  onChange={e => setForm(f => ({ ...f, limitPerSession: Number(e.target.value) }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-2 block">Tipo de Limite</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => setForm(f => ({ ...f, limitType: 'TOTAL' }))}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium border transition ${form.limitType === 'TOTAL' ? 'bg-[#00ff88]/20 border-[#00ff88]/40 text-[#00ff88]' : 'bg-black/20 border-white/10 text-gray-400 hover:text-white'}`}>
+                      Limite Total
+                    </button>
+                    <button onClick={() => setForm(f => ({ ...f, limitType: 'DAILY' }))}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium border transition ${form.limitType === 'DAILY' ? 'bg-[#00ff88]/20 border-[#00ff88]/40 text-[#00ff88]' : 'bg-black/20 border-white/10 text-gray-400 hover:text-white'}`}>
+                      Limite Diário
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-2">
+                    {form.limitType === 'TOTAL' 
+                      ? 'O envio para quando atingir o limite total por número.' 
+                      : `O limite é resetado todo dia às ${form.dailyResetTime || '00:00'} (Horário de Brasília).`}
+                  </p>
+                </div>
+                {form.limitType === 'DAILY' && (
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1.5">
+                       <History size={11} /> Reiniciar Envios às
+                    </label>
+                    <input type="time" value={form.dailyResetTime}
+                      onChange={e => setForm(f => ({ ...f, dailyResetTime: e.target.value }))}
+                      className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50" />
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      A contagem diária será zerada e os disparos retomados neste horário.
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Quantidade de envios (por número)</label>
+                  <input type="number" min={1} value={form.limitPerSession}
+                    onChange={e => setForm(f => ({ ...f, limitPerSession: Number(e.target.value) }))}
+                    className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50" />
+                </div>
               </div>
             </>
           )}

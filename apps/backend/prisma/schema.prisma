@@ -540,6 +540,8 @@ model Campaign {
   delayMax        Int                 @default(30)
   randomOrder     Boolean             @default(true)
   excludeBlocked  Boolean             @default(true)
+  limitType       CampaignLimitType   @default(TOTAL)
+  dailyResetTime  String              @default("00:00")
   workflowId      String?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -555,6 +557,11 @@ model Campaign {
 
   @@index([tenantId])
   @@index([status])
+}
+
+enum CampaignLimitType {
+  TOTAL
+  DAILY
 }
 
 enum CampaignType {
@@ -637,6 +644,8 @@ model CampaignLog {
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId])
+  @@index([sentAt])
+  @@index([sessionId])
 }
 
 model CampaignBlacklist {
