@@ -350,17 +350,33 @@ function ChatArea({
     useEffect(() => {
         const handler = (data: any) => {
             if (data.conversationId !== conversation.id) return
-            // Refetch latest messages when we get a notification
-            apiClient.getInboxMessages(conversation.id, undefined, 1).then((res) => {
-                if (res.data.length > 0) {
-                    const newMsg = res.data[0]
-                    setMessages((prev) => {
-                        if (prev.find((m) => m.id === newMsg.id)) return prev
-                        return [...prev, newMsg]
-                    })
-                    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
-                }
-            }).catch(() => { })
+            
+            // Prefer the message object sent in the event
+            if (data.message) {
+                const newMsg = data.message
+                setMessages((prev) => {
+                    // Deduplicate
+                    if (prev.find((m) => m.id === newMsg.id)) return prev
+                    return [...prev, newMsg]
+                })
+                // Trigger scroll
+                setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+                
+                // Mark as read immediately if it's currently open
+                apiClient.markConversationRead(conversation.id).catch(() => { })
+            } else {
+                // Fallback: fetch latest
+                apiClient.getInboxMessages(conversation.id, undefined, 1).then((res) => {
+                    if (res.data.length > 0) {
+                        const newMsg = res.data[0]
+                        setMessages((prev) => {
+                            if (prev.find((m) => m.id === newMsg.id)) return prev
+                            return [...prev, newMsg]
+                        })
+                        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+                    }
+                }).catch(() => { })
+            }
         }
         wsClient.onRaw('inbox:message-received', handler)
         return () => wsClient.offRaw('inbox:message-received', handler)
@@ -841,20 +857,36 @@ function InboxContent() {
                 {/* ── Contact Profile (right panel) ── */}
                 {selectedConv && showProfile && (
                     <div className="hidden xl:flex w-[320px] max-w-[320px] flex-col border-l border-white/5 bg-[#0d0d0d] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-                        <div className="p-6 border-b border-white/5 flex flex-col items-center select-text">
-                            <Avatar name={selectedConv.contactName} phone={selectedConv.contactPhone} avatarUrl={selectedConv.contactAvatar} size="lg" />
-                            <h2 className="mt-4 font-bold text-white text-lg text-center break-words w-full">
-                                {contactDisplay(selectedConv)}
-                            </h2>
-                            <p className="text-sm text-gray-500 mt-1">
-                                {selectedConv.isGroup ? selectedConv.contactPhone : formatPhone(selectedConv.phoneNumber || selectedConv.contactPhone.split('@')[0])}
-                            </p>
-                            <div className="mt-4 flex gap-2">
-                                <span className={`text-xs px-3 py-1 rounded-full font-medium border border-transparent ${statusColors[selectedConv.status]}`}>
-                                    {statusLabels[selectedConv.status]}
-                                </span>
-                            </div>
-                        </div>
+        <div className="p-6 border-b border-white/5 flex flex-col items-center select-text">
+            <div className="relative group">
+                <Avatar name={selectedConv.contactName} phone={selectedConv.contactPhone} avatarUrl={selectedConv.contactAvatar} size="lg" />
+                <button 
+                    onClick={async () => {
+                        try {
+                            await apiClient.syncConversationProfile(selectedConv.id)
+                            alert('Sincronização iniciada. A foto será atualizada em breve.')
+                        } catch (e) {
+                            alert('Erro ao sincronizar perfil.')
+                        }
+                    }}
+                    className="absolute -bottom-1 -right-1 bg-[#1a1a1a] border border-white/10 rounded-full p-1.5 text-gray-400 hover:text-[#00ff88] hover:border-[#00ff88]/30 transition-all shadow-lg group-hover:scale-110"
+                    title="Sincronizar foto do WhatsApp"
+                >
+                    <RefreshCw size={12} />
+                </button>
+            </div>
+            <h2 className="mt-4 font-bold text-white text-lg text-center break-words w-full">
+                {contactDisplay(selectedConv)}
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+                {selectedConv.isGroup ? selectedConv.contactPhone : formatPhone(selectedConv.phoneNumber || selectedConv.contactPhone.split('@')[0])}
+            </p>
+            <div className="mt-4 flex gap-2">
+                <span className={`text-xs px-3 py-1 rounded-full font-medium border border-transparent ${statusColors[selectedConv.status]}`}>
+                    {statusLabels[selectedConv.status]}
+                </span>
+            </div>
+        </div>
                         
                         <div className="p-4 space-y-6">
                             {/* Sobre a sessão */}

@@ -995,6 +995,8 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     const messageId = msg.key.id!;
     const sessionClient = this.sessions.get(sessionId);
 
+    console.log(`[INCOMING] Message ${messageId} from ${contactPhone} on session ${sessionId}`);
+
     try {
       // --- Meta Ads Detection ---
       this.detectAndSaveAdOrigin(tenantId, sessionId, msg, contactPhone).catch(

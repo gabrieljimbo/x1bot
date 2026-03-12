@@ -375,7 +375,7 @@ export class CampaignsService {
             recipients: true,
           }
         },
-        workflow: true,
+        workflow: true, // CampaignWorkflow (has nodes/edges)
       }
     });
 
@@ -392,80 +392,109 @@ export class CampaignsService {
 
     const nodeStatsMap: Record<string, any> = {};
 
-    if (campaign.workflowId) {
+    // Build funnel stats from WorkflowExecution records AND ExecutionLogs (for historical path)
+    const hasWorkflow = campaign.workflowId || campaign.workflow;
+
+    if (hasWorkflow) {
+      // Get all executions linked to this campaign
       const executions = await this.prisma.workflowExecution.findMany({
         where: { campaignId },
-        select: { id: true, status: true, currentNodeId: true }
+        select: { id: true, status: true, currentNodeId: true, workflowId: true }
       });
 
       const execIds = executions.map(e => e.id);
 
-      if (execIds.length > 0) {
-        // Fetch Execution Logs accurately reflecting the executed paths
+      if (executions.length > 0) {
+        // Fetch historical logs to build a true funnel (who PASSED through which node)
         const logs = await this.prisma.executionLog.findMany({
-          where: { executionId: { in: execIds }, eventType: { in: ['EXECUTION_STARTED', 'NODE_EXECUTED'] } },
-          select: { executionId: true, nodeId: true, eventType: true, createdAt: true },
+          where: { 
+            executionId: { in: execIds }, 
+            eventType: { in: ['EXECUTION_STARTED', 'NODE_EXECUTED', 'node.executed', 'execution.started'] } 
+          },
+          select: { executionId: true, nodeId: true, eventType: true },
           orderBy: { createdAt: 'asc' }
         });
 
-        // Group the visited nodes per execution
-        const nodeVisitsByExec: Record<string, string[]> = {};
+        // Fetch the actual Workflow model to get nodes definition
+        let workflowNodes: any[] = [];
+        if (campaign.workflowId) {
+          const actualWorkflow = await this.prisma.workflow.findUnique({
+            where: { id: campaign.workflowId },
+            select: { nodes: true }
+          });
+          workflowNodes = (actualWorkflow?.nodes as any[]) || [];
+        }
+        if (workflowNodes.length === 0 && campaign.workflow) {
+          workflowNodes = (campaign.workflow.nodes as any[]) || [];
+        }
+
+        const nodeMap = new Map<string, string>();
+        for (const n of workflowNodes) {
+          nodeMap.set(n.id, n.data?.label || n.data?.name || n.type || `Nó ${n.id.substring(0, 6)}`);
+        }
+
+        const initStat = (nodeId: string) => {
+          if (!nodeStatsMap[nodeId]) {
+            nodeStatsMap[nodeId] = {
+              nodeId,
+              nodeName: nodeMap.get(nodeId) || `Nó: ${nodeId.substring(0, 8)}`,
+              totalExecutions: 0,
+              successCount: 0,
+              failCount: 0,
+              waitingCount: 0,
+              runningCount: 0,
+            };
+          }
+        };
+
+        // 1. Process Logs (Historical path)
+        const visits = new Set<string>(); // composite key execId:nodeId to avoid double counting in case of loops for totalExecutions
         for (const log of logs) {
-          if (!nodeVisitsByExec[log.executionId]) nodeVisitsByExec[log.executionId] = [];
-          if (log.nodeId && !nodeVisitsByExec[log.executionId].includes(log.nodeId)) {
-             nodeVisitsByExec[log.executionId].push(log.nodeId);
+          if (!log.nodeId) continue;
+          const key = `${log.executionId}:${log.nodeId}`;
+          if (!visits.has(key)) {
+            visits.add(key);
+            initStat(log.nodeId);
+            nodeStatsMap[log.nodeId].totalExecutions++;
+            // Mark as success (passed through) unless it's the current node which we'll handle below
+            nodeStatsMap[log.nodeId].successCount++;
           }
         }
 
-        const workflowNodes = (campaign.workflow?.nodes as any[]) || [];
-        const nodeMap = new Map(workflowNodes.map(n => [n.id, n.data?.label || n.type]));
+        // 2. Process Current state for exact status (handles waiting/running/failed at the specific node)
+        for (const exec of executions) {
+          const nodeId = exec.currentNodeId;
+          if (!nodeId) continue;
 
-        Object.keys(nodeVisitsByExec).forEach(execId => {
-          const visitedNodes = nodeVisitsByExec[execId];
-          const execution = executions.find(e => e.id === execId);
-          if (!execution) return;
-
-          visitedNodes.forEach((nodeId, index) => {
-             if (!nodeStatsMap[nodeId]) {
-                 nodeStatsMap[nodeId] = { 
-                    nodeId, 
-                    nodeName: nodeMap.get(nodeId) || `Nó: ${nodeId}`,
-                    totalExecutions: 0, 
-                    successCount: 0, 
-                    failCount: 0 
-                 };
-             }
-             nodeStatsMap[nodeId].totalExecutions++;
-             
-             const isLastNode = index === visitedNodes.length - 1;
-             
-             if (isLastNode) {
-               if (execution.status === 'COMPLETED') {
-                  nodeStatsMap[nodeId].successCount++;
-               } else if (['ERROR', 'FAILED', 'EXPIRED'].includes(execution.status)) {
-                  nodeStatsMap[nodeId].failCount++;
-               }
-             } else {
-               nodeStatsMap[nodeId].successCount++;
-             }
-          });
+          initStat(nodeId);
           
-          // Check if currentNodeId differs from the historical path (e.g. paused at a node without producing a log)
-          if (['RUNNING', 'WAITING'].includes(execution.status) && execution.currentNodeId ) {
-             if (!visitedNodes.includes(execution.currentNodeId)) {
-               if (!nodeStatsMap[execution.currentNodeId]) {
-                   nodeStatsMap[execution.currentNodeId] = { 
-                      nodeId: execution.currentNodeId, 
-                      nodeName: nodeMap.get(execution.currentNodeId) || `Nó: ${execution.currentNodeId}`,
-                      totalExecutions: 0, 
-                      successCount: 0, 
-                      failCount: 0 
-                   };
-               }
-               nodeStatsMap[execution.currentNodeId].totalExecutions++;
-             }
+          // If we didn't have a log for this current node (e.g. migration or race condition), count it
+          const key = `${exec.id}:${nodeId}`;
+          if (!visits.has(key)) {
+            visits.add(key);
+            nodeStatsMap[nodeId].totalExecutions++;
+          } else {
+            // Correct the "successCount++" from logs above if they are actually stuck/failed here
+            nodeStatsMap[nodeId].successCount--;
           }
-        });
+
+          if (exec.status === 'COMPLETED') {
+            nodeStatsMap[nodeId].successCount++;
+          } else if (['ERROR', 'FAILED', 'EXPIRED'].includes(exec.status)) {
+            nodeStatsMap[nodeId].failCount++;
+          } else if (exec.status === 'WAITING') {
+            nodeStatsMap[nodeId].waitingCount++;
+          } else if (exec.status === 'RUNNING') {
+            nodeStatsMap[nodeId].runningCount++;
+          }
+        }
+
+        // 3. Add unvisited nodes
+        for (const n of workflowNodes) {
+          if (!nodeStatsMap[n.id] && n.type !== 'start') {
+            initStat(n.id);
+          }
+        }
       }
     }
 

@@ -73,4 +73,9 @@ export class InboxController {
     async markAsRead(@Request() req: any, @Param('id') conversationId: string) {
         return this.inboxService.markAsRead(req.user.tenantId, conversationId);
     }
+
+    @Post(':id/sync-profile')
+    async syncProfile(@Request() req: any, @Param('id') conversationId: string) {
+        return this.inboxService.syncConversationProfile(req.user.tenantId, conversationId);
+    }
 }

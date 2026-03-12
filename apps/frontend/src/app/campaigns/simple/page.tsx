@@ -154,23 +154,44 @@ function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () =
               {/* Node Stats (Workflow Details) */}
               {insights?.nodeStats?.length > 0 && (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-5">
-                  <h3 className="text-white font-medium mb-4">Métricas por Etapa (Fluxo)</h3>
-                  <div className="space-y-3">
+                  <h3 className="text-white font-medium mb-4">Detalhamento do Funil (Fluxo)</h3>
+                  <div className="space-y-4">
                     {insights.nodeStats.map((stat: any) => {
                       const successRate = stat.totalExecutions > 0 ? Math.round((stat.successCount / stat.totalExecutions) * 100) : 0;
                       return (
-                        <div key={stat.nodeId} className="bg-black/30 rounded-lg p-4 flex items-center justify-between">
-                          <div>
-                            <p className="text-white text-sm font-medium">{stat.nodeName || `Nó: ${stat.nodeId}`}</p>
-                            <p className="text-xs text-gray-500">
-                              {stat.totalExecutions} execuções • {stat.failCount} falhas
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end">
-                            <span className="text-[#00ff88] font-bold">{successRate}% sucesso</span>
-                            <div className="w-24 h-1.5 bg-white/10 rounded-full mt-1 overflow-hidden">
-                              <div className="h-full bg-[#00ff88]" style={{ width: `${successRate}%` }} />
+                        <div key={stat.nodeId} className="bg-black/30 border border-white/5 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <p className="text-white font-medium">{stat.nodeName || `Nó: ${stat.nodeId.substring(0, 8)}`}</p>
+                              <p className="text-xs text-gray-500">{stat.totalExecutions} total de leads que chegaram aqui</p>
                             </div>
+                            <div className="text-right">
+                              <span className="text-[#00ff88] font-bold">{successRate}%</span>
+                              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Conversão</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-4 gap-2 mb-3">
+                            <div className="bg-white/5 rounded p-2 text-center">
+                              <p className="text-xs text-gray-400 mb-1">Passaram</p>
+                              <p className="text-sm font-bold text-green-400">{stat.successCount}</p>
+                            </div>
+                            <div className="bg-white/5 rounded p-2 text-center">
+                              <p className="text-xs text-gray-400 mb-1">Aguardando</p>
+                              <p className="text-sm font-bold text-blue-400">{stat.waitingCount || 0}</p>
+                            </div>
+                            <div className="bg-white/5 rounded p-2 text-center">
+                              <p className="text-xs text-gray-400 mb-1">Executando</p>
+                              <p className="text-sm font-bold text-yellow-400">{stat.runningCount || 0}</p>
+                            </div>
+                            <div className="bg-white/5 rounded p-2 text-center">
+                              <p className="text-xs text-gray-400 mb-1">Falhas</p>
+                              <p className="text-sm font-bold text-red-400">{stat.failCount}</p>
+                            </div>
+                          </div>
+
+                          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full bg-[#00ff88]" style={{ width: `${successRate}%` }} />
                           </div>
                         </div>
                       )
@@ -243,9 +264,9 @@ function CampaignDrawer({
   const [selectedListId, setSelectedListId] = useState('')
 
   useEffect(() => {
-    apiClient.getWhatsappSessions().then(setSessions).catch(() => {})
-    apiClient.getContactLists().then(setContactLists).catch(() => {})
-    apiClient.getCampaignWorkflowsList().then(setWorkflows).catch(() => {})
+    apiClient.getWhatsappSessions().then(setSessions).catch(() => { })
+    apiClient.getContactLists().then(setContactLists).catch(() => { })
+    apiClient.getCampaignWorkflowsList().then(setWorkflows).catch(() => { })
   }, [])
 
   useEffect(() => {
@@ -270,7 +291,7 @@ function CampaignDrawer({
     setSelectedGroupPhones(new Set())
     apiClient.getCampaignGroups(groupSessionId)
       .then(setGroups)
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoadingGroups(false))
   }, [recipientMode, groupSessionId])
 
@@ -291,7 +312,7 @@ function CampaignDrawer({
         }).map(p => p.phone)
         setSelectedGroupPhones(new Set(toSelect))
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoadingParticipants(false))
   }, [selectedGroupJid, groupSessionId, selectedWorkflowId, campaignType])
 
@@ -392,7 +413,7 @@ function CampaignDrawer({
         .map(p => ({ phone: p.phone, name: p.name || undefined }))
       await apiClient.addContactsManually(newList.id, contactsToAdd)
       setStatusMessage({ type: 'success', text: `Lista "${listName}" criada com ${contactsToAdd.length} contatos.` })
-      apiClient.getContactLists().then(setContactLists).catch(() => {})
+      apiClient.getContactLists().then(setContactLists).catch(() => { })
     } catch (e: any) {
       setStatusMessage({ type: 'error', text: 'Erro ao exportar: ' + (e?.response?.data?.message || e.message) })
     } finally {
@@ -511,45 +532,45 @@ function CampaignDrawer({
               )}
 
               {campaignType === 'SIMPLE' && (
-              <>{form.messages.map((msg, idx) => (
-                <div key={idx} className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-500">Mensagem {idx + 1}</span>
-                    {form.messages.length > 1 && (
-                      <button onClick={() => removeMsg(idx)} className="text-red-400 hover:text-red-300 text-xs">Remover</button>
+                <>{form.messages.map((msg, idx) => (
+                  <div key={idx} className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">Mensagem {idx + 1}</span>
+                      {form.messages.length > 1 && (
+                        <button onClick={() => removeMsg(idx)} className="text-red-400 hover:text-red-300 text-xs">Remover</button>
+                      )}
+                    </div>
+                    <select value={msg.type} onChange={e => updateMsg(idx, 'type', e.target.value)}
+                      className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm">
+                      <option value="text">Texto</option>
+                      <option value="image">Imagem</option>
+                      <option value="video">Vídeo</option>
+                      <option value="audio">Áudio</option>
+                      <option value="document">Documento</option>
+                    </select>
+                    {msg.type === 'text' ? (
+                      <textarea rows={3} value={msg.content ?? ''} onChange={e => updateMsg(idx, 'content', e.target.value)}
+                        className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm resize-none focus:outline-none focus:border-[#00ff88]/50"
+                        placeholder="Digite a mensagem..." />
+                    ) : (
+                      <>
+                        <input value={msg.mediaUrl ?? ''} onChange={e => updateMsg(idx, 'mediaUrl', e.target.value)}
+                          className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-[#00ff88]/50"
+                          placeholder="URL da mídia..." />
+                        <input value={msg.caption ?? ''} onChange={e => updateMsg(idx, 'caption', e.target.value)}
+                          className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-[#00ff88]/50"
+                          placeholder="Legenda (opcional)" />
+                      </>
                     )}
                   </div>
-                  <select value={msg.type} onChange={e => updateMsg(idx, 'type', e.target.value)}
-                    className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm">
-                    <option value="text">Texto</option>
-                    <option value="image">Imagem</option>
-                    <option value="video">Vídeo</option>
-                    <option value="audio">Áudio</option>
-                    <option value="document">Documento</option>
-                  </select>
-                  {msg.type === 'text' ? (
-                    <textarea rows={3} value={msg.content ?? ''} onChange={e => updateMsg(idx, 'content', e.target.value)}
-                      className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm resize-none focus:outline-none focus:border-[#00ff88]/50"
-                      placeholder="Digite a mensagem..." />
-                  ) : (
-                    <>
-                      <input value={msg.mediaUrl ?? ''} onChange={e => updateMsg(idx, 'mediaUrl', e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-[#00ff88]/50"
-                        placeholder="URL da mídia..." />
-                      <input value={msg.caption ?? ''} onChange={e => updateMsg(idx, 'caption', e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-[#00ff88]/50"
-                        placeholder="Legenda (opcional)" />
-                    </>
-                  )}
-                </div>
-              ))}
-              <button onClick={addMsg}
-                className="w-full py-2 border border-dashed border-white/20 rounded-lg text-gray-400 text-sm hover:border-[#00ff88]/40 hover:text-[#00ff88] transition flex items-center justify-center gap-2">
-                <Plus size={14} /> Adicionar Mensagem
-              </button>
-              </>
-            )}
-          </>
+                ))}
+                  <button onClick={addMsg}
+                    className="w-full py-2 border border-dashed border-white/20 rounded-lg text-gray-400 text-sm hover:border-[#00ff88]/40 hover:text-[#00ff88] transition flex items-center justify-center gap-2">
+                    <Plus size={14} /> Adicionar Mensagem
+                  </button>
+                </>
+              )}
+            </>
           )}
 
           {tab === 'recipients' && (
@@ -595,11 +616,10 @@ function CampaignDrawer({
                               const active = selectedTags.includes(tag)
                               return (
                                 <button key={tag} onClick={() => toggleTag(tag)}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
-                                    active
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition ${active
                                       ? 'bg-[#00ff88]/20 text-[#00ff88] border-[#00ff88]/40'
                                       : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'
-                                  }`}>
+                                    }`}>
                                   {active ? '✅' : '☐'} {tag} <span className="opacity-60">• {count}</span>
                                 </button>
                               )
@@ -618,9 +638,8 @@ function CampaignDrawer({
                               const active = selectedLabelIds.includes(id)
                               return (
                                 <button key={id} onClick={() => toggleLabel(id)}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
-                                    active ? 'opacity-100' : 'opacity-60 hover:opacity-80'
-                                  }`}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition ${active ? 'opacity-100' : 'opacity-60 hover:opacity-80'
+                                    }`}
                                   style={{ backgroundColor: color + '22', borderColor: color + '55', color: active ? color : '#9ca3af' }}>
                                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
                                   {name} <span className="opacity-70">• {count}</span>
@@ -773,15 +792,14 @@ function CampaignDrawer({
                         <div className="max-h-[240px] overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                           {getVisibleParticipants().map(p => (
                             <label key={p.phone}
-                              className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition ${
-                                selectedGroupPhones.has(p.phone)
+                              className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition ${selectedGroupPhones.has(p.phone)
                                   ? 'bg-[#00ff88]/5 border border-[#00ff88]/20'
                                   : 'bg-white/5 border border-white/5 hover:border-white/10'
-                              }`}>
+                                }`}>
                               <input type="checkbox" checked={selectedGroupPhones.has(p.phone)}
                                 onChange={() => toggleGroupPhone(p.phone)} className="accent-[#00ff88] flex-shrink-0" />
                               <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-0">
+                                <div className="flex items-center justify-between mb-0">
                                   <p className="text-white text-sm truncate">{p.name || p.phone}</p>
                                   {p.alreadyExecuted && (
                                     <span className="text-[10px] text-gray-500 flex items-center gap-1 font-medium italic">
@@ -792,11 +810,10 @@ function CampaignDrawer({
                                 {p.name && <p className="text-gray-500 text-[11px] font-mono">{p.phone}</p>}
                               </div>
                               {p.isAdmin && (
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold flex-shrink-0 ${
-                                  p.isSuperAdmin
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold flex-shrink-0 ${p.isSuperAdmin
                                     ? 'bg-yellow-500/10 text-yellow-500/70 border border-yellow-500/20'
                                     : 'bg-blue-500/10 text-blue-500/70 border border-blue-500/20'
-                                }`}>
+                                  }`}>
                                   {p.isSuperAdmin ? 'SUPER' : 'ADMIN'}
                                 </span>
                               )}
@@ -978,13 +995,12 @@ function SimplePageContent() {
         <CampaignsSidebar />
         <div className="flex-1 p-8">
           {statusMessage && (
-            <div className={`mb-6 p-4 rounded-xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${
-              statusMessage.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-500' :
-              statusMessage.type === 'success' ? 'bg-[#00ff88]/10 border-[#00ff88]/20 text-[#00ff88]' :
-              'bg-blue-500/10 border-blue-500/20 text-blue-400'
-            }`}>
-              {statusMessage.type === 'error' ? <AlertCircle size={20} /> : 
-               statusMessage.type === 'success' ? <CheckCircle2 size={20} /> : <Info size={20} />}
+            <div className={`mb-6 p-4 rounded-xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${statusMessage.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-500' :
+                statusMessage.type === 'success' ? 'bg-[#00ff88]/10 border-[#00ff88]/20 text-[#00ff88]' :
+                  'bg-blue-500/10 border-blue-500/20 text-blue-400'
+              }`}>
+              {statusMessage.type === 'error' ? <AlertCircle size={20} /> :
+                statusMessage.type === 'success' ? <CheckCircle2 size={20} /> : <Info size={20} />}
               <p className="text-sm font-medium">{statusMessage.text}</p>
               <button onClick={() => setStatusMessage(null)} className="ml-auto opacity-50 hover:opacity-100">
                 <X size={18} />

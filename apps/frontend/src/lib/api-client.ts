@@ -514,6 +514,11 @@ export const apiClient = {
     return data
   },
 
+  syncConversationProfile: async (conversationId: string) => {
+    const { data } = await client.post(`/inbox/${conversationId}/sync-profile`)
+    return data
+  },
+
   getInboxStats: async () => {
     const { data } = await client.get('/inbox/stats')
     return data

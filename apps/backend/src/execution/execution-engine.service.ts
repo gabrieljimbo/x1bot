@@ -310,6 +310,17 @@ export class ExecutionEngineService implements OnModuleInit {
         },
       }) as unknown as WorkflowExecution;
 
+      // Log execution start for insights
+      await this.prisma.executionLog.create({
+        data: {
+          tenantId,
+          executionId: execution.id,
+          nodeId: triggerNode.id,
+          eventType: 'EXECUTION_STARTED',
+          data: { workflowId, triggerType: options?.triggerType || triggerNode.type, campaignId: options?.campaignId }
+        }
+      }).catch(err => console.error('[EXECUTION LOG] Failed to log start:', err));
+
       // Set _executionId (needs the DB-generated id) and sync in-memory context
       baseContext.variables._executionId = execution.id;
       execution.context = baseContext;
@@ -654,6 +665,17 @@ export class ExecutionEngineService implements OnModuleInit {
         await this.failExecution(execution, 'Current node not found');
         return;
       }
+
+      // Log node execution for funnel insights
+      await this.prisma.executionLog.create({
+        data: {
+          tenantId: execution.tenantId,
+          executionId: execution.id,
+          nodeId: currentNode.id,
+          eventType: 'NODE_EXECUTED',
+          data: { nodeType: currentNode.type, campaignId: (execution as any).campaignId }
+        }
+      }).catch(err => console.error('[EXECUTION LOG] Failed to log node execution:', err));
 
       // If we're inside a loop and current node is the loop node itself, skip it
       // (loop node should only execute once at the start)

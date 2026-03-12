@@ -296,6 +296,18 @@ export class InboxService {
         const unreadIncrement = (data.unreadCount as any)?.increment || 0;
         const { unreadCount, ...restData } = data;
 
+        // Clean up data to avoid overwriting with undefined
+        const updateData: any = { tenantId };
+        Object.keys(restData).forEach(key => {
+            if ((restData as any)[key] !== undefined) {
+                updateData[key] = (restData as any)[key];
+            }
+        });
+
+        if (unreadIncrement) {
+            updateData.unreadCount = { increment: unreadIncrement };
+        }
+
         const conversation = await this.prisma.conversation.upsert({
             where: {
                 sessionId_contactPhone: {
@@ -303,11 +315,7 @@ export class InboxService {
                     contactPhone,
                 },
             },
-            update: {
-                ...restData,
-                unreadCount: unreadIncrement ? { increment: unreadIncrement } : undefined,
-                tenantId,
-            },
+            update: updateData,
             create: {
                 tenantId,
                 sessionId,
@@ -320,9 +328,9 @@ export class InboxService {
             },
         });
 
-        // Fire-and-forget sync profile picture if missing
-        if (!conversation.contactAvatar) {
-            this.syncProfilePicture(tenantId, conversation.id, sessionId, contactPhone).catch(() => {});
+        // Proactively sync profile picture if missing or if it's an old placeholder
+        if (!conversation.contactAvatar || conversation.contactAvatar.includes('placeholder') || conversation.contactAvatar.includes('default')) {
+            this.syncProfilePicture(tenantId, conversation.id, sessionId, contactPhone).catch(() => { });
         }
 
         await this.eventBus.emit({
@@ -368,10 +376,21 @@ export class InboxService {
             type: EventType.INBOX_MESSAGE_RECEIVED,
             tenantId: conversation.tenantId,
             conversationId,
+            message, // Include the full message object
             timestamp: new Date(),
         } as any);
 
         return message;
+    }
+
+    async syncConversationProfile(tenantId: string, conversationId: string) {
+        const conversation = await this.prisma.conversation.findFirst({
+            where: { id: conversationId, tenantId },
+        });
+
+        if (!conversation) throw new NotFoundException('Conversation not found');
+
+        return this.syncProfilePicture(tenantId, conversation.id, conversation.sessionId, conversation.contactPhone);
     }
 
     private async syncProfilePicture(tenantId: string, conversationId: string, sessionId: string, contactPhone: string) {

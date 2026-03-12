@@ -864,7 +864,7 @@ export class WorkflowService {
       by: ['nodeId'],
       where: {
         executionId: { in: executionIds },
-        eventType: 'node.executed',
+        eventType: { in: ['NODE_EXECUTED', 'node.executed'] },
       },
       _count: { executionId: true },
     });
