@@ -823,6 +823,26 @@ export class CampaignsService {
       };
     });
 
+    // Try to fill missing names from local conversations
+    const phonesWithNoName = participants.filter(p => !p.name).map(p => p.phone);
+    if (phonesWithNoName.length > 0) {
+      const conversations = await this.prisma.conversation.findMany({
+        where: {
+          tenantId,
+          contactPhone: { in: phonesWithNoName },
+          contactName: { not: null }
+        },
+        select: { contactPhone: true, contactName: true }
+      });
+
+      const nameMap = new Map(conversations.map(c => [c.contactPhone, c.contactName]));
+      participants.forEach(p => {
+        if (!p.name && nameMap.has(p.phone)) {
+          p.name = nameMap.get(p.phone);
+        }
+      });
+    }
+
     if (workflowId) {
       const executions = await this.prisma.workflowExecution.findMany({
         where: {

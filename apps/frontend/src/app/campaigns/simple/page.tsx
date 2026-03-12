@@ -798,9 +798,9 @@ function CampaignDrawer({
                                 }`}>
                               <input type="checkbox" checked={selectedGroupPhones.has(p.phone)}
                                 onChange={() => toggleGroupPhone(p.phone)} className="accent-[#00ff88] flex-shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between mb-0">
-                                  <p className="text-white text-sm truncate">{p.name || p.phone}</p>
+                               <div className="flex-1 min-w-0">
+                                 <div className="flex items-center justify-between mb-0">
+                                  <p className="text-white text-sm font-medium truncate">{p.name || p.phone}</p>
                                   {p.alreadyExecuted && (
                                     <span className="text-[10px] text-gray-500 flex items-center gap-1 font-medium italic">
                                       <History size={10} /> Já enviado
@@ -809,14 +809,15 @@ function CampaignDrawer({
                                 </div>
                                 {p.name && <p className="text-gray-500 text-[11px] font-mono">{p.phone}</p>}
                               </div>
-                              {p.isAdmin && (
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold flex-shrink-0 ${p.isSuperAdmin
-                                    ? 'bg-yellow-500/10 text-yellow-500/70 border border-yellow-500/20'
-                                    : 'bg-blue-500/10 text-blue-500/70 border border-blue-500/20'
-                                  }`}>
-                                  {p.isSuperAdmin ? 'SUPER' : 'ADMIN'}
-                                </span>
-                              )}
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold flex-shrink-0 ${p.isSuperAdmin
+                                  ? 'bg-yellow-500/10 text-yellow-500/70 border border-yellow-500/20'
+                                  : p.isAdmin
+                                    ? 'bg-blue-500/10 text-blue-500/70 border border-blue-500/20'
+                                    : 'bg-white/5 text-gray-500 border border-white/5'
+                                }`}>
+                                {p.isSuperAdmin ? 'CRIADOR' : p.isAdmin ? 'ADMIN' : 'MEMBRO'}
+                              </span>
+
                             </label>
                           ))}
                         </div>
