@@ -33,7 +33,7 @@ const CAMPAIGN_NODES = [
 
 const ALLOWED_ACTION_NODES = [
   'SEND_MESSAGE', 'SEND_MEDIA', 'SEND_CONTACT', 'PIX_RECOGNITION', 'RMKT', 'RANDOMIZER',
-  'SET_TAGS', 'MANAGE_LABELS', 'WAIT_REPLY', 'WAIT', 'CONDITION', 'SWITCH', 'END',
+  'SET_TAGS', 'MANAGE_LABELS', 'WAIT_REPLY', 'WAIT', 'CONDITION', 'SWITCH', 'MARK_STAGE', 'END',
 ]
 
 interface ContactList { id: string; name: string; _count: { contacts: number } }
