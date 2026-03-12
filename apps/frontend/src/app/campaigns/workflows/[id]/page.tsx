@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { Save, ArrowLeft, Play, Pause, Users, X, Plus, Upload, Phone, List } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
+import { useAuth } from '@/contexts/AuthContext'
 import { AuthGuard } from '@/components/AuthGuard'
 import AppHeader from '@/components/AppHeader'
 import { WorkflowNode, WorkflowEdge, WorkflowNodeType } from '@n9n/shared'
@@ -171,6 +172,7 @@ function CampaignWorkflowEditorContent() {
   const params = useParams()
   const router = useRouter()
   const campaignId = params.id as string
+  const { tenant } = useAuth()
 
   const [campaign, setCampaign] = useState<any>(null)
   const [nodes, setNodes] = useState<WorkflowNode[]>([])
@@ -372,10 +374,11 @@ function CampaignWorkflowEditorContent() {
         </div>
       </div>
 
-      {selectedNode && (
+      {selectedNode && tenant?.id && (
         <NodeConfigModal
           node={selectedNode}
-          tenantId=""
+          tenantId={tenant.id}
+          workflowId={campaignId}
           onClose={() => setSelectedNode(null)}
           onSave={async (nodeId, config) => {
             const updated = nodesRef.current.map(n => n.id === nodeId ? { ...n, config } : n)

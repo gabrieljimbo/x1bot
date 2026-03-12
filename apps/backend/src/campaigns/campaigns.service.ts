@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappSessionManager } from '../whatsapp/whatsapp-session-manager.service';
 import { ExecutionEngineService } from '../execution/execution-engine.service';
 import { CampaignStatus, CampaignType, Prisma } from '@prisma/client';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class CampaignsService {
@@ -10,6 +11,7 @@ export class CampaignsService {
     private readonly prisma: PrismaService,
     private readonly whatsappSessionManager: WhatsappSessionManager,
     private readonly executionEngine: ExecutionEngineService,
+    private readonly storageService: StorageService,
   ) { }
 
   // ─── CRUD ────────────────────────────────────────────────────────────────────
@@ -128,7 +130,31 @@ export class CampaignsService {
 
   async deleteCampaign(tenantId: string, campaignId: string) {
     await this.assertCampaignBelongs(tenantId, campaignId);
+    
+    // 1. Clean up media files associated with the campaign workflow
+    const mediaFiles = await this.prisma.mediaFile.findMany({
+      where: { workflowId: campaignId, tenantId },
+    });
+
+    for (const file of mediaFiles) {
+      try {
+        await this.storageService.deleteMedia(file.objectName);
+      } catch (err) {
+        console.warn(`[CampaignsService] Failed to delete media ${file.objectName} from storage:`, err);
+      }
+    }
+
+    if (mediaFiles.length > 0) {
+      await this.prisma.mediaFile.deleteMany({
+        where: { id: { in: mediaFiles.map(f => f.id) } }
+      });
+      console.log(`[CampaignsService] Deleted ${mediaFiles.length} media files for campaign ${campaignId}`);
+    }
+
+    // 2. Delete the campaign (related CampaignWorkflow and Recipient records will be deleted by Cascade if configured, 
+    // but PRISMA usually requires manual handling or onDelete: Cascade in schema)
     await this.prisma.campaign.delete({ where: { id: campaignId } });
+    
     return { success: true };
   }
 
@@ -299,11 +325,69 @@ export class CampaignsService {
 
   async saveWorkflow(campaignId: string, tenantId: string, nodes: any[], edges: any[]) {
     await this.assertCampaignBelongs(tenantId, campaignId);
+    
+    // Cleanup orphaned media before saving
+    await this.cleanupOrphanedMedia(tenantId, campaignId, nodes);
+
     return this.prisma.campaignWorkflow.upsert({
       where: { campaignId },
       update: { nodes, edges },
       create: { campaignId, nodes, edges },
     });
+  }
+
+  private async cleanupOrphanedMedia(tenantId: string, workflowId: string, nodes: any[]) {
+    try {
+      // 1. Collect all media IDs currently in use in the workflow nodes
+      const usedMediaIds = new Set<string>();
+      
+      const findMediaIds = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return;
+        
+        if (obj.uploadedMediaId) {
+          usedMediaIds.add(obj.uploadedMediaId);
+        }
+        
+        for (const key in obj) {
+          if (typeof obj[key] === 'object') {
+            findMediaIds(obj[key]);
+          }
+        }
+      };
+
+      for (const node of nodes) {
+        if (node.config) {
+          findMediaIds(node.config);
+        }
+      }
+
+      // 2. Find all media files registered for this workflow/campaign in the database
+      const existingMedia = await this.prisma.mediaFile.findMany({
+        where: { workflowId, tenantId },
+        select: { id: true, objectName: true },
+      });
+
+      // 3. Identify which ones are no longer used in the current configuration
+      const orphanMedia = existingMedia.filter((media) => !usedMediaIds.has(media.id));
+
+      if (orphanMedia.length > 0) {
+        console.log(`[CampaignsService] Found ${orphanMedia.length} orphaned media files in campaign ${workflowId}. Cleaning up...`);
+        
+        // 4. Delete orphaned media from storage and database
+        for (const media of orphanMedia) {
+          try {
+            await this.storageService.deleteMedia(media.objectName);
+            await this.prisma.mediaFile.delete({ where: { id: media.id } });
+            console.log(`[CampaignsService] Deleted orphaned media ${media.id} (${media.objectName})`);
+          } catch (err) {
+            console.error(`[CampaignsService] Failed to delete orphaned media ${media.id}:`, err);
+          }
+        }
+      }
+    } catch (error) {
+      // We don't want to block saving the workflow if cleanup fails
+      console.error(`[CampaignsService] Error during media cleanup for campaign ${workflowId}:`, error);
+    }
   }
 
   async getWorkflow(campaignId: string, tenantId: string) {

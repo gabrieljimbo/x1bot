@@ -94,13 +94,8 @@ export default function NodeExecutionPanel({
     }
 
     try {
-      const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
-      const workflowUrl = `${API_URL}/api/workflows/${executionData.workflowId}?tenantId=${tenantId}`
-      const response = await fetch(workflowUrl)
-      if (response.ok) {
-        const workflow = await response.json()
-        setWorkflowNodes(workflow.nodes || [])
-      }
+      const workflow = await apiClient.getWorkflow(executionData.workflowId, tenantId)
+      setWorkflowNodes(workflow.nodes || [])
     } catch (error) {
       console.error('[loadWorkflowNodes] Error:', error)
     }

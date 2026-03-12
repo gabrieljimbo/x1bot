@@ -103,6 +103,11 @@ export class WorkflowService {
       this.validateEdges(nodes, edges);
     }
 
+    // Cleanup orphaned media if nodes are being updated
+    if (data.nodes) {
+      await this.cleanupOrphanedMedia(tenantId, workflowId, data.nodes);
+    }
+
     const workflow = await this.prisma.workflow.update({
       where: {
         id: workflowId,
@@ -117,6 +122,57 @@ export class WorkflowService {
     });
 
     return this.mapToWorkflow(workflow);
+  }
+
+  private async cleanupOrphanedMedia(tenantId: string, workflowId: string, nodes: WorkflowNode[]) {
+    try {
+      // 1. Collect all media IDs currently in use in the workflow nodes
+      const usedMediaIds = new Set<string>();
+      
+      const findMediaIds = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return;
+        
+        if (obj.uploadedMediaId) {
+          usedMediaIds.add(obj.uploadedMediaId);
+        }
+        
+        for (const key in obj) {
+          if (typeof obj[key] === 'object') {
+            findMediaIds(obj[key]);
+          }
+        }
+      };
+
+      for (const node of nodes) {
+        if (node.config) {
+          findMediaIds(node.config);
+        }
+      }
+
+      // 2. Find all media files registered for this workflow in the database
+      const existingMedia = await this.prisma.mediaFile.findMany({
+        where: { workflowId, tenantId },
+        select: { id: true, objectName: true },
+      });
+
+      // 3. Identify which ones are no longer used
+      const orphanMedia = existingMedia.filter((media) => !usedMediaIds.has(media.id));
+
+      if (orphanMedia.length > 0) {
+        // 4. Delete orphaned media from storage and database
+        for (const media of orphanMedia) {
+          try {
+            await this.storageService.deleteMedia(media.objectName);
+            await this.prisma.mediaFile.delete({ where: { id: media.id } });
+            console.log(`[WorkflowService] Deleted orphaned media ${media.id} (${media.objectName}) from workflow ${workflowId}`);
+          } catch (err) {
+            console.error(`[WorkflowService] Failed to delete orphaned media ${media.id}:`, err);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`[WorkflowService] Error during media cleanup for workflow ${workflowId}:`, error);
+    }
   }
 
   /**

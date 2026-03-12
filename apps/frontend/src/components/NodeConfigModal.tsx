@@ -22,6 +22,7 @@ interface NodeConfigModalProps {
   inputData?: any // Optional: real execution input data
   executionData?: any // Optional: full execution data
   executionLogs?: any[] // Optional: execution logs
+  workflowId?: string // Optional: the ID of the workflow this node belongs to
 }
 
 // Component for SET_TAGS configuration
@@ -186,7 +187,7 @@ function SetTagsConfig({ config, setConfig, tenantId: _tenantId }: any) {
   )
 }
 
-function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node }: any) {
+function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node, workflowId }: any) {
   const [activeTab, setActiveTab] = useState<'params' | 'config'>('params');
 
   return (
@@ -269,27 +270,8 @@ function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node
                       }
 
                       try {
-                        const formData = new FormData()
-                        formData.append('file', file)
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
-                        const token = localStorage.getItem('n9n_token')
-                        const headers: HeadersInit = {}
-                        if (token) {
-                          headers['Authorization'] = `Bearer ${token}`
-                        }
-                        const res = await fetch(
-                          `${API_URL}/api/media/upload?tenantId=${tenantId}&mediaType=${mediaType}&nodeId=${node.id}&workflowId=${node.workflowId || ''}`,
-                          { method: 'POST', headers, body: formData }
-                        )
-
-                        if (!res.ok) {
-                          const err = await res.json()
-                          alert(err.message || 'Erro ao fazer upload')
-                          e.target.value = ''
-                          return
-                        }
-
-                        const data = await res.json()
+                        const targetWorkflowId = workflowId || (node as any).workflowId || '';
+                        const data = await apiClient.uploadMedia(file, tenantId, mediaType, node.id, targetWorkflowId);
                         setConfig({
                           ...config,
                           mediaUrl: data.url,
@@ -297,8 +279,8 @@ function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node
                           uploadedFileName: data.originalName,
                           uploadedFileSize: data.size,
                         })
-                      } catch (err) {
-                        alert('Erro ao fazer upload do arquivo')
+                      } catch (err: any) {
+                        alert(err.response?.data?.message || err.message || 'Erro ao fazer upload do arquivo')
                       }
                       e.target.value = ''
                     }}
@@ -471,7 +453,7 @@ function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node
   )
 }
 
-function MessageComposer({ value, onChange, placeholder, tenantId, node }: { value: any, onChange: (val: any) => void, placeholder?: string, tenantId?: string, node?: any }) {
+function MessageComposer({ value, onChange, placeholder, tenantId, node, workflowId }: { value: any, onChange: (val: any) => void, placeholder?: string, tenantId?: string, node?: any, workflowId?: string }) {
   const [activeTab, setActiveTab] = useState<'text' | 'image' | 'video' | 'audio'>(
     typeof value === 'object' ? value?.type || 'text' : 'text'
   );
@@ -590,35 +572,16 @@ function MessageComposer({ value, onChange, placeholder, tenantId, node }: { val
                       }
 
                       try {
-                        const formData = new FormData()
-                        formData.append('file', file)
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
-                        const token = localStorage.getItem('n9n_token')
-                        const headers: HeadersInit = {}
-                        if (token) {
-                          headers['Authorization'] = `Bearer ${token}`
-                        }
-                        const res = await fetch(
-                          `${API_URL}/api/media/upload?tenantId=${tenantId}&mediaType=${activeTab}&nodeId=${node?.id}&workflowId=${(node as any)?.workflowId || ''}`,
-                          { method: 'POST', headers, body: formData }
-                        )
-
-                        if (!res.ok) {
-                          const err = await res.json()
-                          alert(err.message || 'Erro ao fazer upload')
-                          e.target.value = ''
-                          return
-                        }
-
-                        const data = await res.json()
+                        const targetWorkflowId = workflowId || (node as any)?.workflowId || '';
+                        const data = await apiClient.uploadMedia(file, tenantId || '', activeTab, node?.id || '', targetWorkflowId);
                         update({
                           mediaUrl: data.url,
                           uploadedMediaId: data.id,
                           uploadedFileName: data.originalName,
                           uploadedFileSize: data.size,
                         })
-                      } catch (err) {
-                        alert('Erro ao fazer upload do arquivo')
+                      } catch (err: any) {
+                        alert(err.response?.data?.message || err.message || 'Erro ao fazer upload do arquivo')
                       }
                       e.target.value = ''
                     }}
@@ -1862,7 +1825,7 @@ function TriggerManualConfig({ config, setConfig, tenantId, sessions, loading }:
   );
 }
 
-function MencionarTodosConfig({ config, setConfig, tenantId, node }: any) {
+function MencionarTodosConfig({ config, setConfig, tenantId, node, workflowId }: any) {
   return (
     <div className="space-y-4">
       <div>
@@ -1873,6 +1836,7 @@ function MencionarTodosConfig({ config, setConfig, tenantId, node }: any) {
           placeholder="Ex: Pessoal, olhem essa oferta imperdível!"
           tenantId={tenantId}
           node={node}
+          workflowId={workflowId}
         />
         <p className="text-[10px] text-gray-500 mt-1">A mensagem será enviada mencionando todos os membros.</p>
       </div>
@@ -1885,6 +1849,7 @@ function MencionarTodosConfig({ config, setConfig, tenantId, node }: any) {
           placeholder="Ex: OFERTA ENCERRADA! Obrigado a todos..."
           tenantId={tenantId}
           node={node}
+          workflowId={workflowId}
         />
         <p className="text-[10px] text-gray-500 mt-1">A mensagem será enviada mencionando todos os membros.</p>
       </div>
@@ -2823,7 +2788,7 @@ function PixelEventConfig({ config, setConfig }: any) {
   )
 }
 
-function SequenciaLancamentoConfig({ config, setConfig, tenantId, node }: any) {
+function SequenciaLancamentoConfig({ config, setConfig, tenantId, node, workflowId }: any) {
   useEffect(() => {
     if (!config.fases || config.fases.length === 0) {
       const defaultPhases = [
@@ -2933,6 +2898,7 @@ function SequenciaLancamentoConfig({ config, setConfig, tenantId, node }: any) {
                 onChange={(val: any) => updateFase(i, 'mensagem', val)}
                 tenantId={tenantId}
                 node={node}
+                workflowId={workflowId}
               />
             </div>
 
@@ -3402,7 +3368,7 @@ function GroupTriggerConfig({ config, setConfig }: any) {
   );
 }
 
-function OfertaRelampagoConfig({ config, setConfig, tenantId, node }: any) {
+function OfertaRelampagoConfig({ config, setConfig, tenantId, node, workflowId }: any) {
   // Logic for durations/fixed times
   return (
     <div className="space-y-4">
@@ -3414,6 +3380,7 @@ function OfertaRelampagoConfig({ config, setConfig, tenantId, node }: any) {
           placeholder="Aproveite agora! Oferta válida por tempo limitado..."
           tenantId={tenantId}
           node={node}
+          workflowId={workflowId}
         />
       </div>
 
@@ -3469,6 +3436,7 @@ function OfertaRelampagoConfig({ config, setConfig, tenantId, node }: any) {
           placeholder="A oferta acabou! Em breve traremos novas promoções."
           tenantId={tenantId}
           node={node}
+          workflowId={workflowId}
         />
       </div>
 
@@ -3485,7 +3453,7 @@ function OfertaRelampagoConfig({ config, setConfig, tenantId, node }: any) {
   );
 }
 
-function AquecimentoConfig({ config, setConfig, tenantId, node }: any) {
+function AquecimentoConfig({ config, setConfig, tenantId, node, workflowId }: any) {
   useEffect(() => {
     if (!config.sequencia || config.sequencia.length === 0) {
       const defaultDays = [
@@ -3564,6 +3532,7 @@ function AquecimentoConfig({ config, setConfig, tenantId, node }: any) {
                 placeholder={`O que enviar no dia ${s.dia}?`}
                 tenantId={tenantId}
                 node={node}
+                workflowId={workflowId}
               />
             </div>
 
@@ -3591,7 +3560,7 @@ function AquecimentoConfig({ config, setConfig, tenantId, node }: any) {
   );
 }
 
-function LembreteRecorrenteConfig({ config, setConfig, tenantId, node }: any) {
+function LembreteRecorrenteConfig({ config, setConfig, tenantId, node, workflowId }: any) {
   return (
     <div className="space-y-4">
       <div>
@@ -3612,6 +3581,7 @@ function LembreteRecorrenteConfig({ config, setConfig, tenantId, node }: any) {
           placeholder="Bom dia! Lembrete de que hoje temos live às 20h..."
           tenantId={tenantId}
           node={node}
+          workflowId={workflowId}
         />
       </div>
 
@@ -4074,6 +4044,7 @@ export default function NodeConfigModal({
   inputData,
   executionData,
   executionLogs,
+  workflowId,
 }: NodeConfigModalProps) {
   const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
   const [activeTab, setActiveTab] = useState<'parameters' | 'settings'>('parameters')
@@ -4183,7 +4154,7 @@ export default function NodeConfigModal({
         return <PromoMLConfig config={config} setConfig={setConfig} />
 
       case WorkflowNodeType.MENCIONAR_TODOS:
-        return <MencionarTodosConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} />
+        return <MencionarTodosConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} workflowId={workflowId} />
 
       case WorkflowNodeType.GRUPO_MEDIA:
         return (
@@ -4194,6 +4165,7 @@ export default function NodeConfigModal({
             tenantId={tenantId}
             sessions={sessions}
             loading={loading}
+            workflowId={workflowId}
           />
         )
 
@@ -4201,19 +4173,19 @@ export default function NodeConfigModal({
         return <GrupoWaitConfig config={config} setConfig={setConfig} />
 
       case WorkflowNodeType.AQUECIMENTO:
-        return <AquecimentoConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} />
+        return <AquecimentoConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} workflowId={workflowId} />
 
       case WorkflowNodeType.OFERTA_RELAMPAGO:
-        return <OfertaRelampagoConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} />
+        return <OfertaRelampagoConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} workflowId={workflowId} />
 
       case WorkflowNodeType.LEMBRETE_RECORRENTE:
-        return <LembreteRecorrenteConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} />
+        return <LembreteRecorrenteConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} workflowId={workflowId} />
 
       case WorkflowNodeType.ENQUETE_GRUPO:
         return <EnqueteGrupoConfig config={config} setConfig={setConfig} />
 
       case WorkflowNodeType.SEQUENCIA_LANCAMENTO:
-        return <SequenciaLancamentoConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} />
+        return <SequenciaLancamentoConfig config={config} setConfig={setConfig} tenantId={tenantId} node={node} workflowId={workflowId} />
 
       case WorkflowNodeType.PROMO_ML_API:
         return <PromoMLApiConfig config={config} setConfig={setConfig} />
@@ -4526,27 +4498,8 @@ export default function NodeConfigModal({
                         }
 
                         try {
-                          const formData = new FormData()
-                          formData.append('file', file)
-                          const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
-                          const token = localStorage.getItem('n9n_token')
-                          const headers: HeadersInit = {}
-                          if (token) {
-                            headers['Authorization'] = `Bearer ${token}`
-                          }
-                          const res = await fetch(
-                            `${API_URL}/media/upload?tenantId=${tenantId}&mediaType=${mediaType}&nodeId=${node.id}&workflowId=${(node as any).workflowId || ''}`,
-                            { method: 'POST', headers, body: formData }
-                          )
-
-                          if (!res.ok) {
-                            const err = await res.json()
-                            alert(err.message || 'Erro ao fazer upload')
-                            e.target.value = ''
-                            return
-                          }
-
-                          const data = await res.json()
+                          const targetWorkflowId = workflowId || (node as any).workflowId || '';
+                          const data = await apiClient.uploadMedia(file, tenantId, mediaType, node.id, targetWorkflowId);
                           setConfig({
                             ...config,
                             mediaUrl: data.url,
@@ -4554,8 +4507,8 @@ export default function NodeConfigModal({
                             uploadedFileName: data.originalName,
                             uploadedFileSize: data.size,
                           })
-                        } catch (err) {
-                          alert('Erro ao fazer upload do arquivo')
+                        } catch (err: any) {
+                          alert(err.response?.data?.message || err.message || 'Erro ao fazer upload do arquivo')
                         }
                         e.target.value = ''
                       }}
@@ -4586,13 +4539,7 @@ export default function NodeConfigModal({
                     className="text-red-400 hover:text-red-300 text-sm px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
                     onClick={async () => {
                       try {
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
-                        const token = localStorage.getItem('n9n_token')
-                        const headers: HeadersInit = {}
-                        if (token) {
-                          headers['Authorization'] = `Bearer ${token}`
-                        }
-                        await fetch(`${API_URL}/media/${config.uploadedMediaId}?tenantId=${tenantId}`, { method: 'DELETE', headers })
+                        await apiClient.deleteMedia(config.uploadedMediaId, tenantId)
                       } catch (e) { /* ignore */ }
                       setConfig({
                         ...config,

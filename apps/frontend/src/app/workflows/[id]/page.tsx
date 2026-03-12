@@ -861,6 +861,7 @@ function WorkflowPageContent() {
         <NodeConfigModal
           node={selectedNode}
           tenantId={tenantId}
+          workflowId={workflowId}
           onClose={() => setSelectedNode(null)}
           onSave={handleNodeConfigSave}
         />

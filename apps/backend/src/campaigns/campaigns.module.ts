@@ -3,9 +3,10 @@ import { CampaignsController, ContactListsController } from './campaigns.control
 import { CampaignsService } from './campaigns.service';
 import { ContactListsService } from './contact-lists.service';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [forwardRef(() => WhatsappModule)],
+  imports: [forwardRef(() => WhatsappModule), StorageModule],
   controllers: [CampaignsController, ContactListsController],
   providers: [CampaignsService, ContactListsService],
   exports: [CampaignsService, ContactListsService],

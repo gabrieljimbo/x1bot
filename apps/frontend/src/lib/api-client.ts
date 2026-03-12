@@ -816,4 +816,22 @@ export const apiClient = {
     return data as { deleted: number };
   },
 
+  uploadMedia: async (file: File, tenantId: string, mediaType: string, nodeId: string, workflowId: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const { data } = await client.post('/media/upload', formData, {
+      params: { tenantId, mediaType, nodeId, workflowId },
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    return data
+  },
+
+  deleteMedia: async (mediaId: string, tenantId: string) => {
+    const { data } = await client.delete(`/media/${mediaId}`, {
+      params: { tenantId },
+    })
+    return data
+  },
 }
