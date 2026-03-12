@@ -287,10 +287,14 @@ function ChatArea({
     conversation,
     onBack,
     onStatusUpdate,
+    onToggleProfile,
+    showProfile,
 }: {
     conversation: Conversation
     onBack: () => void
     onStatusUpdate: (conv: Conversation) => void
+    onToggleProfile: () => void
+    showProfile: boolean
 }) {
     const [messages, setMessages] = useState<Message[]>([])
     const [loading, setLoading] = useState(true)
@@ -491,6 +495,15 @@ function ChatArea({
                         </div>
                     )}
                 </div>
+
+                {/* Profile panel toggle */}
+                <button
+                    onClick={onToggleProfile}
+                    className={`ml-1 p-2 rounded-xl border transition-colors hidden xl:flex items-center justify-center flex-shrink-0 ${showProfile ? 'bg-[#00ff88]/20 border-[#00ff88]/40 text-[#00ff88]' : 'bg-[#1a1a1a] border-white/5 text-gray-400 hover:text-white'}`}
+                    title="Detalhes do Contato"
+                >
+                    <User size={15} />
+                </button>
             </div>
 
             {/* Messages */}
@@ -577,6 +590,7 @@ function InboxContent() {
     const [loading, setLoading] = useState(true)
     const [selectedConv, setSelectedConv] = useState<Conversation | null>(null)
     const [showChat, setShowChat] = useState(false)  // mobile nav
+    const [showProfile, setShowProfile] = useState(true) // right pane nav
 
     // Filters
     const [search, setSearch] = useState('')
@@ -800,7 +814,7 @@ function InboxContent() {
                     </div>
                 </div>
 
-                {/* ── Chat area (right panel) ── */}
+                {/* ── Chat area (middle panel) ── */}
                 <div className={`${showChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 overflow-hidden`}>
                     {selectedConv ? (
                         <ChatArea
@@ -808,6 +822,8 @@ function InboxContent() {
                             conversation={selectedConv}
                             onBack={() => setShowChat(false)}
                             onStatusUpdate={handleStatusUpdate}
+                            onToggleProfile={() => setShowProfile(p => !p)}
+                            showProfile={showProfile}
                         />
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-8">
@@ -821,6 +837,75 @@ function InboxContent() {
                         </div>
                     )}
                 </div>
+
+                {/* ── Contact Profile (right panel) ── */}
+                {selectedConv && showProfile && (
+                    <div className="hidden xl:flex w-[320px] max-w-[320px] flex-col border-l border-white/5 bg-[#0d0d0d] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                        <div className="p-6 border-b border-white/5 flex flex-col items-center select-text">
+                            <Avatar name={selectedConv.contactName} phone={selectedConv.contactPhone} avatarUrl={selectedConv.contactAvatar} size="lg" />
+                            <h2 className="mt-4 font-bold text-white text-lg text-center break-words w-full">
+                                {contactDisplay(selectedConv)}
+                            </h2>
+                            <p className="text-sm text-gray-500 mt-1">
+                                {selectedConv.isGroup ? selectedConv.contactPhone : formatPhone(selectedConv.phoneNumber || selectedConv.contactPhone.split('@')[0])}
+                            </p>
+                            <div className="mt-4 flex gap-2">
+                                <span className={`text-xs px-3 py-1 rounded-full font-medium border border-transparent ${statusColors[selectedConv.status]}`}>
+                                    {statusLabels[selectedConv.status]}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div className="p-4 space-y-6">
+                            {/* Sobre a sessão */}
+                            <div>
+                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Detalhes da Conexão</h4>
+                                <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-3 space-y-2">
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-500">Sessão</span>
+                                        <span className="text-white font-medium">{selectedConv.session?.name || 'Desconhecida'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-500">Tipo</span>
+                                        <span className="text-white font-medium">{selectedConv.isGroup ? 'Grupo' : 'Individual'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-500">ID Chat</span>
+                                        <span className="text-gray-400 font-mono text-[10px] truncate max-w-[120px]" title={selectedConv.contactPhone}>{selectedConv.contactPhone.split('@')[0]}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Tags/Labels */}
+                            {selectedConv.labels && selectedConv.labels.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Etiquetas (WhatsApp)</h4>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {selectedConv.labels.map(label => (
+                                            <span key={label} className="bg-white/5 text-gray-300 border border-white/10 text-[10px] px-2 py-0.5 rounded-md">
+                                                {label}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Funil / Workflow */}
+                            {selectedConv.activeFlowId && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Automacão Ativa</h4>
+                                    <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-3 flex items-start gap-3">
+                                        <Zap size={16} className="text-violet-400 mt-0.5 shrink-0" />
+                                        <div>
+                                            <p className="text-sm font-medium text-violet-300">Fluxo em andamento</p>
+                                            <p className="text-xs text-violet-400/70 mt-1 break-all">ID: {selectedConv.activeFlowId}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     )

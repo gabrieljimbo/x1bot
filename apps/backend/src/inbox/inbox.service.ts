@@ -320,6 +320,11 @@ export class InboxService {
             },
         });
 
+        // Fire-and-forget sync profile picture if missing
+        if (!conversation.contactAvatar) {
+            this.syncProfilePicture(tenantId, conversation.id, sessionId, contactPhone).catch(() => {});
+        }
+
         await this.eventBus.emit({
             type: EventType.INBOX_CONVERSATION_UPDATED,
             tenantId,
@@ -367,5 +372,25 @@ export class InboxService {
         } as any);
 
         return message;
+    }
+
+    private async syncProfilePicture(tenantId: string, conversationId: string, sessionId: string, contactPhone: string) {
+        try {
+            const avatarUrl = await this.whatsappSessionManager.getProfilePictureUrl(sessionId, contactPhone);
+            if (avatarUrl) {
+                await this.prisma.conversation.update({
+                    where: { id: conversationId },
+                    data: { contactAvatar: avatarUrl }
+                });
+                await this.eventBus.emit({
+                    type: EventType.INBOX_CONVERSATION_UPDATED,
+                    tenantId,
+                    conversationId,
+                    timestamp: new Date(),
+                } as any);
+            }
+        } catch (e) {
+            // ignore silently
+        }
     }
 }

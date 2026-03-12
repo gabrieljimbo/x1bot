@@ -1415,5 +1415,19 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       throw error;
     }
   }
+
+  async getProfilePictureUrl(sessionId: string, jid: string): Promise<string | null> {
+    const sessionClient = this.resolveSessionClient(sessionId);
+    if (!sessionClient || !sessionClient.socket?.profilePictureUrl) return null;
+    
+    try {
+      // get high-res if 'image', or low-res if 'preview'
+      const url = await sessionClient.socket.profilePictureUrl(jid, 'image');
+      return url || null;
+    } catch (e: any) {
+      // Not allowed or no profile picture
+      return null;
+    }
+  }
 }
 
