@@ -984,7 +984,7 @@ function CampaignDrawer({
                 </div>
               )}
 
-              <button onClick={handleAddRecipients}
+              <button onClick={() => handleAddRecipients()}
                 disabled={saving || (recipientMode === 'phones' && !phonesText.trim()) || (recipientMode === 'csv' && !csvText.trim()) || (recipientMode === 'group' && selectedGroupPhones.size === 0) || (recipientMode === 'list' && !selectedListId)}
                 className="w-full py-2 bg-[#00ff88]/10 border border-[#00ff88]/30 rounded-lg text-[#00ff88] text-sm font-medium hover:bg-[#00ff88]/20 transition disabled:opacity-50">
                 {saving ? 'Adicionando...' : 'Confirmar e Adicionar Destinatários'}
