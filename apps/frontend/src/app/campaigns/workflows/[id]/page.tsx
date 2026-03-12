@@ -138,6 +138,7 @@ function CampaignNodesSidebar({ onAddNode, onClose }: { onAddNode: (type: Workfl
     { type: 'WAIT_REPLY' as WorkflowNodeType, label: 'Aguardar Resposta', icon: '⏳' },
     { type: 'WAIT' as WorkflowNodeType, label: 'Aguardar Tempo', icon: '⏱️' },
     { type: 'CONDITION' as WorkflowNodeType, label: 'Condição', icon: '🔀' },
+    { type: 'MARK_STAGE' as WorkflowNodeType, label: 'Marcar Etapa', icon: '🚩' },
     { type: 'END' as WorkflowNodeType, label: 'Finalizar', icon: '🔴' },
   ]
 
