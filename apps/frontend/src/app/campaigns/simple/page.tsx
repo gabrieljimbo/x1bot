@@ -798,7 +798,7 @@ function CampaignDrawer({
               )}
               {recipientMode === 'list' && (
                 <select value={selectedListId} onChange={e => setSelectedListId(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm">
+                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50">
                   <option value="">Selecione uma lista...</option>
                   {contactLists.map(l => (
                     <option key={l.id} value={l.id}>{l.name} ({l._count.contacts} contatos)</option>

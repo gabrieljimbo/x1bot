@@ -132,6 +132,24 @@ export class ScheduleWorker implements OnModuleInit, OnModuleDestroy {
 
       for (const link of effectiveLinks) {
         try {
+          // --- Check if the group itself has the Bot switch ON ---
+          // Since WhatsappGroupConfig is linked to a session, we verify if ANY enabled config exists for this group
+          // on a connected session for this tenant.
+          const groupConfig = await this.prisma.whatsappGroupConfig.findFirst({
+            where: {
+              groupId: link.groupJid,
+              enabled: true,
+              whatsappSession: {
+                tenantId: link.tenantId,
+                status: 'CONNECTED'
+              }
+            }
+          });
+
+          if (!groupConfig) {
+            // Silently skip if the user turned off the bot for this group
+            continue;
+          }
           const workflowData = await this.prisma.workflow.findUnique({
             where: { id: link.workflowId },
           });

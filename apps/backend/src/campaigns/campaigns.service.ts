@@ -151,6 +151,15 @@ export class CampaignsService {
       console.log(`[CampaignsService] Deleted ${mediaFiles.length} media files for campaign ${campaignId}`);
     }
 
+    // 1.5. Clean up shadow workflow if exists
+    try {
+      await this.prisma.workflow.deleteMany({
+        where: { id: `shadow-${campaignId}`, tenantId }
+      });
+    } catch (err) {
+      // Ignore if doesn't exist
+    }
+
     // 2. Delete the campaign (related CampaignWorkflow and Recipient records will be deleted by Cascade if configured, 
     // but PRISMA usually requires manual handling or onDelete: Cascade in schema)
     await this.prisma.campaign.delete({ where: { id: campaignId } });
@@ -1031,11 +1040,13 @@ export class CampaignsService {
       const sentPhones = new Set(alreadySent.map(r => r.phone));
       
       let executedPhones = new Set<string>();
-      if (campaign.workflowId) {
+      const workflowToCheck = campaign.type === 'WORKFLOW' ? `shadow-${campaign.id}` : campaign.workflowId;
+      
+      if (workflowToCheck) {
         const executions = await this.prisma.workflowExecution.findMany({
           where: {
             tenantId,
-            workflowId: campaign.workflowId,
+            workflowId: workflowToCheck,
             contactPhone: { in: participants.map((p: any) => p.phone) }
           },
           select: { contactPhone: true }

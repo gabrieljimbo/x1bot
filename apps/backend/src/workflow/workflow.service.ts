@@ -56,7 +56,12 @@ export class WorkflowService {
    */
   async getWorkflows(tenantId: string): Promise<Workflow[]> {
     const workflows = await this.prisma.workflow.findMany({
-      where: { tenantId },
+      where: { 
+        tenantId,
+        NOT: {
+          id: { startsWith: 'shadow-' }
+        }
+      },
       orderBy: { createdAt: 'desc' },
     });
 

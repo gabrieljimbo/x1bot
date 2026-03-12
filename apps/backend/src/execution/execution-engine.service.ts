@@ -292,6 +292,17 @@ export class ExecutionEngineService implements OnModuleInit {
         baseContext.variables.contactStage = '';
       }
 
+      // Verify session existence before creating execution to prevent FK violation
+      const sessionExists = await this.prisma.whatsappSession.findUnique({
+        where: { id: sessionId },
+        select: { id: true }
+      });
+
+      if (!sessionExists) {
+        console.warn(`[EXECUTION] Cannot start execution for session ${sessionId}: session no longer exists in database.`);
+        throw new Error(`WhatsApp session ${sessionId} not found`);
+      }
+
       // Create execution with normalized payload
       const execution = await this.prisma.workflowExecution.create({
         data: {

@@ -292,11 +292,14 @@ export class WhatsappMessageHandler {
     console.log('[TRIGGER] Matching message:', messageText, 'Type:', payload.type);
     console.log('[TRIGGER] Tenant:', tenantId);
 
-    // Get active workflows for this tenant
+    // Get active workflows for this tenant, excluding shadow workflows from campaigns
     const workflows = await this.prisma.workflow.findMany({
       where: {
         tenantId,
         isActive: true,
+        NOT: {
+          id: { startsWith: 'shadow-' }
+        }
       },
     });
 

@@ -997,9 +997,21 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   private async handleIncomingMessage(tenantId: string, sessionId: string, msg: WAMessage, skipTrigger: boolean = false): Promise<void> {
     const contactPhone = msg.key.remoteJid!;
     const messageId = msg.key.id!;
-    const sessionClient = this.sessions.get(sessionId);
-
     console.log(`[INCOMING] Message ${messageId} from ${contactPhone} on session ${sessionId}`);
+
+    // Verify session still exists in DB to avoid FK errors and clean up "ghost" sessions
+    const sessionExists = await (this.prisma as any).whatsappSession.findUnique({
+      where: { id: sessionId },
+      select: { id: true }
+    });
+
+    if (!sessionExists) {
+      console.warn(`[SESSION_CLEANUP] Session ${sessionId} no longer exists in database. Disconnecting ghost socket.`);
+      this.disconnectSession(sessionId).catch(() => {});
+      return;
+    }
+
+    const sessionClient = this.sessions.get(sessionId);
 
     try {
       // --- Meta Ads Detection ---

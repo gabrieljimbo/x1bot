@@ -2657,30 +2657,36 @@ functions, etc.)
           await this.whatsappSessionManager.sendMessage(finalSessionId, destination, config.footerText);
         }
 
-        // Record sent products for anti-repeat (SentProduct table, 24h expiry)
+        // Record sent products for anti-repeat (SentProduct table)
         if (config.antiRepeat && tenantId && products.length > 0) {
-          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-          const recordGroupId = config.antiRepeatScope !== 'global' && groupJid ? groupJid : null;
+          const days = config.antiRepeatDays || 3;
+          const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+          const recordGroupId = config.antiRepeatScope !== 'global' && groupJid ? groupJid : '';
+          
           for (const p of products) {
-            await this.prisma.sentProduct.upsert({
-              where: {
-                tenantId_groupId_productId_source: {
+            try {
+              await this.prisma.sentProduct.upsert({
+                where: {
+                  tenantId_groupId_productId_source: {
+                    tenantId,
+                    groupId: recordGroupId,
+                    productId: String(p.itemId),
+                    source: 'shopee',
+                  },
+                },
+                create: {
                   tenantId,
-                  groupId: recordGroupId ?? '',
+                  sessionId: finalSessionId!,
+                  groupId: recordGroupId,
                   productId: String(p.itemId),
                   source: 'shopee',
+                  expiresAt,
                 },
-              },
-              create: {
-                tenantId,
-                sessionId: finalSessionId!,
-                groupId: recordGroupId,
-                productId: String(p.itemId),
-                source: 'shopee',
-                expiresAt,
-              },
-              update: { sentAt: new Date(), expiresAt },
-            });
+                update: { sentAt: new Date(), expiresAt },
+              });
+            } catch (e) {
+              console.error('[PROMO_SHOPEE] Error recording sent product:', e.message);
+            }
           }
         }
       } else {
@@ -2789,14 +2795,17 @@ ${config.footerText || ''}`;
               await this.whatsappSessionManager.sendMessage(sessionId, finalContactPhone, caption);
             }
 
-            // Track as sent (SentProduct table, 24h expiry)
+            // Track as sent (SentProduct table)
             if (tenantId) {
-              const mlExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+              const mlDays = config.antiRepeatDays || 3;
+              const mlExpiresAt = new Date(Date.now() + mlDays * 24 * 60 * 60 * 1000);
+              const mlRecordGroupId = mlGroupJid || '';
+              
               await this.prisma.sentProduct.upsert({
                 where: {
                   tenantId_groupId_productId_source: {
                     tenantId,
-                    groupId: mlGroupJid ?? '',
+                    groupId: mlRecordGroupId,
                     productId: cleanUrl,
                     source: 'ml',
                   },
@@ -2804,7 +2813,7 @@ ${config.footerText || ''}`;
                 create: {
                   tenantId,
                   sessionId: sessionId!,
-                  groupId: mlGroupJid,
+                  groupId: mlRecordGroupId,
                   productId: cleanUrl,
                   source: 'ml',
                   expiresAt: mlExpiresAt,

@@ -462,6 +462,7 @@ export interface PromoShopeeConfig {
   footerText?: string;
   messageInterval: number;
   sessionId?: string;
+  antiRepeatDays?: number;
   saveResponseAs?: string;
 }
 
@@ -485,6 +486,7 @@ export interface PromoMLConfig {
   footerText?: string;
   messageInterval: number;
   ignoreAlreadySent: boolean;
+  antiRepeatDays?: number;
   saveResponseAs?: string;
 }
 

@@ -218,22 +218,18 @@ export class InboxService {
             media: null,
         };
 
-        const execution = await this.executionService.createExecution(
-            tenantId,
-            workflowId,
-            conversation.sessionId,
-            conversation.contactPhone,
-            { variables: {}, input: mockPayload }
-        );
-
-        // Start asynchronously
-        this.executionEngine.startExecution(
+        // startExecution already handles session checks and record creation
+        const execution = await this.executionEngine.startExecution(
             tenantId,
             workflowId,
             conversation.sessionId,
             conversation.contactPhone,
             mockPayload.text,
-            mockPayload
+            mockPayload,
+            { 
+              force: true,
+              initialContext: { variables: {}, input: mockPayload }
+            }
         );
 
         await this.prisma.conversation.update({

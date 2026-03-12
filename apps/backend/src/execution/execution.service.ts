@@ -31,6 +31,17 @@ export class ExecutionService {
       ...initialContext,
     };
 
+    // Verify session existence before creating execution
+    const sessionExists = await this.prisma.whatsappSession.findUnique({
+      where: { id: sessionId },
+      select: { id: true }
+    });
+
+    if (!sessionExists) {
+      console.warn(`[EXECUTION_SERVICE] Cannot create execution for session ${sessionId}: session not found.`);
+      throw new Error(`WhatsApp session ${sessionId} not found`);
+    }
+
     const execution = await this.prisma.workflowExecution.create({
       data: {
         tenantId,
