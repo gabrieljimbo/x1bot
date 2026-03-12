@@ -605,6 +605,8 @@ model CampaignRecipient {
   status       String    @default("pending")
   sentAt       DateTime?
   error        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   campaign     Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
