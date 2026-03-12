@@ -178,6 +178,72 @@ export class WhatsappMessageHandler {
         }
       }
 
+      // Fallback 4: Inbox-based identity resolution (most robust against Meta privacy changes)
+      // Cross-references the Inbox conversations/messages to find the real phone behind an @lid.
+      // Strategy: Find recent conversations in this session where the bot sent messages (fromMe)
+      // in the last 10 minutes, then check if any of those real contacts have a WAITING flow state.
+      if (!finalFlowState && contactPhone.includes('@lid')) {
+        console.log(`[STATE] Session ${sessionId}: Fallback 4 — Inbox-based @lid resolution for ${contactPhone}`);
+
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+
+        // Find conversations in this session where the bot recently sent a message (campaign/flow activity)
+        // Exclude @lid, @g.us, @newsletter contacts — we only want real phone numbers
+        const recentBotConversations = await this.prisma.conversation.findMany({
+          where: {
+            sessionId,
+            tenantId,
+            contactPhone: {
+              not: { contains: '@lid' },
+            },
+            isGroup: false,
+            messages: {
+              some: {
+                fromMe: true,
+                timestamp: { gte: tenMinutesAgo },
+              },
+            },
+          },
+          select: {
+            contactPhone: true,
+          },
+          orderBy: { lastMessageAt: 'desc' },
+          take: 20, // Limit search scope for performance
+        });
+
+        if (recentBotConversations.length > 0) {
+          const candidatePhones = recentBotConversations.map(c => c.contactPhone);
+          console.log(`[STATE] Session ${sessionId}: Inbox found ${candidatePhones.length} recent bot conversations. Checking for WAITING states...`);
+
+          // Check which of these real contacts has a WAITING ContactFlowState
+          const matchingState = await this.prisma.contactFlowState.findFirst({
+            where: {
+              contactPhone: { in: candidatePhones },
+              sessionId: { in: [sessionId, ...candidatePhones.map(() => sessionId)] }, // Same session
+            },
+            orderBy: { updatedAt: 'desc' },
+          });
+
+          if (matchingState) {
+            console.log(`[STATE] Session ${sessionId}: Inbox Fallback matched @lid ${contactPhone} → real contact ${matchingState.contactPhone}`);
+            finalFlowState = matchingState;
+          } else {
+            // Extended search: check cross-session WAITING states for these phones
+            const crossSessionState = await this.prisma.contactFlowState.findFirst({
+              where: {
+                contactPhone: { in: candidatePhones },
+              },
+              orderBy: { updatedAt: 'desc' },
+            });
+
+            if (crossSessionState) {
+              console.log(`[STATE] Session ${sessionId}: Inbox Fallback (cross-session) matched @lid ${contactPhone} → real contact ${crossSessionState.contactPhone} on session ${crossSessionState.sessionId}`);
+              finalFlowState = crossSessionState;
+            }
+          }
+        }
+      }
+
       if (finalFlowState) {
         const oldPhone = finalFlowState.contactPhone;
         const oldSession = finalFlowState.sessionId;
