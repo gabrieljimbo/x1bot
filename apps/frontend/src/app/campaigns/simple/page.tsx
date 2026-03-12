@@ -801,14 +801,21 @@ function CampaignDrawer({
                 </div>
               )}
               {recipientMode === 'list' && (
-                <select value={selectedListId} onChange={e => setSelectedListId(e.target.value)}
-                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50">
-                  <option value="">Selecione uma lista...</option>
-                  {contactLists.map(l => (
-                    <option key={l.id} value={l.id}>{l.name} ({l._count.contacts} contatos)</option>
-                  ))}
-                </select>
-              )}
+                <div className="space-y-2">
+                  <label className="text-xs text-gray-400 font-medium flex items-center gap-1.5">
+                    <List size={11} /> Selecione a lista de contatos
+                  </label>
+                  <select value={selectedListId} onChange={e => setSelectedListId(e.target.value)}
+                    className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50">
+                    <option value="" className="bg-[#1a1a1a] text-gray-400">Selecione uma lista...</option>
+                    {contactLists.map(l => (
+                      <option key={l.id} value={l.id} className="bg-[#1a1a1a] text-white">
+                        {l.name} ({l._count.contacts} contatos)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) }
               {recipientMode === 'group' && (
                 <div className="space-y-4">
                   {/* Session selector */}
@@ -840,9 +847,11 @@ function CampaignDrawer({
                     </div>
                     <select value={groupSessionId} onChange={e => setGroupSessionId(e.target.value)}
                       className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50">
-                      <option value="">Selecione uma sessão...</option>
+                      <option value="" className="bg-[#1a1a1a] text-gray-400">Selecione uma sessão...</option>
                       {sessions.filter(s => s.status?.toLowerCase() === 'connected').map(s => (
-                        <option key={s.id} value={s.id}>{s.name} {s.phoneNumber ? `(${s.phoneNumber})` : ''}</option>
+                        <option key={s.id} value={s.id} className="bg-[#1a1a1a] text-white">
+                          {s.name} {s.phoneNumber ? `(${s.phoneNumber})` : ''}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -856,9 +865,9 @@ function CampaignDrawer({
                       ) : (
                         <select value={selectedGroupJid} onChange={e => setSelectedGroupJid(e.target.value)}
                           className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50">
-                          <option value="">Selecione um grupo...</option>
+                          <option value="" className="bg-[#1a1a1a] text-gray-400">Selecione um grupo...</option>
                           {groups.map(g => (
-                            <option key={g.groupId} value={g.groupId}>{g.name}</option>
+                            <option key={g.groupId} value={g.groupId} className="bg-[#1a1a1a] text-white">{g.name}</option>
                           ))}
                         </select>
                       )}
