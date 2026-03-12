@@ -857,14 +857,11 @@ export class ExecutionEngineService implements OnModuleInit {
           });
           execution.currentNodeId = nextEdgeOnError.target;
           continue;
-        } else {
-          // No next node — complete gracefully
-          await this.executionService.updateExecution(execution.id, {
-            status: ExecutionStatus.COMPLETED,
-            context: execution.context,
-          });
-          return;
         }
+        
+        // No next node — fail properly
+        await this.failExecution(execution, nodeError.message);
+        return;
       }
 
       // Send message if node produced one
@@ -1229,6 +1226,24 @@ export class ExecutionEngineService implements OnModuleInit {
       output: execution.context.output,
       timestamp: new Date(),
     });
+
+    // Update campaign recipient status if this is a campaign execution
+    if ((execution as any).campaignId) {
+      const campaignId = (execution as any).campaignId;
+      await this.prisma.campaignRecipient.updateMany({
+        where: { campaignId, phone: execution.contactPhone },
+        data: { status: 'sent', sentAt: new Date() }
+      }).catch(err => console.error(`[EXECUTION] Failed to update campaign status:`, err));
+
+      await this.prisma.campaignLog.create({
+        data: {
+          campaignId,
+          phone: execution.contactPhone,
+          sessionId: execution.sessionId,
+          status: 'sent'
+        }
+      }).catch(() => { });
+    }
   }
 
   /**
@@ -1293,6 +1308,27 @@ export class ExecutionEngineService implements OnModuleInit {
       currentNodeId: execution.currentNodeId,
       timestamp: new Date(),
     });
+
+    // Update campaign recipient status if this is a campaign execution
+    if ((execution as any).campaignId) {
+      const campaignId = (execution as any).campaignId;
+      const isBlocked = error.includes('blocked') || error.includes('forbidden');
+      
+      await this.prisma.campaignRecipient.updateMany({
+        where: { campaignId, phone: execution.contactPhone },
+        data: { status: 'failed', error }
+      }).catch(err => console.error(`[EXECUTION] Failed to update campaign status on error:`, err));
+
+      await this.prisma.campaignLog.create({
+        data: {
+          campaignId,
+          phone: execution.contactPhone,
+          sessionId: execution.sessionId,
+          status: isBlocked ? 'blocked' : 'failed',
+          error
+        }
+      }).catch(() => { });
+    }
   }
 
   /**

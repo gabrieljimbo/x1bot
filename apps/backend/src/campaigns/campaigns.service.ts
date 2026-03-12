@@ -670,6 +670,9 @@ export class CampaignsService {
 
       try {
         if (campaign.workflowId) {
+          // Mark as processing, engine will mark as sent/failed later
+          await this.prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'processing' } });
+
           if (shadowWorkflowId) {
             // Execute CampaignWorkflow via shadow Workflow using ExecutionEngine
             await this.executionEngine.startExecution(
@@ -708,10 +711,10 @@ export class CampaignsService {
               await this.whatsappSessionManager.sendMessage(session.sessionId, recipient.phone, msg.content, true);
             }
           }
+          // Only mark as sent directly for simple campaigns
+          await this.prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'sent', sentAt: new Date() } });
+          await this.prisma.campaignLog.create({ data: { campaignId, phone: recipient.phone, sessionId: session.sessionId, status: 'sent' } });
         }
-
-        await this.prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'sent', sentAt: new Date() } });
-        await this.prisma.campaignLog.create({ data: { campaignId, phone: recipient.phone, sessionId: session.sessionId, status: 'sent' } });
       } catch (e: any) {
         const isBlocked = e.message?.includes('blocked') || e.message?.includes('forbidden');
         await this.prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'failed', error: e.message } });

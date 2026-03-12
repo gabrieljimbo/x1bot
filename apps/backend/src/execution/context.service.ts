@@ -9,6 +9,7 @@ export class ContextService {
    * Example: "Hello {{variables.name}}" -> "Hello John"
    */
   interpolate(template: string, context: ExecutionContext): string {
+    if (!template) return '';
     return template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
       const value = this.getValueByPath(context, path.trim());
       return value !== undefined ? String(value) : match;

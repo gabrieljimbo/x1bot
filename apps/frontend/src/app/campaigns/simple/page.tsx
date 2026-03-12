@@ -214,7 +214,7 @@ interface WaLabel { id: string; name: string; color: string; count: number }
 function CampaignDrawer({
   initial, onSave, onClose, setStatusMessage
 }: {
-  initial?: Campaign; onSave: (data: any) => Promise<any>; onClose: () => void;
+  initial?: Campaign; onSave: (data: any, keepOpen?: boolean) => Promise<any>; onClose: () => void;
   setStatusMessage: (msg: { type: 'error' | 'success' | 'info'; text: string } | null) => void
 }) {
   const [tab, setTab] = useState<'content' | 'recipients' | 'sessions' | 'settings'>('content')
@@ -327,29 +327,43 @@ function CampaignDrawer({
     ...waLabels.filter(l => selectedLabelIds.includes(l.id)).map(l => l.count),
   ].reduce((a, b) => a + b, 0)
 
-  const handleSave = async () => {
+  const handleSave = async (keepOpen = false) => {
     if (!form.name.trim()) return setStatusMessage({ type: 'error', text: 'Nome da campanha é obrigatório' })
     if (campaignType === 'WORKFLOW' && !selectedWorkflowId) return setStatusMessage({ type: 'error', text: 'Selecione um fluxo para esta campanha' })
+    
+    // Auto-select session if in group mode and nothing selected
+    let sessionIds = [...form.sessionIds]
+    if (sessionIds.length === 0 && recipientMode === 'group' && groupSessionId) {
+      sessionIds = [groupSessionId]
+    }
+
+    if (sessionIds.length === 0) {
+      return setStatusMessage({ type: 'error', text: 'Selecione ao menos uma sessão na aba "Sessões"' })
+    }
+
     setSaving(true)
     setStatusMessage(null)
     try {
       const payload = {
         ...form,
+        sessionIds,
         type: campaignType,
         workflowId: campaignType === 'WORKFLOW' ? selectedWorkflowId : null,
         scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : undefined,
         messages: campaignType === 'SIMPLE' ? form.messages.filter(m => m.content || m.mediaUrl) : [],
       }
-      const result = await onSave(payload)
+      const result = await onSave(payload, keepOpen)
       if (result?.id) {
         setCampaignId(result.id)
-        setStatusMessage({ type: 'success', text: 'Campanha salva com sucesso! Agora você pode adicionar destinatários.' })
+        setStatusMessage({ type: 'success', text: 'Campanha salva! Agora clique em "Adicionar Destinatários" abaixo para incluir os números.' })
+        return result.id
       }
     } catch (e: any) {
       setStatusMessage({ type: 'error', text: e?.response?.data?.message || 'Erro ao salvar campanha' })
     } finally {
       setSaving(false)
     }
+    return null
   }
 
   // Update selection when toggles change
@@ -422,19 +436,29 @@ function CampaignDrawer({
   }
 
   const handleAddRecipients = async () => {
-    const id = campaignId
-    if (!id) return setStatusMessage({ type: 'info', text: 'Por favor, salve a campanha antes de adicionar destinatários' })
+    let id = campaignId
+    if (!id) {
+      // If no ID yet, try to save first (internal save, keep drawer open)
+      id = await handleSave(true)
+      if (!id) return // Save failed, message already set
+    }
+
     setStatusMessage(null)
+    setSaving(true) // Use saving state for visual feedback
     try {
       let result: any
       if (recipientMode === 'phones') {
-        result = await apiClient.addCampaignRecipientsFromPhones(id, phonesText.split(/[\n,]/).map(p => p.trim()).filter(Boolean))
+        const phones = phonesText.split(/[\n,]/).map(p => p.trim()).filter(Boolean)
+        if (phones.length === 0) throw new Error('Digite ao menos um número de telefone')
+        result = await apiClient.addCampaignRecipientsFromPhones(id, phones)
       } else if (recipientMode === 'csv') {
+        if (!csvText.trim()) throw new Error('Cole o conteúdo CSV ou arraste um arquivo')
         result = await apiClient.addCampaignRecipientsFromCsv(id, csvText)
       } else if (recipientMode === 'inbox') {
         result = await apiClient.addCampaignRecipientsFromContacts(id, selectedTags, selectedLabelIds)
       } else if (recipientMode === 'group') {
-        if (!groupSessionId || !selectedGroupJid) return setStatusMessage({ type: 'error', text: 'Selecione uma sessão e um grupo' })
+        if (!groupSessionId || !selectedGroupJid) throw new Error('Selecione uma sessão e um grupo')
+        if (selectedGroupPhones.size === 0) throw new Error('Selecione ao menos um participante do grupo')
         result = await apiClient.addCampaignRecipientsFromGroup(id, {
           sessionId: groupSessionId,
           groupJid: selectedGroupJid,
@@ -443,13 +467,15 @@ function CampaignDrawer({
           selectedPhones: [...selectedGroupPhones],
         })
       } else {
-        if (!selectedListId) return setStatusMessage({ type: 'error', text: 'Selecione uma lista de contatos' })
+        if (!selectedListId) throw new Error('Selecione uma lista de contatos')
         result = await apiClient.addCampaignRecipientsFromList(id, selectedListId)
       }
       setRecipientResult(`${result.added} adicionados. Total: ${result.total}`)
-      setStatusMessage({ type: 'success', text: `${result.added} destinatários adicionados com sucesso!` })
+      setStatusMessage({ type: 'success', text: `Sucesso! ${result.added} destinatários foram adicionados à campanha.` })
     } catch (e: any) {
       setStatusMessage({ type: 'error', text: 'Erro: ' + (e?.response?.data?.message || e.message) })
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -945,7 +971,7 @@ function CampaignDrawer({
 
         <div className="p-5 border-t border-white/10 flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition">Cancelar</button>
-          <button onClick={handleSave} disabled={saving}
+          <button onClick={() => handleSave(false)} disabled={saving}
             className="px-5 py-2 bg-[#00ff88] text-black font-bold rounded-lg text-sm hover:bg-[#00dd77] transition disabled:opacity-50">
             {saving ? 'Salvando...' : 'Salvar'}
           </button>
@@ -973,13 +999,15 @@ function SimplePageContent() {
 
   useEffect(() => { load() }, [])
 
-  const handleSave = async (data: any) => {
+  const handleSave = async (data: any, keepOpen = false) => {
     const result = editing
       ? await apiClient.updateCampaign(editing.id, data)
       : await apiClient.createCampaign(data)
     await load()
-    setShowDrawer(false)
-    setEditing(null)
+    if (!keepOpen) {
+      setShowDrawer(false)
+      setEditing(null)
+    }
     return result
   }
 
