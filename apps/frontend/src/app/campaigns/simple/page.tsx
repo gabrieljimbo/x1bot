@@ -609,11 +609,35 @@ function CampaignDrawer({
                 <div className="space-y-4">
                   {/* Session selector */}
                   <div>
-                    <label className="text-xs text-gray-400 mb-1 block">Sessão WhatsApp</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-gray-400 block">Sessão WhatsApp</label>
+                      {groupSessionId && (
+                        <button
+                          onClick={async () => {
+                            if (loadingGroups) return;
+                            setLoadingGroups(true);
+                            try {
+                              await apiClient.syncCampaignGroups(groupSessionId);
+                              const updated = await apiClient.getCampaignGroups(groupSessionId);
+                              setGroups(updated);
+                            } catch (e: any) {
+                              alert('Erro ao sincronizar: ' + (e?.response?.data?.message || e.message));
+                            } finally {
+                              setLoadingGroups(false);
+                            }
+                          }}
+                          disabled={loadingGroups}
+                          className="text-[10px] text-[#00ff88] hover:underline flex items-center gap-1"
+                        >
+                          <RefreshCw size={10} className={loadingGroups ? 'animate-spin' : ''} />
+                          {loadingGroups ? 'Sincronizando...' : 'Sincronizar agora'}
+                        </button>
+                      )}
+                    </div>
                     <select value={groupSessionId} onChange={e => setGroupSessionId(e.target.value)}
                       className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00ff88]/50">
                       <option value="">Selecione uma sessão...</option>
-                      {sessions.filter(s => s.status === 'connected').map(s => (
+                      {sessions.filter(s => s.status?.toLowerCase() === 'connected').map(s => (
                         <option key={s.id} value={s.id}>{s.name} {s.phoneNumber ? `(${s.phoneNumber})` : ''}</option>
                       ))}
                     </select>

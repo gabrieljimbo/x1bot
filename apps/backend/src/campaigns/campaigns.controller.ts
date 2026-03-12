@@ -58,6 +58,11 @@ export class CampaignsController {
     return this.campaignsService.getGroups(req.user.tenantId, sessionId);
   }
 
+  @Post('groups/sync')
+  syncGroups(@Request() req: any, @Query('sessionId') sessionId: string) {
+    return this.campaignsService.syncGroups(req.user.tenantId, sessionId);
+  }
+
   @Get('groups/:groupJid/participants')
   getGroupParticipants(
     @Request() req: any,

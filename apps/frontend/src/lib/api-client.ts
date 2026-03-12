@@ -679,6 +679,11 @@ export const apiClient = {
     return data as { groupId: string; name: string; sessionId: string; enabled: boolean }[];
   },
 
+  syncCampaignGroups: async (sessionId: string) => {
+    const { data } = await client.post('/campaigns/groups/sync', null, { params: { sessionId } });
+    return data;
+  },
+
   getGroupParticipants: async (sessionId: string, groupJid: string) => {
     const { data } = await client.get(`/campaigns/groups/${encodeURIComponent(groupJid)}/participants`, { params: { sessionId } });
     return data as { phone: string; name: string | null; isAdmin: boolean; isSuperAdmin: boolean }[];

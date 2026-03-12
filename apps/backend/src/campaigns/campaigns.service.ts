@@ -624,6 +624,15 @@ export class CampaignsService {
     }));
   }
 
+  async syncGroups(tenantId: string, sessionId: string) {
+    const session = await this.prisma.whatsappSession.findFirst({
+      where: { id: sessionId, tenantId },
+    });
+    if (!session) throw new NotFoundException('Session not found');
+
+    return this.whatsappSessionManager.syncGroups(sessionId);
+  }
+
   async getGroupParticipants(tenantId: string, sessionId: string, groupJid: string) {
     // Verify session belongs to tenant
     const session = await this.prisma.whatsappSession.findFirst({
