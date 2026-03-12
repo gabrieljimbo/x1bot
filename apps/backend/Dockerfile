@@ -4,8 +4,9 @@ FROM node:20-slim AS builder
 WORKDIR /app
 
 # IMPORTANT: Coolify passes NODE_ENV=production as --build-arg which overrides ENV.
-# We must use explicit inline NODE_ENV=development on RUN commands that need devDependencies.
-# Do NOT rely on ENV NODE_ENV=development here as it gets overridden by build-args.
+# We explicitly set it to development for this stage.
+ARG NODE_ENV=development
+ENV NODE_ENV=development
 
 # Install pnpm and build dependencies
 RUN npm install -g pnpm@10
@@ -28,8 +29,8 @@ COPY apps/backend/package.json ./apps/backend/
 COPY packages/shared/package.json ./packages/shared/
 
 # Install ALL dependencies (including devDeps for building)
-# Force NODE_ENV=development inline to prevent Coolify's build-arg from skipping devDeps
-RUN NODE_ENV=development pnpm install
+# Explicitly use --production=false to ignore any global NODE_ENV setting
+RUN pnpm install --frozen-lockfile --production=false
 
 # Copy source code
 COPY apps/backend ./apps/backend
@@ -42,17 +43,22 @@ WORKDIR /app
 
 # Build shared library then backend
 WORKDIR /app/packages/shared
-RUN NODE_ENV=development pnpm build
+RUN pnpm build
 
 WORKDIR /app/apps/backend
-RUN NODE_ENV=development pnpm build
+RUN pnpm build
 
 # Stage 2: Production Dependencies (Minimal)
 FROM node:20-slim AS runner-deps
 WORKDIR /app
+
+# Set to production for the actual runtime dependencies
+ARG NODE_ENV=production
+ENV NODE_ENV=production
+
 RUN npm install -g pnpm@10
 
-# Install runtime dependencies for native modules (canvas, prisma, openssl)
+# Install runtime dependencies for native modules
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 \
     libpango-1.0-0 \
@@ -69,8 +75,8 @@ COPY apps/backend/package.json ./apps/backend/
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/backend/prisma ./apps/backend/prisma
 
-# Install only production dependencies
-RUN NODE_ENV=production pnpm install --prod
+# Install ONLY production dependencies
+RUN pnpm install --prod --frozen-lockfile
 
 # Generate Prisma Client in production node_modules
 WORKDIR /app/apps/backend
@@ -122,7 +128,7 @@ ENV NODE_ENV=production
 RUN mkdir -p /app/data /app/logs /app/apps/backend/.wwebjs_auth /app/apps/backend/.wwebjs_cache \
     && chown -R node:node /app
 
-# Copy production node_modules from runner-deps (includes pnpm store and generated prisma)
+# Copy production node_modules and built code
 COPY --from=runner-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=runner-deps --chown=node:node /app/apps/backend/node_modules ./apps/backend/node_modules
 
@@ -144,3 +150,4 @@ WORKDIR /app/apps/backend
 
 EXPOSE 3041
 ENTRYPOINT ["/app/apps/backend/docker-entrypoint.sh"]
+
