@@ -35,6 +35,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const TOKEN_KEY = 'n9n_token'
+const REFRESH_TOKEN_KEY = 'n9n_refresh_token'
 const USER_KEY = 'n9n_user'
 const TENANT_KEY = 'n9n_tenant'
 
@@ -45,22 +46,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Load auth state from localStorage
     const storedToken = localStorage.getItem(TOKEN_KEY)
     const storedUser = localStorage.getItem(USER_KEY)
     const storedTenant = localStorage.getItem(TENANT_KEY)
 
-    if (storedToken && storedUser && storedTenant) {
+    if (storedToken) {
       try {
         setToken(storedToken)
-        setUser(JSON.parse(storedUser))
-        setTenant(JSON.parse(storedTenant))
         apiClient.setToken(storedToken)
+
+        if (storedUser) {
+          setUser(JSON.parse(storedUser))
+        }
+
+        if (storedTenant && storedTenant !== 'undefined') {
+          setTenant(JSON.parse(storedTenant))
+        }
       } catch (error) {
         console.error('Error loading auth state:', error)
-        localStorage.removeItem(TOKEN_KEY)
-        localStorage.removeItem(USER_KEY)
-        localStorage.removeItem(TENANT_KEY)
+        // Only clear if it's a critical failure
+        if (error instanceof SyntaxError) {
+          localStorage.removeItem(TOKEN_KEY)
+          localStorage.removeItem(USER_KEY)
+          localStorage.removeItem(TENANT_KEY)
+        }
       }
     }
 
@@ -75,6 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTenant(response.tenant)
 
     localStorage.setItem(TOKEN_KEY, response.accessToken)
+    localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
     localStorage.setItem(USER_KEY, JSON.stringify(response.user))
     localStorage.setItem(TENANT_KEY, JSON.stringify(response.tenant))
 
@@ -89,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTenant(response.tenant)
 
     localStorage.setItem(TOKEN_KEY, response.accessToken)
+    localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
     localStorage.setItem(USER_KEY, JSON.stringify(response.user))
     localStorage.setItem(TENANT_KEY, JSON.stringify(response.tenant))
 
@@ -101,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTenant(null)
 
     localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
     localStorage.removeItem(TENANT_KEY)
 

@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Send, GitBranch, Users, Ban } from 'lucide-react'
+import { Send, GitBranch, Users, Ban, BarChart3 } from 'lucide-react'
 
 const links = [
   { href: '/campaigns/simple', label: 'Disparos', icon: Send },
   { href: '/campaigns/workflows', label: 'Fluxos', icon: GitBranch },
   { href: '/campaigns/lists', label: 'Listas', icon: Users },
   { href: '/campaigns/blacklist', label: 'Blacklist', icon: Ban },
+  { href: '/campaigns/insights', label: 'Insights', icon: BarChart3 },
 ]
 
 export default function CampaignsSidebar() {

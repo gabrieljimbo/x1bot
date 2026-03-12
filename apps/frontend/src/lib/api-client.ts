@@ -23,18 +23,95 @@ client.interceptors.request.use(
   }
 )
 
-// Add response interceptor to handle 401 errors
+// Flag to prevent multiple simultaneous refresh requests
+let isRefreshing = false
+// Queue to hold requests that failed with 401 while a refresh is in progress
+let failedQueue: any[] = []
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+
+  failedQueue = []
+}
+
+// Add response interceptor to handle 401 errors and token refresh
 client.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('n9n_token')
-      localStorage.removeItem('n9n_user')
-      localStorage.removeItem('n9n_tenant')
-      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-        window.location.href = '/login'
+  async (error) => {
+    const originalRequest = error.config
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`
+            return client(originalRequest)
+          })
+          .catch((err) => {
+            return Promise.reject(err)
+          })
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      const refreshToken = localStorage.getItem('n9n_refresh_token')
+
+      if (refreshToken) {
+        try {
+          // Use axios instance directly without the 401 interceptor logic for the refresh call
+          const { data } = await axios.post(`${API_URL}/api/auth/refresh`, {
+            refreshToken,
+          })
+
+          const { accessToken, refreshToken: newRefreshToken } = data
+
+          localStorage.setItem('n9n_token', accessToken)
+          if (newRefreshToken) {
+            localStorage.setItem('n9n_refresh_token', newRefreshToken)
+          }
+
+          client.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`
+
+          processQueue(null, accessToken)
+          isRefreshing = false
+
+          return client(originalRequest)
+        } catch (refreshError) {
+          processQueue(refreshError, null)
+          isRefreshing = false
+
+          // If refresh fails, log out
+          localStorage.removeItem('n9n_token')
+          localStorage.removeItem('n9n_refresh_token')
+          localStorage.removeItem('n9n_user')
+          localStorage.removeItem('n9n_tenant')
+
+          if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+            window.location.href = '/login'
+          }
+          return Promise.reject(refreshError)
+        }
+      } else {
+        // No refresh token, log out
+        localStorage.removeItem('n9n_token')
+        localStorage.removeItem('n9n_user')
+        localStorage.removeItem('n9n_tenant')
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
       }
     }
+
     return Promise.reject(error)
   }
 )

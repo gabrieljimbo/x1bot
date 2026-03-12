@@ -177,7 +177,7 @@ function CampaignWorkflowEditorContent() {
   const [edges, setEdges] = useState<WorkflowEdge[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle')
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [selectedNode, setSelectedNode] = useState<WorkflowNode | null>(null)
   const [showSidebar, setShowSidebar] = useState(true)
   const [showRecipients, setShowRecipients] = useState(false)
@@ -216,12 +216,22 @@ function CampaignWorkflowEditorContent() {
     load()
   }, [campaignId])
 
-  const handleChange = (n: WorkflowNode[], e: WorkflowEdge[]) => {
+  const handleChange = async (n: WorkflowNode[], e: WorkflowEdge[]) => {
     nodesRef.current = n
     edgesRef.current = e
     // Sync state for components that might rely on it
     setNodes(n)
     setEdges(e)
+
+    // Auto-save on significant changes (node movement, edge changes, etc)
+    try {
+      setSaveStatus('saving')
+      await apiClient.saveCampaignWorkflow(campaignId, n, e)
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    } catch {
+      setSaveStatus('error')
+    }
   }
 
   const handleSave = async () => {
@@ -237,7 +247,7 @@ function CampaignWorkflowEditorContent() {
     }
   }
 
-  const handleAddNode = (type: WorkflowNodeType) => {
+  const handleAddNode = async (type: WorkflowNodeType) => {
     const newNode: WorkflowNode = {
       id: `node-${Date.now()}`,
       type,
@@ -246,12 +256,21 @@ function CampaignWorkflowEditorContent() {
     }
     const updated = [...nodesRef.current, newNode]
     const currentEdges = edgesRef.current
-    setNodes(updated)
-    setEdges([...currentEdges]) // Sync state
-    nodesRef.current = updated
+
+    try {
+      setSaveStatus('saving')
+      await apiClient.saveCampaignWorkflow(campaignId, updated, currentEdges)
+      setNodes(updated)
+      setEdges([...currentEdges]) // Sync state
+      nodesRef.current = updated
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    } catch {
+      setSaveStatus('error')
+    }
   }
 
-  const handleDuplicateNode = (nodeId: string) => {
+  const handleDuplicateNode = async (nodeId: string) => {
     const sourceNode = nodesRef.current.find(n => n.id === nodeId)
     if (!sourceNode) return
 
@@ -267,9 +286,18 @@ function CampaignWorkflowEditorContent() {
 
     const updatedNodes = [...nodesRef.current, newNode]
     const currentEdges = edgesRef.current
-    setNodes(updatedNodes)
-    setEdges([...currentEdges])
-    nodesRef.current = updatedNodes
+
+    try {
+      setSaveStatus('saving')
+      await apiClient.saveCampaignWorkflow(campaignId, updatedNodes, currentEdges)
+      setNodes(updatedNodes)
+      setEdges([...currentEdges])
+      nodesRef.current = updatedNodes
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    } catch {
+      setSaveStatus('error')
+    }
   }
 
   if (loading) {
@@ -349,12 +377,21 @@ function CampaignWorkflowEditorContent() {
           node={selectedNode}
           tenantId=""
           onClose={() => setSelectedNode(null)}
-          onSave={(nodeId, config) => {
+          onSave={async (nodeId, config) => {
             const updated = nodesRef.current.map(n => n.id === nodeId ? { ...n, config } : n)
             const currentEdges = edgesRef.current
-            setNodes(updated)
-            setEdges([...currentEdges])
-            nodesRef.current = updated
+            
+            try {
+              setSaveStatus('saving')
+              await apiClient.saveCampaignWorkflow(campaignId, updated, currentEdges)
+              setNodes(updated)
+              setEdges([...currentEdges])
+              nodesRef.current = updated
+              setSaveStatus('saved')
+              setTimeout(() => setSaveStatus('idle'), 2000)
+            } catch {
+              setSaveStatus('error')
+            }
             setSelectedNode(null)
           }}
         />
