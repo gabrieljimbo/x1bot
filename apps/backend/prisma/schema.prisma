@@ -542,6 +542,10 @@ model Campaign {
   excludeBlocked  Boolean             @default(true)
   limitType       CampaignLimitType   @default(TOTAL)
   dailyResetTime  String              @default("00:00")
+  maxPerHour      Int                 @default(100)
+  maxPerMinute    Int                 @default(5)
+  errorThreshold  Int                 @default(30)
+  allowedDays     Json                @default("[0,1,2,3,4,5,6]")
   workflowId      String?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt

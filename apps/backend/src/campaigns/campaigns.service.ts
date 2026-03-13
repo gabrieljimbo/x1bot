@@ -5,6 +5,8 @@ import { ExecutionEngineService } from '../execution/execution-engine.service';
 import { CampaignStatus, CampaignType, Prisma } from '@prisma/client';
 import { StorageService } from '../storage/storage.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { EventBusService } from '../event-bus/event-bus.service';
+import { EventType } from '@n9n/shared';
 
 @Injectable()
 export class CampaignsService {
@@ -13,6 +15,7 @@ export class CampaignsService {
     private readonly whatsappSessionManager: WhatsappSessionManager,
     private readonly executionEngine: ExecutionEngineService,
     private readonly storageService: StorageService,
+    private readonly eventBus: EventBusService,
   ) { }
 
   private processingCampaigns = new Set<string>();
@@ -71,6 +74,10 @@ export class CampaignsService {
     excludeBlocked?: boolean;
     limitType?: any;
     dailyResetTime?: string;
+    maxPerHour?: number;
+    maxPerMinute?: number;
+    errorThreshold?: number;
+    allowedDays?: number[];
     sessionIds?: string[];
     messages?: { order: number; type: string; content?: string; mediaUrl?: string; caption?: string }[];
   }) {
@@ -89,6 +96,10 @@ export class CampaignsService {
         excludeBlocked: dto.excludeBlocked ?? true,
         limitType: (dto.limitType ?? 'TOTAL') as any,
         dailyResetTime: dto.dailyResetTime ?? '00:00',
+        maxPerHour: dto.maxPerHour ?? 100,
+        maxPerMinute: dto.maxPerMinute ?? 5,
+        errorThreshold: dto.errorThreshold ?? 30,
+        allowedDays: dto.allowedDays ?? [0, 1, 2, 3, 4, 5, 6],
       } as any,
     });
 
@@ -147,6 +158,10 @@ export class CampaignsService {
     excludeBlocked?: boolean;
     limitType?: any;
     dailyResetTime?: string;
+    maxPerHour?: number;
+    maxPerMinute?: number;
+    errorThreshold?: number;
+    allowedDays?: number[];
     sessionIds?: string[];
     messages?: { order: number; type: string; content?: string; mediaUrl?: string; caption?: string }[];
   }) {
@@ -884,12 +899,32 @@ export class CampaignsService {
       }
     }
     let sessionIndex = 0;
-    const now = new Date();
     const todayThreshold = this.getResetThresholdInUTC((campaign as any).dailyResetTime);
 
+    // Rate limiting counters
+    const maxPerMinute: number = (campaign as any).maxPerMinute ?? 5;
+    const maxPerHour: number = (campaign as any).maxPerHour ?? 100;
+    const errorThreshold: number = (campaign as any).errorThreshold ?? 30;
+    const allowedDays: number[] = Array.isArray((campaign as any).allowedDays)
+      ? (campaign as any).allowedDays
+      : JSON.parse((campaign as any).allowedDays ?? '[0,1,2,3,4,5,6]');
+
+    let sentThisMinute = 0;
+    let sentThisHour = 0;
+    let minuteStart = Date.now();
+    let hourStart = Date.now();
+
     for (const recipient of pendingRecipients) {
-      const current = await this.prisma.campaign.findUnique({ where: { id: campaignId } });
+      const current = await this.prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
       if (!current || (current.status as string) !== CampaignStatus.RUNNING) break;
+
+      // Allowed days check (São Paulo timezone)
+      const nowSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const todayDay = nowSP.getDay();
+      if (!allowedDays.includes(todayDay)) {
+        console.log(`[CampaignsService] Today (${todayDay}) is not an allowed day for campaign ${campaignId}. Stopping loop.`);
+        break;
+      }
 
       if (campaign.excludeBlocked) {
         const blocked = await this.isBlacklisted(campaign.tenantId, recipient.phone);
@@ -919,6 +954,7 @@ export class CampaignsService {
         const sentCount = await this.prisma.campaignLog.count({ where: countWhere });
         if (sentCount < (campaign as any).limitPerSession) {
           session = candidate;
+          sessionIndex++; // advance so next lead goes to the next session (round-robin)
           break;
         }
 
@@ -929,6 +965,33 @@ export class CampaignsService {
       if (!session) {
         console.log(`[CampaignsService] All sessions exhausted for campaign ${campaignId} (${(campaign as any).limitType} limit)`);
         break;
+      }
+
+      // Per-minute rate limit
+      const nowTs = Date.now();
+      if (nowTs - minuteStart >= 60_000) {
+        sentThisMinute = 0;
+        minuteStart = nowTs;
+      }
+      if (sentThisMinute >= maxPerMinute) {
+        const waitMs = 60_000 - (Date.now() - minuteStart);
+        console.log(`[CampaignsService] Per-minute limit (${maxPerMinute}) reached, waiting ${Math.ceil(waitMs / 1000)}s`);
+        await new Promise((r) => setTimeout(r, waitMs > 0 ? waitMs : 1000));
+        sentThisMinute = 0;
+        minuteStart = Date.now();
+      }
+
+      // Per-hour rate limit
+      if (Date.now() - hourStart >= 3_600_000) {
+        sentThisHour = 0;
+        hourStart = Date.now();
+      }
+      if (sentThisHour >= maxPerHour) {
+        const waitMs = 3_600_000 - (Date.now() - hourStart);
+        console.log(`[CampaignsService] Per-hour limit (${maxPerHour}) reached, waiting ${Math.ceil(waitMs / 60000)}min`);
+        await new Promise((r) => setTimeout(r, waitMs > 0 ? waitMs : 1000));
+        sentThisHour = 0;
+        hourStart = Date.now();
       }
 
       try {
@@ -978,6 +1041,9 @@ export class CampaignsService {
           await this.prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'sent', sentAt: new Date() } });
           await this.prisma.campaignLog.create({ data: { campaignId, phone: recipient.phone, sessionId: session.sessionId, status: 'sent' } });
         }
+
+        sentThisMinute++;
+        sentThisHour++;
       } catch (e: any) {
         const isBlocked = e.message?.includes('blocked') || e.message?.includes('forbidden');
         await this.prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'failed', error: e.message } });
@@ -985,6 +1051,32 @@ export class CampaignsService {
           data: { campaignId, phone: recipient.phone, sessionId: session.sessionId, status: isBlocked ? 'blocked' : 'failed', error: e.message },
         });
         if (isBlocked) await this.addToBlacklist(campaign.tenantId, recipient.phone, 'blocked');
+
+        // Error threshold check: pause campaign if error rate exceeds limit
+        if (errorThreshold > 0) {
+          const [totalSent, totalErrors] = await Promise.all([
+            this.prisma.campaignLog.count({ where: { campaignId } }),
+            this.prisma.campaignLog.count({ where: { campaignId, status: 'failed' } }),
+          ]);
+          if (totalSent >= 10) {
+            const errorRate = (totalErrors / totalSent) * 100;
+            if (errorRate >= errorThreshold) {
+              console.warn(`[CampaignsService] Error rate ${errorRate.toFixed(1)}% exceeded threshold ${errorThreshold}% — pausing campaign ${campaignId}`);
+              await this.prisma.campaign.update({ where: { id: campaignId }, data: { status: CampaignStatus.PAUSED } });
+              await this.eventBus.emit({
+                type: EventType.CAMPAIGN_PAUSED,
+                tenantId: campaign.tenantId,
+                timestamp: new Date(),
+                campaignId,
+                campaignName: campaign.name,
+                reason: `Taxa de erros ${errorRate.toFixed(1)}% ultrapassou limite de ${errorThreshold}%`,
+                errorRate: parseFloat(errorRate.toFixed(1)),
+                threshold: errorThreshold,
+              } as any);
+              break;
+            }
+          }
+        }
       }
 
       const delay = Math.floor(Math.random() * (campaign.delayMax - campaign.delayMin + 1)) + campaign.delayMin;

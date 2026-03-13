@@ -7,6 +7,7 @@ import {
   AlertCircle, Info, History, CheckCircle2, Copy, RotateCcw, ChevronDown
 } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
+import { wsClient } from '@/lib/websocket'
 import { AuthGuard } from '@/components/AuthGuard'
 import AppHeader from '@/components/AppHeader'
 import CampaignsSidebar from '@/components/campaigns/CampaignsSidebar'
@@ -398,6 +399,10 @@ function CampaignDrawer({
     scheduledAt: initial?.scheduledAt ? initial.scheduledAt.slice(0, 16) : '',
     sessionIds: initial?.sessions?.map(s => s.sessionId) ?? [],
     messages: (initial?.messages ?? [{ order: 0, type: 'text', content: '', mediaUrl: '', caption: '' }]) as { id?: string; order: number; type: string; content?: string; mediaUrl?: string; caption?: string }[],
+    maxPerMinute: (initial as any)?.maxPerMinute ?? 5,
+    maxPerHour: (initial as any)?.maxPerHour ?? 100,
+    errorThreshold: (initial as any)?.errorThreshold ?? 30,
+    allowedDays: ((initial as any)?.allowedDays ?? [0, 1, 2, 3, 4, 5, 6]) as number[],
   })
 
   const [phonesText, setPhonesText] = useState('')
@@ -1219,6 +1224,77 @@ function CampaignDrawer({
                   </div>
                 </label>
               </div>
+
+              {/* Velocidade de Envio */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+                <p className="text-xs text-gray-400 font-medium">⚡ Velocidade de Envio</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Limite por minuto</label>
+                    <div className="flex items-center gap-2">
+                      <input type="number" min={1} max={60} value={form.maxPerMinute}
+                        onChange={e => setForm(f => ({ ...f, maxPerMinute: Number(e.target.value) }))}
+                        className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+                      <span className="text-gray-500 text-xs whitespace-nowrap">msgs/min</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Limite por hora</label>
+                    <div className="flex items-center gap-2">
+                      <input type="number" min={1} max={1000} value={form.maxPerHour}
+                        onChange={e => setForm(f => ({ ...f, maxPerHour: Number(e.target.value) }))}
+                        className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+                      <span className="text-gray-500 text-xs whitespace-nowrap">msgs/hora</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600">💡 O sistema respeitará o menor limite atingido primeiro.</p>
+              </div>
+
+              {/* Dias Permitidos */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+                <p className="text-xs text-gray-400 font-medium">📅 Dias Permitidos</p>
+                <div className="flex flex-wrap gap-2">
+                  {(['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'] as const).map((label, day) => {
+                    const active = form.allowedDays.includes(day)
+                    return (
+                      <button key={day} type="button"
+                        onClick={() => setForm(f => ({
+                          ...f,
+                          allowedDays: active
+                            ? f.allowedDays.filter(d => d !== day)
+                            : [...f.allowedDays, day].sort((a, b) => a - b)
+                        }))}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${active ? 'bg-[#00ff88]/20 border-[#00ff88]/40 text-[#00ff88]' : 'bg-white/5 border-white/10 text-gray-500'}`}>
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setForm(f => ({ ...f, allowedDays: [0, 1, 2, 3, 4, 5, 6] }))}
+                    className="text-xs text-gray-400 hover:text-white transition px-2 py-1 rounded border border-white/10 hover:border-white/30">Todos</button>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, allowedDays: [1, 2, 3, 4, 5] }))}
+                    className="text-xs text-gray-400 hover:text-white transition px-2 py-1 rounded border border-white/10 hover:border-white/30">Seg–Sex</button>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, allowedDays: [0, 6] }))}
+                    className="text-xs text-gray-400 hover:text-white transition px-2 py-1 rounded border border-white/10 hover:border-white/30">Fins de Semana</button>
+                </div>
+              </div>
+
+              {/* Proteção de Erros */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+                <p className="text-xs text-gray-400 font-medium">📊 Proteção contra Erros</p>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Parar campanha se taxa de erro ultrapassar</label>
+                  <div className="flex items-center gap-2">
+                    <input type="number" min={0} max={100} value={form.errorThreshold}
+                      onChange={e => setForm(f => ({ ...f, errorThreshold: Number(e.target.value) }))}
+                      className="w-24 bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+                    <span className="text-gray-400 text-sm">%</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600">💡 Se {form.errorThreshold}% dos envios falharem, a campanha é pausada automaticamente para evitar banimento. Use 0 para desativar.</p>
+              </div>
             </>
           )}
         </div>
@@ -1259,6 +1335,18 @@ function SimplePageContent() {
   }
 
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    const handler = (event: any) => {
+      setStatusMessage({
+        type: 'error',
+        text: `⚠️ Campanha "${event.campaignName}" pausada automaticamente — ${event.reason}. Verifique os números e retome manualmente.`,
+      })
+      load()
+    }
+    wsClient.on('campaign.paused', handler)
+    return () => wsClient.off('campaign.paused', handler)
+  }, [])
 
   const handleSave = async (data: any, keepOpen = false) => {
     const result = editing

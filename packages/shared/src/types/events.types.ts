@@ -24,6 +24,9 @@ export enum EventType {
 
   // Marketing events
   PIXEL_EVENT = 'marketing.pixel_event',
+
+  // Campaign events
+  CAMPAIGN_PAUSED = 'campaign.paused',
 }
 
 export interface BaseEvent {
@@ -118,6 +121,15 @@ export interface WhatsappQrCodeEvent extends BaseEvent {
   qrCode: string;
 }
 
+export interface CampaignPausedEvent extends BaseEvent {
+  type: EventType.CAMPAIGN_PAUSED;
+  campaignId: string;
+  campaignName: string;
+  reason: string;
+  errorRate: number;
+  threshold: number;
+}
+
 export type WorkflowEvent =
   | ExecutionStartedEvent
   | ExecutionResumedEvent
@@ -130,7 +142,8 @@ export type WorkflowEvent =
   | WhatsappSessionConnectedEvent
   | WhatsappSessionDisconnectedEvent
   | WhatsappQrCodeEvent
-  | PixelEvent;
+  | PixelEvent
+  | CampaignPausedEvent;
 
 
 
