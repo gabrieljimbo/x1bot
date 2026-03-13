@@ -435,5 +435,11 @@ export class WorkflowController {
   ) {
     return this.workflowService.getWorkflowShareStats(tenantId, id);
   }
+
+  // Dashboard Stats
+  @Get('dashboard-stats')
+  async getDashboardStats(@Tenant() tenantId: string) {
+    return this.workflowService.getDashboardStats(tenantId);
+  }
 }
 

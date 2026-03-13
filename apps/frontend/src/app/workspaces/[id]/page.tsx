@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Building2, Users, Workflow, MessageSquare, UserCog, Edit2, Trash2, Plus, Power, Copy, Share2, Download, Info, Rocket, Clock } from 'lucide-react'
+import { ArrowLeft, Building2, Users, Workflow, MessageSquare, UserCog, Edit2, Trash2, Plus, Power, Copy, Share2, Download, Info, Rocket, Clock, X, CheckCircle, TrendingUp, TrendingDown, Megaphone, Zap, BarChart2 } from 'lucide-react'
+import QRCode from 'react-qr-code'
 import { apiClient } from '@/lib/api-client'
 import { SuperAdminGuardWrapper } from '@/components/SuperAdminGuard'
 import { useAuth } from '@/contexts/AuthContext'
@@ -76,6 +77,8 @@ function WorkspaceDetailsPageContent() {
   const [sessions, setSessions] = useState<WorkspaceSession[]>([])
   const [inboxStats, setInboxStats] = useState({ totalUnread: 0, openCount: 0, pendingCount: 0 })
   const [inboxStatsError, setInboxStatsError] = useState(false)
+  const [dashStats, setDashStats] = useState<any>(null)
+  const [activeCampaigns, setActiveCampaigns] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'workflows' | 'sessions' | 'course' | 'inbox'>(initialTab)
   const [error, setError] = useState<string | null>(null)
@@ -85,6 +88,11 @@ function WorkspaceDetailsPageContent() {
   const [deletingSession, setDeletingSession] = useState<WorkspaceSession | null>(null)
   const [newSessionName, setNewSessionName] = useState('')
   const [creatingSession, setCreatingSession] = useState(false)
+  const [showQRModal, setShowQRModal] = useState(false)
+  const [qrSessionId, setQrSessionId] = useState<string | null>(null)
+  const [qrCode, setQrCode] = useState<string | null>(null)
+  const [qrStatus, setQrStatus] = useState<string>('CONNECTING')
+  const qrPollRef = useRef<NodeJS.Timeout | null>(null)
   const [showDeleteWorkflowModal, setShowDeleteWorkflowModal] = useState(false)
   const [deletingWorkflow, setDeletingWorkflow] = useState<WorkspaceWorkflow | null>(null)
   const [showCreateWorkflowModal, setShowCreateWorkflowModal] = useState(false)
@@ -116,6 +124,10 @@ function WorkspaceDetailsPageContent() {
       loadWorkspaceDetails()
     }
   }, [workspaceId])
+
+  useEffect(() => {
+    return () => stopQRPolling()
+  }, [])
 
   useEffect(() => {
     if (workspaceId) {
@@ -163,6 +175,22 @@ function WorkspaceDetailsPageContent() {
         setInboxStatsError(true)
       }
 
+      // Load dashboard stats
+      try {
+        const ds = await apiClient.getDashboardStats(workspaceId)
+        setDashStats(ds)
+      } catch (err) {
+        console.warn('Silent: Error loading dashboard stats')
+      }
+
+      // Load active campaigns
+      try {
+        const camps = await apiClient.getCampaigns()
+        setActiveCampaigns(camps.filter((c: any) => c.status === 'RUNNING'))
+      } catch (err) {
+        console.warn('Silent: Error loading campaigns')
+      }
+
     } catch (error: any) {
       console.error('Error loading workspace details:', error)
       setError(error.response?.data?.message || 'Failed to load workspace details')
@@ -203,17 +231,53 @@ function WorkspaceDetailsPageContent() {
       setCreatingSession(true)
       setError(null)
       // Pass workspaceId as tenantId to create session in the correct workspace
-      await apiClient.createWhatsappSession(newSessionName, workspaceId)
-      setSuccess('Session created successfully')
+      const session = await apiClient.createWhatsappSession(newSessionName, workspaceId)
       setShowCreateModal(false)
       setNewSessionName('')
       await loadTabData()
-      setTimeout(() => setSuccess(null), 3000)
+      // Open QR modal and start polling for QR code
+      setQrSessionId(session.id)
+      setQrCode(null)
+      setQrStatus('CONNECTING')
+      setShowQRModal(true)
+      startQRPolling(session.id)
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create session')
     } finally {
       setCreatingSession(false)
     }
+  }
+
+  const stopQRPolling = () => {
+    if (qrPollRef.current) {
+      clearInterval(qrPollRef.current)
+      qrPollRef.current = null
+    }
+  }
+
+  const startQRPolling = (sessionId: string) => {
+    stopQRPolling()
+    qrPollRef.current = setInterval(async () => {
+      try {
+        const s = await apiClient.getWhatsappSession(sessionId, workspaceId)
+        setQrStatus(s.status)
+        if (s.qrCode) setQrCode(s.qrCode)
+        if (s.status === 'CONNECTED') {
+          stopQRPolling()
+          await loadTabData()
+          setTimeout(() => setShowQRModal(false), 2000)
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 2000)
+  }
+
+  const handleCloseQRModal = () => {
+    stopQRPolling()
+    setShowQRModal(false)
+    setQrCode(null)
+    setQrSessionId(null)
   }
 
   const handleDeleteSession = async () => {
@@ -491,61 +555,81 @@ function WorkspaceDetailsPageContent() {
           )}
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            {/* Mensagens Hoje */}
             <div className="bg-[#151515] border border-gray-800 rounded-lg p-6">
               <div className="flex items-center gap-3 mb-2">
-                <Users size={20} className="text-blue-400" />
-                <h3 className="text-sm font-medium text-gray-400">Users</h3>
+                <MessageSquare size={20} className="text-blue-400" />
+                <h3 className="text-sm font-medium text-gray-400">Mensagens Hoje</h3>
               </div>
-              <p className="text-2xl font-bold">{workspace._count?.users || 0}</p>
+              <p className="text-2xl font-bold">{dashStats ? dashStats.messagesToday : '—'}</p>
+              {dashStats && (
+                <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${dashStats.messagesTrend > 0 ? 'text-green-400' : dashStats.messagesTrend < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                  {dashStats.messagesTrend > 0 ? <TrendingUp size={12} /> : dashStats.messagesTrend < 0 ? <TrendingDown size={12} /> : null}
+                  {dashStats.messagesTrend !== 0 ? `${dashStats.messagesTrend > 0 ? '+' : ''}${dashStats.messagesTrend}% vs ontem` : 'igual a ontem'}
+                </div>
+              )}
             </div>
+            {/* Novos Contatos Hoje */}
             <div className="bg-[#151515] border border-gray-800 rounded-lg p-6">
               <div className="flex items-center gap-3 mb-2">
-                <Workflow size={20} className="text-purple-400" />
-                <h3 className="text-sm font-medium text-gray-400">Workflows</h3>
+                <Users size={20} className="text-purple-400" />
+                <h3 className="text-sm font-medium text-gray-400">Novos Contatos Hoje</h3>
               </div>
-              <p className="text-2xl font-bold">{workspace._count?.workflows || 0}</p>
+              <p className="text-2xl font-bold">{dashStats ? dashStats.newContactsToday : '—'}</p>
+              {dashStats && (
+                <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${dashStats.newContactsTrend > 0 ? 'text-green-400' : dashStats.newContactsTrend < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                  {dashStats.newContactsTrend > 0 ? <TrendingUp size={12} /> : dashStats.newContactsTrend < 0 ? <TrendingDown size={12} /> : null}
+                  {dashStats.newContactsTrend !== 0 ? `${dashStats.newContactsTrend > 0 ? '+' : ''}${dashStats.newContactsTrend} vs ontem` : 'igual a ontem'}
+                </div>
+              )}
             </div>
+            {/* Campanhas Hoje */}
             <div className="bg-[#151515] border border-gray-800 rounded-lg p-6">
               <div className="flex items-center gap-3 mb-2">
-                <MessageSquare size={20} className="text-green-400" />
-                <h3 className="text-sm font-medium text-gray-400">Sessions</h3>
+                <Megaphone size={20} className="text-orange-400" />
+                <h3 className="text-sm font-medium text-gray-400">Campanhas Hoje</h3>
               </div>
-              <p className="text-2xl font-bold">{workspace._count?.whatsappSessions || 0}</p>
+              <p className="text-2xl font-bold">{dashStats ? dashStats.campaignsDispatchedToday : '—'}</p>
             </div>
+            {/* Sessões Ativas */}
             <div className="bg-[#151515] border border-gray-800 rounded-lg p-6">
               <div className="flex items-center gap-3 mb-2">
-                <Workflow size={20} className="text-yellow-400" />
-                <h3 className="text-sm font-medium text-gray-400">Executions</h3>
+                <Zap size={20} className="text-yellow-400" />
+                <h3 className="text-sm font-medium text-gray-400">Sessões Ativas</h3>
               </div>
-              <p className="text-2xl font-bold">{workspace._count?.executions || 0}</p>
+              <p className="text-2xl font-bold">{dashStats ? dashStats.activeSessions : '—'}</p>
+              {dashStats && (
+                <div className={`mt-1 text-xs font-medium ${dashStats.sessionStatus === 'online' ? 'text-green-400' : dashStats.sessionStatus === 'partial' ? 'text-yellow-400' : 'text-gray-500'}`}>
+                  {dashStats.sessionStatus === 'online' ? '● Online' : dashStats.sessionStatus === 'partial' ? '◐ Parcial' : '○ Offline'}
+                </div>
+              )}
             </div>
+          </div>
+
+          {/* Inbox card */}
+          <div className="mb-8">
             <Link
               href="/inbox"
-              className="bg-[#00ff88]/5 border border-[#00ff88]/20 rounded-lg p-6 hover:bg-[#00ff88]/10 transition group"
+              className="bg-[#00ff88]/5 border border-[#00ff88]/20 rounded-lg p-6 hover:bg-[#00ff88]/10 transition group flex items-center justify-between"
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-3">
-                  <MessageSquare size={20} className="text-[#00ff88]" />
+              <div className="flex items-center gap-4">
+                <MessageSquare size={20} className="text-[#00ff88]" />
+                <div>
                   <h3 className="text-sm font-medium text-gray-300">Inbox</h3>
-                </div>
-                <div className="flex gap-2">
-                  {inboxStats.totalUnread > 0 && (
-                    <span className="bg-[#00ff88] text-black text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
-                      {inboxStats.totalUnread}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-end justify-between">
-                <div className="space-y-1">
-                  <p className="text-xs text-gray-500 uppercase font-bold tracking-tighter">Status Ativos</p>
-                  <div className="flex gap-3 text-sm font-bold text-white">
+                  <div className="flex gap-3 text-sm font-bold text-white mt-0.5">
                     <span>{inboxStats.openCount} ABERTAS</span>
                     <span className="text-gray-600">/</span>
                     <span className="text-amber-400">{inboxStats.pendingCount} PENDENTES</span>
                   </div>
                 </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {inboxStats.totalUnread > 0 && (
+                  <span className="bg-[#00ff88] text-black text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                    {inboxStats.totalUnread} não lidas
+                  </span>
+                )}
                 <div className="text-[#00ff88] group-hover:translate-x-1 transition-transform">
                   <ArrowLeft className="rotate-180" size={16} />
                 </div>
@@ -652,6 +736,133 @@ function WorkspaceDetailsPageContent() {
           {/* Tab Content */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+
+              {/* Campanhas Ativas */}
+              <div className="bg-[#151515] border border-gray-800 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Megaphone size={18} className="text-orange-400" />
+                  <h2 className="text-lg font-bold">Campanhas Ativas</h2>
+                </div>
+                {activeCampaigns.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                    <Megaphone size={32} className="mb-2 opacity-20" />
+                    <p className="text-sm">Nenhuma campanha ativa no momento</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {activeCampaigns.map((camp: any) => {
+                      const total = camp._count?.recipients || camp.recipients?.length || 0
+                      const sent = camp.sessions?.reduce((acc: number, s: any) => acc + (s.sentCount || 0), 0) || 0
+                      const pct = total > 0 ? Math.round((sent / total) * 100) : 0
+                      const barColor = pct >= 90 ? 'bg-green-400' : pct >= 70 ? 'bg-yellow-400' : 'bg-green-400'
+                      return (
+                        <div key={camp.id} className="flex items-center gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium truncate">{camp.name}</span>
+                              <span className="text-xs text-gray-400 ml-2">{pct}%</span>
+                            </div>
+                            <div className="w-full bg-gray-800 rounded-full h-2">
+                              <div className={`h-2 rounded-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                          <span className="text-xs font-medium px-2 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30 whitespace-nowrap">
+                            {camp.status}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Fluxos Mais Executados */}
+              <div className="bg-[#151515] border border-gray-800 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <BarChart2 size={18} className="text-primary" />
+                  <h2 className="text-lg font-bold">Fluxos Mais Executados <span className="text-xs text-gray-500 font-normal">(últimos 7 dias)</span></h2>
+                </div>
+                {!dashStats || !dashStats.topWorkflows || dashStats.topWorkflows.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                    <Workflow size={32} className="mb-2 opacity-20" />
+                    <p className="text-sm">Sem dados de execução nos últimos 7 dias</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {dashStats.topWorkflows.slice(0, 5).map((wf: any, idx: number) => {
+                      const relTime = wf.lastExecutedAt ? (() => {
+                        const diff = Date.now() - new Date(wf.lastExecutedAt).getTime()
+                        const mins = Math.floor(diff / 60000)
+                        if (mins < 60) return `há ${mins} min`
+                        const hrs = Math.floor(mins / 60)
+                        if (hrs < 24) return `há ${hrs}h`
+                        const days = Math.floor(hrs / 24)
+                        return `há ${days} dia${days !== 1 ? 's' : ''}`
+                      })() : null
+                      return (
+                        <div key={wf.id} className="flex items-center gap-3 py-2 border-b border-gray-800 last:border-0">
+                          <span className="text-gray-600 text-sm w-5 text-right">{idx + 1}</span>
+                          <span className="flex-1 text-sm font-medium truncate">{wf.name}</span>
+                          <span className="text-xs text-primary font-bold">{wf.executionCount} exec.</span>
+                          {relTime && <span className="text-xs text-gray-500">{relTime}</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Taxa de Resposta */}
+              <div className="bg-[#151515] border border-gray-800 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <TrendingUp size={18} className="text-green-400" />
+                  <h2 className="text-lg font-bold">Taxa de Resposta dos Contatos</h2>
+                </div>
+                {!dashStats || dashStats.responseRate === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                    <TrendingUp size={32} className="mb-2 opacity-20" />
+                    <p className="text-sm">Dados insuficientes</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div>
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>Responderam</span>
+                          <span>{dashStats.responseRate}%</span>
+                        </div>
+                        <div className="w-full bg-gray-800 rounded-full h-3">
+                          <div className="h-3 rounded-full bg-green-400 transition-all" style={{ width: `${dashStats.responseRate}%` }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>Não responderam</span>
+                          <span>{100 - dashStats.responseRate}%</span>
+                        </div>
+                        <div className="w-full bg-gray-800 rounded-full h-3">
+                          <div className="h-3 rounded-full bg-gray-600 transition-all" style={{ width: `${100 - dashStats.responseRate}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                      <div className="bg-[#1a1a1a] rounded-lg p-3">
+                        <p className="text-xs text-gray-500 mb-1">Tempo médio de resposta</p>
+                        <p className="text-sm font-bold text-white">
+                          {dashStats.avgResponseTimeMinutes >= 60
+                            ? `${Math.floor(dashStats.avgResponseTimeMinutes / 60)}h ${dashStats.avgResponseTimeMinutes % 60}min`
+                            : `${dashStats.avgResponseTimeMinutes}min`}
+                        </p>
+                      </div>
+                      <div className="bg-[#1a1a1a] rounded-lg p-3">
+                        <p className="text-xs text-gray-500 mb-1">Contatos ativos hoje</p>
+                        <p className="text-sm font-bold text-white">{dashStats.activeContactsToday}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="bg-[#151515] border border-gray-800 rounded-lg p-6">
                 <h2 className="text-xl font-bold mb-4">Workspace Information</h2>
                 <div className="grid grid-cols-2 gap-4">
@@ -1046,6 +1257,50 @@ function WorkspaceDetailsPageContent() {
                     {creatingSession ? 'Creating...' : 'Create'}
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* QR Code Modal */}
+          {showQRModal && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+              <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 w-full max-w-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold">Conectar WhatsApp</h2>
+                  <button onClick={handleCloseQRModal} className="text-gray-400 hover:text-white transition">
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {qrStatus === 'CONNECTED' ? (
+                  <div className="flex flex-col items-center gap-3 py-6">
+                    <CheckCircle size={56} className="text-primary" />
+                    <p className="text-lg font-semibold text-primary">Conectado com sucesso!</p>
+                  </div>
+                ) : qrCode ? (
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="bg-white p-4 rounded-lg">
+                      <QRCode value={qrCode} size={220} />
+                    </div>
+                    <div className="text-center text-sm text-gray-400 space-y-1">
+                      <p>Abra o WhatsApp no seu celular</p>
+                      <p>Vá em <span className="text-white">Aparelhos Conectados</span></p>
+                      <p>Aponte a câmera para este QR Code</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-4 py-8">
+                    <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    <p className="text-gray-400 text-sm">Aguardando QR Code...</p>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleCloseQRModal}
+                  className="w-full mt-6 px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 transition text-sm"
+                >
+                  Fechar
+                </button>
               </div>
             </div>
           )}

@@ -524,6 +524,12 @@ export const apiClient = {
     return data
   },
 
+  getDashboardStats: async (tenantId?: string) => {
+    const params = tenantId ? { tenantId } : {}
+    const { data } = await client.get('/dashboard-stats', { params })
+    return data
+  },
+
   // Generic
   get: async (url: string, params?: any) => {
     const path = url.startsWith('/api') ? url.replace(/^\/api/, '') : url

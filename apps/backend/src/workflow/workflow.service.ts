@@ -962,5 +962,194 @@ export class WorkflowService {
       nodes: nodeStats,
     };
   }
+
+  async getDashboardStats(tenantId: string) {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    const endOfYesterday = new Date(startOfToday);
+    const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const last7days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // messagesToday
+    let messagesToday = 0;
+    let messagesYesterday = 0;
+    try {
+      const todayConvs = await this.prisma.conversation.findMany({
+        where: { tenantId },
+        select: { id: true },
+      });
+      const convIds = todayConvs.map((c: any) => c.id);
+      if (convIds.length > 0) {
+        messagesToday = await this.prisma.message.count({
+          where: {
+            conversationId: { in: convIds },
+            timestamp: { gte: startOfToday },
+          },
+        });
+        messagesYesterday = await this.prisma.message.count({
+          where: {
+            conversationId: { in: convIds },
+            timestamp: { gte: startOfYesterday, lt: endOfYesterday },
+          },
+        });
+      }
+    } catch (e) {}
+
+    const messagesTrend = messagesYesterday > 0
+      ? Math.round(((messagesToday - messagesYesterday) / messagesYesterday) * 100)
+      : 0;
+
+    // newContactsToday — unique contactPhones first seen today in conversations
+    let newContactsToday = 0;
+    let newContactsYesterday = 0;
+    try {
+      newContactsToday = await this.prisma.conversation.count({
+        where: {
+          tenantId,
+          createdAt: { gte: startOfToday },
+        },
+      });
+      newContactsYesterday = await this.prisma.conversation.count({
+        where: {
+          tenantId,
+          createdAt: { gte: startOfYesterday, lt: endOfYesterday },
+        },
+      });
+    } catch (e) {}
+
+    const newContactsTrend = newContactsToday - newContactsYesterday;
+
+    // campaignsDispatchedToday
+    let campaignsDispatchedToday = 0;
+    try {
+      campaignsDispatchedToday = await this.prisma.campaign.count({
+        where: {
+          tenantId,
+          status: { in: ['RUNNING', 'COMPLETED'] as any[] },
+          updatedAt: { gte: startOfToday },
+        },
+      });
+    } catch (e) {}
+
+    // activeSessions
+    let activeSessions = 0;
+    let totalSessions = 0;
+    try {
+      const sessions = await this.prisma.whatsappSession.findMany({
+        where: { tenantId },
+        select: { status: true },
+      });
+      totalSessions = sessions.length;
+      activeSessions = sessions.filter((s: any) => s.status === 'CONNECTED').length;
+    } catch (e) {}
+
+    let sessionStatus: 'online' | 'offline' | 'partial' = 'offline';
+    if (activeSessions > 0 && activeSessions === totalSessions) sessionStatus = 'online';
+    else if (activeSessions > 0) sessionStatus = 'partial';
+
+    // topWorkflows — top 5 by execution count in last 7 days
+    let topWorkflows: { id: string; name: string; executionCount: number; lastExecutedAt: string | null }[] = [];
+    try {
+      const executions = await this.prisma.workflowExecution.groupBy({
+        by: ['workflowId'],
+        where: { tenantId, startedAt: { gte: last7days } },
+        _count: { id: true },
+        _max: { startedAt: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 5,
+      });
+
+      const workflowIds = executions.map((e: any) => e.workflowId);
+      const workflows = workflowIds.length > 0
+        ? await this.prisma.workflow.findMany({ where: { id: { in: workflowIds } }, select: { id: true, name: true } })
+        : [];
+      const wfMap = new Map(workflows.map((w: any) => [w.id, w.name]));
+
+      topWorkflows = executions.map((e: any) => ({
+        id: e.workflowId,
+        name: wfMap.get(e.workflowId) || 'Fluxo Desconhecido',
+        executionCount: e._count.id,
+        lastExecutedAt: e._max.startedAt ? e._max.startedAt.toISOString() : null,
+      }));
+    } catch (e) {}
+
+    // responseRate, avgResponseTimeMinutes, activeContactsToday
+    let responseRate = 0;
+    let avgResponseTimeMinutes = 0;
+    let activeContactsToday = 0;
+    try {
+      // activeContactsToday: conversations with a message from contact (fromMe=false) in last 24h
+      const recentConvs = await this.prisma.conversation.findMany({
+        where: { tenantId },
+        select: { id: true },
+      });
+      const recentConvIds = recentConvs.map((c: any) => c.id);
+
+      if (recentConvIds.length > 0) {
+        // Get distinct conversations with contact messages today
+        const activeConvMessages = await this.prisma.message.findMany({
+          where: {
+            conversationId: { in: recentConvIds },
+            fromMe: false,
+            timestamp: { gte: last24h },
+          },
+          select: { conversationId: true },
+          distinct: ['conversationId'],
+        });
+        activeContactsToday = activeConvMessages.length;
+
+        // For response rate: of conversations where contact wrote, how many got a reply
+        if (activeContactsToday > 0) {
+          const contactConvIds = activeConvMessages.map((m: any) => m.conversationId);
+          let repliedCount = 0;
+          let totalResponseMs = 0;
+          let responseCount = 0;
+
+          for (const convId of contactConvIds) {
+            const messages = await this.prisma.message.findMany({
+              where: { conversationId: convId, timestamp: { gte: last24h } },
+              orderBy: { timestamp: 'asc' },
+              select: { fromMe: true, timestamp: true },
+            });
+
+            // Check if there's any fromMe=true after a fromMe=false
+            let lastContactTime: Date | null = null;
+            for (const msg of messages) {
+              if (!msg.fromMe) {
+                lastContactTime = msg.timestamp;
+              } else if (msg.fromMe && lastContactTime) {
+                repliedCount++;
+                totalResponseMs += msg.timestamp.getTime() - lastContactTime.getTime();
+                responseCount++;
+                lastContactTime = null;
+                break;
+              }
+            }
+          }
+
+          responseRate = Math.round((repliedCount / activeContactsToday) * 100);
+          avgResponseTimeMinutes = responseCount > 0
+            ? Math.round(totalResponseMs / responseCount / 60000)
+            : 0;
+        }
+      }
+    } catch (e) {}
+
+    return {
+      messagesToday,
+      messagesTrend,
+      newContactsToday,
+      newContactsTrend,
+      campaignsDispatchedToday,
+      activeSessions,
+      sessionStatus,
+      topWorkflows,
+      responseRate,
+      avgResponseTimeMinutes,
+      activeContactsToday,
+    };
+  }
 }
 
