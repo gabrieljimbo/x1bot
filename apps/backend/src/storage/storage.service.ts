@@ -120,11 +120,11 @@ export class StorageService implements OnModuleInit {
 
     if (ngrokUrl) {
       this.logger.debug(`Using ngrok URL: ${ngrokUrl}`);
-      return `${ngrokUrl}/media/files/${filename}`;
+      return `${ngrokUrl}/api/media/files/${filename}`;
     }
 
     if (backendUrl) {
-      return `${backendUrl}/media/files/${filename}`;
+      return `${backendUrl}/api/media/files/${filename}`;
     }
 
     if (minioPublicUrl) {
