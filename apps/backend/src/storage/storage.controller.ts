@@ -17,6 +17,7 @@ import { Response } from 'express';
 import { StorageService } from './storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 
 // File size limits per media type (in bytes)
 const SIZE_LIMITS: Record<string, number> = {
@@ -172,6 +173,7 @@ export class StorageController {
   /**
    * Serve a file from MinIO — searches all subfolders
    */
+  @Public()
   @Get('files/:filename')
   async getFile(@Param('filename') filename: string, @Res() res: Response) {
     try {
