@@ -625,11 +625,14 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
             try {
               // Extract filename from URL and fetch directly from MinIO (avoids circular HTTP requests)
               const audioFilename = mediaUrl.split('/').pop() || '';
+              console.log(`[SEND_MEDIA] Trying MinIO for audio: "${audioFilename}"`);
               const minioResult = audioFilename ? await this.storageService.getFileBuffer(audioFilename) : null;
               let audioBuffer: Buffer;
               if (minioResult) {
+                console.log(`[SEND_MEDIA] MinIO found audio at: ${minioResult.objectName} (${minioResult.buffer.length} bytes)`);
                 audioBuffer = minioResult.buffer;
               } else {
+                console.warn(`[SEND_MEDIA] MinIO returned null for "${audioFilename}", falling back to HTTP`);
                 // Fallback to HTTP if not found in MinIO
                 const audioResponse = await fetch(mediaUrl);
                 if (!audioResponse.ok) {
