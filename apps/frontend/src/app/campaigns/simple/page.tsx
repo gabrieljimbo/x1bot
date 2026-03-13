@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, Play, Pause, Trash2, Edit2, BarChart2, X,
   Send, Upload, Phone, List, RefreshCw, Tag, Smartphone, Shuffle, AlignJustify, GitBranch, Users,
-  AlertCircle, Info, History, CheckCircle2, Copy, RotateCcw
+  AlertCircle, Info, History, CheckCircle2, Copy, RotateCcw, ChevronDown
 } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { AuthGuard } from '@/components/AuthGuard'
@@ -60,6 +60,7 @@ const STATUS_COLORS: Record<CampaignStatus, string> = {
 
 function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<'stats' | 'leads'>('stats')
+  const [expandedNode, setExpandedNode] = useState<string | null>(null)
   const [stats, setStats] = useState<Stats | null>(null)
   const [insights, setInsights] = useState<any>(null)
   const [recipients, setRecipients] = useState<any[]>([])
@@ -186,43 +187,96 @@ function StatsModal({ campaignId, onClose }: { campaignId: string; onClose: () =
                 <div className="bg-white/5 border border-white/10 rounded-xl p-5">
                   <h3 className="text-white font-medium mb-4">Detalhamento do Funil (Fluxo)</h3>
                   <div className="space-y-4">
-                    {insights.nodeStats.map((stat: any) => {
+                    {insights.nodeStats.map((stat: any, idx: number) => {
                       const successRate = stat.totalExecutions > 0 ? Math.round((stat.successCount / stat.totalExecutions) * 100) : 0;
+                      const isExpanded = expandedNode === stat.nodeId;
+                      const hasLeads = stat.leads && (
+                        stat.leads.passed?.length > 0 || stat.leads.waiting?.length > 0 ||
+                        stat.leads.running?.length > 0 || stat.leads.failed?.length > 0
+                      );
                       return (
-                        <div key={stat.nodeId} className="bg-black/30 border border-white/5 rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <p className="text-white font-medium">{stat.nodeName || `Nó: ${stat.nodeId.substring(0, 8)}`}</p>
-                              <p className="text-xs text-gray-500">{stat.totalExecutions} total de leads que chegaram aqui</p>
+                        <div key={stat.nodeId} className="bg-black/30 border border-white/5 rounded-lg overflow-hidden">
+                          <div className="p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black text-gray-600 uppercase">#{idx + 1}</span>
+                                  <p className="text-white font-medium">{stat.nodeName || `Nó: ${stat.nodeId.substring(0, 8)}`}</p>
+                                </div>
+                                <p className="text-xs text-gray-500">{stat.totalExecutions} total de leads que chegaram aqui</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="text-right">
+                                  <span className="text-[#00ff88] font-bold">{successRate}%</span>
+                                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Conversão</p>
+                                </div>
+                                {hasLeads && (
+                                  <button
+                                    onClick={() => setExpandedNode(isExpanded ? null : stat.nodeId)}
+                                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition ml-1"
+                                  >
+                                    <ChevronDown size={13} className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <span className="text-[#00ff88] font-bold">{successRate}%</span>
-                              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Conversão</p>
+
+                            <div className="grid grid-cols-4 gap-2 mb-3">
+                              <div className="bg-white/5 rounded p-2 text-center">
+                                <p className="text-xs text-gray-400 mb-1">Passaram</p>
+                                <p className="text-sm font-bold text-green-400">{stat.successCount}</p>
+                              </div>
+                              <div className="bg-white/5 rounded p-2 text-center">
+                                <p className="text-xs text-gray-400 mb-1">Aguardando</p>
+                                <p className="text-sm font-bold text-blue-400">{stat.waitingCount || 0}</p>
+                              </div>
+                              <div className="bg-white/5 rounded p-2 text-center">
+                                <p className="text-xs text-gray-400 mb-1">Executando</p>
+                                <p className="text-sm font-bold text-yellow-400">{stat.runningCount || 0}</p>
+                              </div>
+                              <div className="bg-white/5 rounded p-2 text-center">
+                                <p className="text-xs text-gray-400 mb-1">Falhas</p>
+                                <p className="text-sm font-bold text-red-400">{stat.failCount}</p>
+                              </div>
+                            </div>
+
+                            <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                              <div className="h-full bg-[#00ff88]" style={{ width: `${successRate}%` }} />
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-4 gap-2 mb-3">
-                            <div className="bg-white/5 rounded p-2 text-center">
-                              <p className="text-xs text-gray-400 mb-1">Passaram</p>
-                              <p className="text-sm font-bold text-green-400">{stat.successCount}</p>
+                          {/* Expandable leads per status */}
+                          {isExpanded && hasLeads && (
+                            <div className="border-t border-white/5 p-4 space-y-3">
+                              {[
+                                { key: 'passed', label: 'Passaram', color: 'text-green-400', bg: 'bg-green-500/10' },
+                                { key: 'waiting', label: 'Aguardando', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+                                { key: 'running', label: 'Executando', color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+                                { key: 'failed', label: 'Falhas', color: 'text-red-400', bg: 'bg-red-500/10' },
+                              ].map(({ key, label, color, bg }) => {
+                                const phones: string[] = stat.leads?.[key] || [];
+                                if (phones.length === 0) return null;
+                                return (
+                                  <div key={key}>
+                                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${color}`}>
+                                      {label} ({phones.length})
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {phones.slice(0, 50).map((phone: string) => (
+                                        <span key={phone} className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full ${bg} ${color} font-mono`}>
+                                          <Phone size={8} />
+                                          {phone}
+                                        </span>
+                                      ))}
+                                      {phones.length > 50 && (
+                                        <span className="text-[10px] text-gray-600 px-2 py-1">+{phones.length - 50} mais</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
-                            <div className="bg-white/5 rounded p-2 text-center">
-                              <p className="text-xs text-gray-400 mb-1">Aguardando</p>
-                              <p className="text-sm font-bold text-blue-400">{stat.waitingCount || 0}</p>
-                            </div>
-                            <div className="bg-white/5 rounded p-2 text-center">
-                              <p className="text-xs text-gray-400 mb-1">Executando</p>
-                              <p className="text-sm font-bold text-yellow-400">{stat.runningCount || 0}</p>
-                            </div>
-                            <div className="bg-white/5 rounded p-2 text-center">
-                              <p className="text-xs text-gray-400 mb-1">Falhas</p>
-                              <p className="text-sm font-bold text-red-400">{stat.failCount}</p>
-                            </div>
-                          </div>
-
-                          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                            <div className="h-full bg-[#00ff88]" style={{ width: `${successRate}%` }} />
-                          </div>
+                          )}
                         </div>
                       )
                     })}

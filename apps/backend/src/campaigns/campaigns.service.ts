@@ -638,10 +638,10 @@ export class CampaignsService {
     const hasWorkflow = campaign.workflowId || campaign.workflow;
 
     if (hasWorkflow) {
-      // Get all executions linked to this campaign
+      // Get all executions linked to this campaign (include contactPhone for leads-per-stage)
       const executions = await this.prisma.workflowExecution.findMany({
         where: { campaignId },
-        select: { id: true, status: true, currentNodeId: true, workflowId: true }
+        select: { id: true, status: true, currentNodeId: true, workflowId: true, contactPhone: true }
       });
 
       const execIds = executions.map(e => e.id);
@@ -670,58 +670,95 @@ export class CampaignsService {
           workflowNodes = (campaign.workflow.nodes as any[]) || [];
         }
 
+        // Build workflow sequence order (trigger → … → end) for correct display order
+        let workflowEdges: any[] = [];
+        if (campaign.workflowId) {
+          const wfWithEdges = await this.prisma.workflow.findUnique({
+            where: { id: campaign.workflowId },
+            select: { edges: true },
+          });
+          workflowEdges = (wfWithEdges?.edges as any[]) || [];
+        }
+        if (workflowEdges.length === 0 && campaign.workflow) {
+          workflowEdges = (campaign.workflow.edges as any[]) || [];
+        }
+
+        // Traverse edges to get ordered sequence of node IDs
+        const nodeSequenceOrder = new Map<string, number>();
+        const triggerNode = workflowNodes.find((n: any) => n.type?.startsWith('TRIGGER_'));
+        if (triggerNode) {
+          let curr = triggerNode;
+          const visitedSeq = new Set<string>();
+          let order = 0;
+          while (curr && !visitedSeq.has(curr.id)) {
+            visitedSeq.add(curr.id);
+            nodeSequenceOrder.set(curr.id, order++);
+            const edge = workflowEdges.find((e: any) => e.source === curr.id);
+            curr = edge ? workflowNodes.find((n: any) => n.id === edge.target) : null;
+          }
+        }
+
         const nodeMap = new Map<string, string>();
         for (const n of workflowNodes) {
+          // config holds the actual node settings; data holds React Flow presentation values
           let name: string = n.data?.label || n.data?.name || n.data?.displayName || '';
-          
+
           if (n.type === 'MARK_STAGE' || n.type === 'SET_STAGE') {
-            const stage = n.data?.stageName || n.data?.name || n.data?.label;
-            name = stage ? `🚩 Etapa: ${stage}` : 'Marcar Etapa';
+            // Prefer config.stageName (actual configured value), fall back to data fields
+            const stage = n.config?.stageName || n.data?.stageName || n.data?.name || n.data?.label;
+            name = stage ? `🚩 ${stage}` : '🚩 Marcar Etapa';
           } else if (n.type === 'WAIT' || n.type === 'DELAY' || n.type === 'GRUPO_WAIT') {
-            const amount = n.data?.amount || n.data?.delay || n.data?.waitTime || n.data?.duration;
-            const unit = n.data?.unit || 'seconds';
+            const amount = n.config?.amount || n.data?.amount || n.data?.delay || n.data?.waitTime;
+            const unit = n.config?.unit || n.data?.unit || 'seconds';
             const unitMap: any = { seconds: 'seg', minutes: 'min', hours: 'h', days: 'd', s: 'seg', m: 'min' };
             name = `⏳ Aguardar ${amount}${unitMap[unit] || unit}`;
           } else if (n.type === 'WAIT_REPLY' || n.type === 'ASK') {
             name = `📩 Aguardar Resposta`;
-            const timeout = n.data?.timeoutAmount || n.data?.timeout;
+            const timeout = n.config?.timeoutAmount || n.data?.timeoutAmount || n.data?.timeout;
             if (timeout) name += ` (${timeout}s)`;
           } else if (n.type === 'SEND_MESSAGE' || n.type === 'SEND_TEXT') {
-            const text = n.data?.text || n.data?.content;
+            const text = n.config?.message || n.config?.text || n.data?.text || n.data?.content;
             if (text && (!name || name === n.type)) {
               name = text.length > 25 ? text.substring(0, 25) + '...' : text;
             }
           } else if (n.type === 'SEND_MEDIA') {
-            const caption = n.data?.caption;
-            const type = n.data?.mediaType || 'Mídia';
+            const caption = n.config?.caption || n.data?.caption;
+            const type = n.config?.mediaType || n.data?.mediaType || 'Mídia';
             if (!name || name === n.type) {
               name = caption ? `🖼️ ${caption.substring(0, 20)}...` : `🏷️ Enviar ${type}`;
             }
           }
-          
+
           if (!name) {
             name = n.type || `Nó ${n.id.substring(0, 6)}`;
           }
-          
+
           nodeMap.set(n.id, name);
         }
+
+        // executionId → contactPhone for leads-per-stage
+        const execPhoneMap = new Map<string, string>(
+          executions.map(e => [e.id, e.contactPhone])
+        );
 
         const initStat = (nodeId: string) => {
           if (!nodeStatsMap[nodeId]) {
             nodeStatsMap[nodeId] = {
               nodeId,
               nodeName: nodeMap.get(nodeId) || `Nó: ${nodeId.substring(0, 8)}`,
+              nodeOrder: nodeSequenceOrder.get(nodeId) ?? 9999,
               totalExecutions: 0,
               successCount: 0,
               failCount: 0,
               waitingCount: 0,
               runningCount: 0,
+              leads: { passed: [] as string[], waiting: [] as string[], running: [] as string[], failed: [] as string[] },
             };
           }
         };
 
         // 1. Process Logs (Historical path)
-        const visits = new Set<string>(); // composite key execId:nodeId to avoid double counting in case of loops for totalExecutions
+        const visits = new Set<string>(); // composite key execId:nodeId to avoid double counting
         for (const log of logs) {
           if (!log.nodeId) continue;
           const key = `${log.executionId}:${log.nodeId}`;
@@ -729,36 +766,48 @@ export class CampaignsService {
             visits.add(key);
             initStat(log.nodeId);
             nodeStatsMap[log.nodeId].totalExecutions++;
-            // Mark as success (passed through) unless it's the current node which we'll handle below
+            // Tentatively mark as passed — corrected below if execution is stuck/failed
             nodeStatsMap[log.nodeId].successCount++;
+            const phone = execPhoneMap.get(log.executionId);
+            if (phone) nodeStatsMap[log.nodeId].leads.passed.push(phone);
           }
         }
 
-        // 2. Process Current state for exact status (handles waiting/running/failed at the specific node)
+        // 2. Process Current state for exact status (waiting/running/failed at the current node)
         for (const exec of executions) {
           const nodeId = exec.currentNodeId;
           if (!nodeId) continue;
 
           initStat(nodeId);
-          
-          // If we didn't have a log for this current node (e.g. migration or race condition), count it
+
           const key = `${exec.id}:${nodeId}`;
           if (!visits.has(key)) {
             visits.add(key);
             nodeStatsMap[nodeId].totalExecutions++;
           } else {
-            // Correct the "successCount++" from logs above if they are actually stuck/failed here
-            nodeStatsMap[nodeId].successCount--;
+            // Correct the tentative successCount from logs — this lead is not "passed" yet
+            nodeStatsMap[nodeId].successCount = Math.max(0, nodeStatsMap[nodeId].successCount - 1);
+            const phone = exec.contactPhone;
+            if (phone) {
+              nodeStatsMap[nodeId].leads.passed = nodeStatsMap[nodeId].leads.passed.filter((p: string) => p !== phone);
+            }
           }
 
+          const phone = exec.contactPhone;
           if (exec.status === 'COMPLETED') {
             nodeStatsMap[nodeId].successCount++;
+            if (phone && !nodeStatsMap[nodeId].leads.passed.includes(phone)) {
+              nodeStatsMap[nodeId].leads.passed.push(phone);
+            }
           } else if (['ERROR', 'FAILED', 'EXPIRED'].includes(exec.status)) {
             nodeStatsMap[nodeId].failCount++;
+            if (phone) nodeStatsMap[nodeId].leads.failed.push(phone);
           } else if (exec.status === 'WAITING') {
             nodeStatsMap[nodeId].waitingCount++;
+            if (phone) nodeStatsMap[nodeId].leads.waiting.push(phone);
           } else if (exec.status === 'RUNNING') {
             nodeStatsMap[nodeId].runningCount++;
+            if (phone) nodeStatsMap[nodeId].leads.running.push(phone);
           }
         }
 
@@ -776,7 +825,8 @@ export class CampaignsService {
       totalSent: sentCount,
       totalInteracted: interactedCount,
       conversionRate: sentCount > 0 ? (interactedCount / sentCount) * 100 : 0,
-      nodeStats: Object.values(nodeStatsMap).sort((a: any, b: any) => b.totalExecutions - a.totalExecutions),
+      // Sort by workflow execution order; nodes not in sequence fall to the end
+      nodeStats: Object.values(nodeStatsMap).sort((a: any, b: any) => a.nodeOrder - b.nodeOrder),
       workflow: campaign.workflow,
     };
   }

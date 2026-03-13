@@ -943,7 +943,9 @@ export class WorkflowService {
 
       return {
         id: node.id,
-        name: node.data?.label || node.name || node.type,
+        name: (node.type === 'MARK_STAGE' || node.type === 'SET_STAGE')
+          ? `🚩 ${node.config?.stageName || node.data?.stageName || node.data?.label || 'Marcar Etapa'}`
+          : (node.data?.label || node.name || node.type),
         type: node.type,
         config: node.config,
         count,
