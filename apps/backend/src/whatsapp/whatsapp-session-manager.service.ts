@@ -600,15 +600,26 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       async () => {
         const messageContent: any = {};
         // ... (existing switch logic remains the same)
+        // Helper: try to get file buffer from MinIO by filename extracted from URL
+        const resolveMediaBuffer = async (url: string) => {
+          const filename = url.split('/').pop() || '';
+          if (!filename) return null;
+          return this.storageService.getFileBuffer(filename);
+        };
+
         switch (mediaType) {
-          case 'image':
-            messageContent.image = { url: mediaUrl };
+          case 'image': {
+            const imgResult = await resolveMediaBuffer(mediaUrl);
+            messageContent.image = imgResult ? imgResult.buffer : { url: mediaUrl };
             messageContent.caption = options?.caption;
             break;
-          case 'video':
-            messageContent.video = { url: mediaUrl };
+          }
+          case 'video': {
+            const vidResult = await resolveMediaBuffer(mediaUrl);
+            messageContent.video = vidResult ? vidResult.buffer : { url: mediaUrl };
             messageContent.caption = options?.caption;
             break;
+          }
           case 'audio':
             // Download audio and convert to OGG/Opus for WhatsApp mobile compatibility
             try {
@@ -660,12 +671,14 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
               messageContent.ptt = options?.ptt ?? options?.sendAudioAsVoice ?? false;
             }
             break;
-          case 'document':
-            messageContent.document = { url: mediaUrl };
+          case 'document': {
+            const docResult = await resolveMediaBuffer(mediaUrl);
+            messageContent.document = docResult ? docResult.buffer : { url: mediaUrl };
             messageContent.mimetype = this.getMimeTypeForMedia(mediaUrl);
             messageContent.fileName = options?.fileName || 'document';
             messageContent.caption = options?.caption;
             break;
+          }
         }
 
         if (options?.mentions) {
