@@ -331,7 +331,7 @@ export class NodeExecutorService {
         return this.executeSequenciaLancamento(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.PROMO_ML_API:
-        return this.executePromoML(node, context, edges, sessionId, contactPhone);
+        return this.executePromoMLApi(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.GRUPO_MEDIA:
         return this.executeGrupoMedia(node, context, edges, sessionId, contactPhone);
