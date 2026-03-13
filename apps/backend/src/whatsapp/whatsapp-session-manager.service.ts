@@ -612,11 +612,20 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
           case 'audio':
             // Download audio and convert to OGG/Opus for WhatsApp mobile compatibility
             try {
-              const audioResponse = await fetch(mediaUrl);
-              if (!audioResponse.ok) {
-                throw new Error(`Failed to download audio: HTTP ${audioResponse.status}`);
+              // Extract filename from URL and fetch directly from MinIO (avoids circular HTTP requests)
+              const audioFilename = mediaUrl.split('/').pop() || '';
+              const minioResult = audioFilename ? await this.storageService.getFileBuffer(audioFilename) : null;
+              let audioBuffer: Buffer;
+              if (minioResult) {
+                audioBuffer = minioResult.buffer;
+              } else {
+                // Fallback to HTTP if not found in MinIO
+                const audioResponse = await fetch(mediaUrl);
+                if (!audioResponse.ok) {
+                  throw new Error(`Failed to download audio: HTTP ${audioResponse.status}`);
+                }
+                audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
               }
-              let audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
               const isPtt = options?.ptt ?? options?.sendAudioAsVoice ?? false;
               let audioMimetype: string;
 
@@ -631,8 +640,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
                 }
                 audioMimetype = options?.mimetype || 'audio/ogg; codecs=opus';
               } else {
-                const contentType = audioResponse.headers.get('content-type');
-                audioMimetype = options?.mimetype || this.getAudioMimeType(mediaUrl, contentType);
+                audioMimetype = options?.mimetype || this.getAudioMimeType(mediaUrl, null);
               }
 
               console.log(`[SEND_MEDIA] Audio ready: ${audioBuffer.length} bytes, mimetype: ${audioMimetype}, ptt: ${isPtt}`);

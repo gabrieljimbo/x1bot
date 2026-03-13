@@ -185,6 +185,29 @@ export class StorageService implements OnModuleInit {
   }
 
   /**
+   * Get file buffer by filename — searches all subfolders (same logic as HTTP proxy route)
+   */
+  async getFileBuffer(filename: string): Promise<{ buffer: Buffer; objectName: string } | null> {
+    await this.ensureBucketExists();
+    const subfolders = ['media/images', 'media/audio', 'media/video', 'media/documents', 'media'];
+    for (const folder of subfolders) {
+      const objectName = `${folder}/${filename}`;
+      const exists = await this.fileExists(objectName);
+      if (exists) {
+        const stream = await this.client.getObject(this.bucket, objectName);
+        const chunks: Buffer[] = [];
+        await new Promise<void>((resolve, reject) => {
+          stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+          stream.on('end', resolve);
+          stream.on('error', reject);
+        });
+        return { buffer: Buffer.concat(chunks), objectName };
+      }
+    }
+    return null;
+  }
+
+  /**
    * Upload media file to MinIO with folder structure based on type
    * Saves to: media/images/, media/audio/, media/video/, or media/documents/
    */
