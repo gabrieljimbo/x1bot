@@ -185,15 +185,18 @@ export class StorageService implements OnModuleInit {
   }
 
   /**
-   * Get file buffer by filename — searches all subfolders (same logic as HTTP proxy route)
+   * Get file buffer by filename — tries each subfolder using getObject directly.
+   * Accepts full URL or bare filename; extracts the last path segment automatically.
    */
-  async getFileBuffer(filename: string): Promise<{ buffer: Buffer; objectName: string } | null> {
+  async getFileBuffer(filenameOrUrl: string): Promise<{ buffer: Buffer; mimeType: string; size: number; objectName: string }> {
     await this.ensureBucketExists();
-    const subfolders = ['media/images', 'media/audio', 'media/video', 'media/documents', 'media'];
+
+    const cleanFilename = filenameOrUrl.split('/').pop() || filenameOrUrl;
+    const subfolders = ['media/audio', 'media/images', 'media/video', 'media/documents', 'media'];
+
     for (const folder of subfolders) {
-      const objectName = `${folder}/${filename}`;
-      const exists = await this.fileExists(objectName);
-      if (exists) {
+      const objectName = `${folder}/${cleanFilename}`;
+      try {
         const stream = await this.client.getObject(this.bucket, objectName);
         const chunks: Buffer[] = [];
         await new Promise<void>((resolve, reject) => {
@@ -201,10 +204,29 @@ export class StorageService implements OnModuleInit {
           stream.on('end', resolve);
           stream.on('error', reject);
         });
-        return { buffer: Buffer.concat(chunks), objectName };
+        const buffer = Buffer.concat(chunks);
+        return { buffer, mimeType: this.getMimeTypeFromFilename(cleanFilename), size: buffer.length, objectName };
+      } catch {
+        // not in this subfolder — try next
       }
     }
-    return null;
+
+    throw new Error(`[MINIO] File not found in any subfolder: ${cleanFilename}`);
+  }
+
+  private getMimeTypeFromFilename(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    const map: Record<string, string> = {
+      mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', opus: 'audio/opus', aac: 'audio/aac',
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+      mp4: 'video/mp4', avi: 'video/x-msvideo', mov: 'video/quicktime', mkv: 'video/x-matroska',
+      pdf: 'application/pdf', doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls: 'application/vnd.ms-excel',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      txt: 'text/plain',
+    };
+    return map[ext] || 'application/octet-stream';
   }
 
   /**

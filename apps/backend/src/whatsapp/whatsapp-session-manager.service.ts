@@ -599,89 +599,42 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       { type: 'media', payload: { caption: options?.caption }, options: { ...options, mediaType } },
       async () => {
         const messageContent: any = {};
-        // ... (existing switch logic remains the same)
-        // Helper: try to get file buffer from MinIO by filename extracted from URL
-        const resolveMediaBuffer = async (url: string) => {
-          const filename = url.split('/').pop() || '';
-          if (!filename) return null;
-          return this.storageService.getFileBuffer(filename);
-        };
+        const { buffer: mediaBuffer, mimeType: mediaMimeType } = await this.getMediaBuffer(mediaUrl);
 
         switch (mediaType) {
-          case 'image': {
-            const imgResult = await resolveMediaBuffer(mediaUrl);
-            messageContent.image = imgResult ? imgResult.buffer : { url: mediaUrl };
+          case 'image':
+            messageContent.image = mediaBuffer;
+            messageContent.mimetype = options?.mimetype || mediaMimeType;
             messageContent.caption = options?.caption;
             break;
-          }
-          case 'video': {
-            const vidResult = await resolveMediaBuffer(mediaUrl);
-            messageContent.video = vidResult ? vidResult.buffer : { url: mediaUrl };
+          case 'video':
+            messageContent.video = mediaBuffer;
+            messageContent.mimetype = options?.mimetype || mediaMimeType;
             messageContent.caption = options?.caption;
             break;
-          }
-          case 'audio':
-            // Download audio and convert to OGG/Opus for WhatsApp mobile compatibility
-            try {
-              // Extract filename from URL and fetch directly from MinIO (avoids circular HTTP requests)
-              const audioFilename = mediaUrl.split('/').pop() || '';
-              console.log(`[SEND_MEDIA] Trying MinIO for audio: "${audioFilename}"`);
-              const minioResult = audioFilename ? await this.storageService.getFileBuffer(audioFilename) : null;
-              let audioBuffer: Buffer;
-              if (minioResult) {
-                console.log(`[SEND_MEDIA] MinIO found audio at: ${minioResult.objectName} (${minioResult.buffer.length} bytes)`);
-                audioBuffer = minioResult.buffer;
-              } else {
-                console.warn(`[SEND_MEDIA] MinIO returned null for "${audioFilename}", falling back to HTTP`);
-                // Fallback to HTTP if not found in MinIO
-                const audioResponse = await fetch(mediaUrl);
-                if (!audioResponse.ok) {
-                  throw new Error(`Failed to download audio: HTTP ${audioResponse.status}`);
-                }
-                audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+          case 'audio': {
+            const isPtt = options?.ptt ?? options?.sendAudioAsVoice ?? false;
+            let audioBuffer = mediaBuffer;
+            if (isPtt) {
+              try {
+                console.log(`[SEND_MEDIA] Converting audio to OGG/Opus for PTT (${audioBuffer.length} bytes)`);
+                audioBuffer = Buffer.from(await this.convertToOpus(audioBuffer));
+                console.log(`[SEND_MEDIA] Audio converted to OGG/Opus: ${audioBuffer.length} bytes`);
+              } catch (convError: any) {
+                console.error(`[SEND_MEDIA] OGG/Opus conversion failed:`, convError.message);
               }
-              const isPtt = options?.ptt ?? options?.sendAudioAsVoice ?? false;
-              let audioMimetype: string;
-
-              if (isPtt) {
-                // For voice messages (PTT), ALWAYS convert to OGG/Opus
-                try {
-                  console.log(`[SEND_MEDIA] Converting audio to OGG/Opus for PTT (${audioBuffer.length} bytes)`);
-                  audioBuffer = Buffer.from(await this.convertToOpus(audioBuffer));
-                  console.log(`[SEND_MEDIA] Audio converted to OGG/Opus: ${audioBuffer.length} bytes`);
-                } catch (convError: any) {
-                  console.error(`[SEND_MEDIA] OGG/Opus conversion failed:`, convError.message);
-                }
-                audioMimetype = options?.mimetype || 'audio/ogg; codecs=opus';
-              } else {
-                audioMimetype = options?.mimetype || this.getAudioMimeType(mediaUrl, null);
-              }
-
-              console.log(`[SEND_MEDIA] Audio ready: ${audioBuffer.length} bytes, mimetype: ${audioMimetype}, ptt: ${isPtt}`);
-              messageContent.audio = audioBuffer;
-              messageContent.mimetype = audioMimetype;
-              messageContent.ptt = isPtt;
-            } catch (downloadError: any) {
-              console.error(`[SEND_MEDIA] Audio download failed:`, downloadError.message);
-              // For 404 errors, the file doesn't exist — falling back to URL will fail the same way
-              if (downloadError.message?.includes('HTTP 404') || downloadError.message?.includes('404')) {
-                throw new Error(`Audio file not found (404): ${mediaUrl}`);
-              }
-              // For transient errors, try passing the URL directly to Baileys as a last resort
-              console.warn(`[SEND_MEDIA] Falling back to URL after non-404 download error`);
-              messageContent.audio = { url: mediaUrl };
-              messageContent.mimetype = options?.mimetype || 'audio/ogg; codecs=opus';
-              messageContent.ptt = options?.ptt ?? options?.sendAudioAsVoice ?? false;
             }
-            break;
-          case 'document': {
-            const docResult = await resolveMediaBuffer(mediaUrl);
-            messageContent.document = docResult ? docResult.buffer : { url: mediaUrl };
-            messageContent.mimetype = this.getMimeTypeForMedia(mediaUrl);
-            messageContent.fileName = options?.fileName || 'document';
-            messageContent.caption = options?.caption;
+            messageContent.audio = audioBuffer;
+            messageContent.mimetype = isPtt ? 'audio/ogg; codecs=opus' : (options?.mimetype || mediaMimeType);
+            messageContent.ptt = isPtt;
             break;
           }
+          case 'document':
+            messageContent.document = mediaBuffer;
+            messageContent.mimetype = options?.mimetype || mediaMimeType;
+            messageContent.fileName = options?.fileName || mediaUrl.split('/').pop() || 'document';
+            messageContent.caption = options?.caption;
+            break;
         }
 
         if (options?.mentions) {
@@ -1316,6 +1269,29 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
   private formatJid(contactPhone: string): string {
     if (contactPhone.includes('@')) return contactPhone;
     return `${contactPhone.replace('+', '')}@s.whatsapp.net`;
+  }
+
+  /**
+   * Fetch media buffer — uses MinIO directly for internal URLs, HTTP for external.
+   */
+  private async getMediaBuffer(mediaUrl: string): Promise<{ buffer: Buffer; mimeType: string }> {
+    const isInternal = mediaUrl.includes('/media/files/') ||
+      (process.env.BACKEND_URL && mediaUrl.includes(process.env.BACKEND_URL));
+
+    if (isInternal) {
+      console.log(`[SEND_MEDIA] Fetching from MinIO: ${mediaUrl}`);
+      const result = await this.storageService.getFileBuffer(mediaUrl);
+      console.log(`[SEND_MEDIA] MinIO OK: ${result.objectName} (${result.size} bytes)`);
+      return { buffer: result.buffer, mimeType: result.mimeType };
+    }
+
+    // External URL — fetch via HTTP
+    console.log(`[SEND_MEDIA] Fetching external URL: ${mediaUrl}`);
+    const response = await fetch(mediaUrl);
+    if (!response.ok) throw new Error(`[MEDIA] HTTP ${response.status}: ${mediaUrl}`);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const mimeType = response.headers.get('content-type') || 'application/octet-stream';
+    return { buffer, mimeType };
   }
 
   private getMimeTypeForMedia(url: string): string {
