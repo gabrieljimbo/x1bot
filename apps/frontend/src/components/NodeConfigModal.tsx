@@ -12,6 +12,7 @@ import {
 import { WorkflowNode, WorkflowNodeType } from '@n9n/shared'
 import { apiClient } from '@/lib/api-client'
 import Editor from '@monaco-editor/react'
+import MediaUploadInput, { MediaValue } from '@/components/MediaUploadInput'
 
 interface NodeConfigModalProps {
   node: WorkflowNode | null
@@ -220,102 +221,27 @@ function GrupoMediaConfig({ config, setConfig, sessions, loading, tenantId, node
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-200">URL da Mídia</label>
-            <input
-              type="text"
-              value={config.mediaUrl || ''}
-              onChange={(e) => setConfig({ ...config, mediaUrl: e.target.value, uploadedMediaId: undefined })}
-              placeholder="https://example.com/media.jpg"
-              className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white font-mono text-sm"
-              disabled={!!config.uploadedMediaId}
+            <label className="block text-sm font-medium mb-2 text-gray-200">Mídia</label>
+            <MediaUploadInput
+              fileType={(config.mediaType as any) || 'image'}
+              tenantId={tenantId}
+              nodeId={node.id}
+              workflowId={workflowId || (node as any).workflowId || ''}
+              value={
+                config.uploadedMediaId
+                  ? { mediaType: 'upload', mediaUrl: config.mediaUrl || '', uploadedMediaId: config.uploadedMediaId, uploadedFileName: config.uploadedFileName, uploadedFileSize: config.uploadedFileSize }
+                  : config.mediaUrl
+                  ? { mediaType: 'url', mediaUrl: config.mediaUrl }
+                  : null
+              }
+              onChange={(val: MediaValue | null) => setConfig({
+                ...config,
+                mediaUrl: val?.mediaUrl || '',
+                uploadedMediaId: val?.uploadedMediaId,
+                uploadedFileName: val?.uploadedFileName,
+                uploadedFileSize: val?.uploadedFileSize,
+              })}
             />
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className="text-xs text-gray-500">Suporta variáveis: <code className="px-1.5 py-0.5 bg-gray-800 rounded text-primary">{"{{variables.imageUrl}}"}</code></span>
-            </div>
-
-            {!config.uploadedMediaId ? (
-              <div className="mt-3">
-                <div className="flex items-center gap-2 my-2">
-                  <div className="flex-1 h-px bg-gray-700"></div>
-                  <span className="text-xs text-gray-500">ou</span>
-                  <div className="flex-1 h-px bg-gray-700"></div>
-                </div>
-                <label className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#151515] border border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-[#1a1a1a] transition-colors">
-                  <span className="text-sm text-gray-300">📎 Upload de arquivo</span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept={
-                      config.mediaType === 'image' ? '.jpg,.jpeg,.png,.webp' :
-                        config.mediaType === 'audio' || config.mediaType === 'ptt' ? '.mp3,.ogg,.aac' :
-                          config.mediaType === 'video' ? '.mp4' : '*'
-                    }
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-
-                      const mediaType = config.mediaType || 'image'
-                      const sizeLimits: Record<string, number> = {
-                        image: 5 * 1024 * 1024,
-                        audio: 10 * 1024 * 1024,
-                        ptt: 10 * 1024 * 1024,
-                        video: 50 * 1024 * 1024,
-                      }
-
-                      if (file.size > (sizeLimits[mediaType] || 5 * 1024 * 1024)) {
-                        const maxMB = Math.round((sizeLimits[mediaType] || 5 * 1024 * 1024) / (1024 * 1024))
-                        alert(`Arquivo muito grande. Máximo para ${mediaType}: ${maxMB}MB`)
-                        e.target.value = ''
-                        return
-                      }
-
-                      try {
-                        const targetWorkflowId = workflowId || (node as any).workflowId || '';
-                        const data = await apiClient.uploadMedia(file, tenantId, mediaType, node.id, targetWorkflowId);
-                        setConfig({
-                          ...config,
-                          mediaUrl: data.url,
-                          uploadedMediaId: data.id,
-                          uploadedFileName: data.originalName,
-                          uploadedFileSize: data.size,
-                        })
-                      } catch (err: any) {
-                        alert(err.response?.data?.message || err.message || 'Erro ao fazer upload do arquivo')
-                      }
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-              </div>
-            ) : (
-              <div className="mt-3 p-3 bg-[#151515] border border-green-500/30 rounded flex justify-between items-center group">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <span className="text-green-500 flex-shrink-0">✓</span>
-                  <span className="text-sm text-gray-300 truncate" title={config.uploadedFileName}>
-                    {config.uploadedFileName || 'Arquivo enviado'}
-                  </span>
-                  <span className="text-xs text-gray-500 flex-shrink-0">
-                    ({config.uploadedFileSize ? Math.round(config.uploadedFileSize / 1024) + ' KB' : '-'})
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConfig({
-                      ...config,
-                      mediaUrl: '',
-                      uploadedMediaId: undefined,
-                      uploadedFileName: undefined,
-                      uploadedFileSize: undefined,
-                    })
-                  }}
-                  className="text-red-400 hover:text-red-300 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Remover arquivo"
-                >
-                  🗑️
-                </button>
-              </div>
-            )}
           </div>
 
           <div>
@@ -526,111 +452,25 @@ function MessageComposer({ value, onChange, placeholder, tenantId, node, workflo
 
         {(activeTab === 'image' || activeTab === 'video') && (
           <div className="space-y-3">
-            <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">URL da Mídia</label>
-              <input
-                type="text"
-                value={config.mediaUrl || ''}
-                onChange={(e) => update({ mediaUrl: e.target.value, uploadedMediaId: undefined })}
-                placeholder="https://exemplo.com/media.jpg"
-                className="w-full px-3 py-2 bg-[#0d0d0d] border border-gray-700 rounded text-xs text-white"
-                disabled={!!config.uploadedMediaId}
-              />
-            </div>
-
-            {/* File upload section */}
-            {!config.uploadedMediaId ? (
-              <div className="mt-3">
-                <div className="flex items-center gap-2 my-2">
-                  <div className="flex-1 h-px bg-gray-700"></div>
-                  <span className="text-xs text-gray-500">ou</span>
-                  <div className="flex-1 h-px bg-gray-700"></div>
-                </div>
-                <label className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#151515] border border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-[#1a1a1a] transition-colors">
-                  <span className="text-sm text-gray-300">📎 Upload de arquivo</span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept={
-                      activeTab === 'image' ? '.jpg,.jpeg,.png,.webp' :
-                        activeTab === 'video' ? '.mp4' : '*'
-                    }
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-
-                      const sizeLimits: Record<string, number> = {
-                        image: 5 * 1024 * 1024,
-                        video: 50 * 1024 * 1024,
-                      }
-
-                      if (file.size > (sizeLimits[activeTab] || 5 * 1024 * 1024)) {
-                        const maxMB = Math.round((sizeLimits[activeTab] || 5 * 1024 * 1024) / (1024 * 1024))
-                        alert(`Arquivo muito grande. Máximo para ${activeTab}: ${maxMB}MB`)
-                        e.target.value = ''
-                        return
-                      }
-
-                      try {
-                        const targetWorkflowId = workflowId || (node as any)?.workflowId || '';
-                        const data = await apiClient.uploadMedia(file, tenantId || '', activeTab, node?.id || '', targetWorkflowId);
-                        update({
-                          mediaUrl: data.url,
-                          uploadedMediaId: data.id,
-                          uploadedFileName: data.originalName,
-                          uploadedFileSize: data.size,
-                        })
-                      } catch (err: any) {
-                        alert(err.response?.data?.message || err.message || 'Erro ao fazer upload do arquivo')
-                      }
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-                <p className="text-xs text-gray-500 mt-1.5">
-                  {activeTab === 'image' ? 'JPG, PNG, WEBP — máx 5MB' :
-                    activeTab === 'video' ? 'MP4 — máx 50MB' : ''}
-                </p>
-              </div>
-            ) : (
-              <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-[#1a1a2e] border border-primary/30 rounded-lg">
-                <span className="text-xl">
-                  {activeTab === 'image' ? '🖼️' :
-                    activeTab === 'video' ? '🎥' : '📄'}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-200 truncate">{config.uploadedFileName || 'Arquivo'}</p>
-                  <p className="text-xs text-gray-500">
-                    {config.uploadedFileSize ? `${(config.uploadedFileSize / 1024).toFixed(1)} KB` : ''}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="text-red-400 hover:text-red-300 text-sm px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
-                  onClick={async () => {
-                    try {
-                      if (tenantId && config.uploadedMediaId) {
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
-                        const token = localStorage.getItem('n9n_token')
-                        const headers: HeadersInit = {}
-                        if (token) {
-                          headers['Authorization'] = `Bearer ${token}`
-                        }
-                        await fetch(`${API_URL}/api/media/${config.uploadedMediaId}?tenantId=${tenantId}`, { method: 'DELETE', headers })
-                      }
-                    } catch (e) { /* ignore */ }
-                    update({
-                      mediaUrl: '',
-                      uploadedMediaId: undefined,
-                      uploadedFileName: undefined,
-                      uploadedFileSize: undefined,
-                    })
-                  }}
-                >
-                  🗑️ Remover
-                </button>
-              </div>
-            )}
+            <MediaUploadInput
+              fileType={activeTab as 'image' | 'video'}
+              tenantId={tenantId || ''}
+              nodeId={node?.id || ''}
+              workflowId={workflowId || (node as any)?.workflowId || ''}
+              value={
+                config.uploadedMediaId
+                  ? { mediaType: 'upload', mediaUrl: config.mediaUrl || '', uploadedMediaId: config.uploadedMediaId, uploadedFileName: config.uploadedFileName, uploadedFileSize: config.uploadedFileSize }
+                  : config.mediaUrl
+                  ? { mediaType: 'url', mediaUrl: config.mediaUrl }
+                  : null
+              }
+              onChange={(val: MediaValue | null) => update({
+                mediaUrl: val?.mediaUrl || '',
+                uploadedMediaId: val?.uploadedMediaId,
+                uploadedFileName: val?.uploadedFileName,
+                uploadedFileSize: val?.uploadedFileSize,
+              })}
+            />
 
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">💬 Legenda</label>
@@ -655,115 +495,25 @@ function MessageComposer({ value, onChange, placeholder, tenantId, node, workflo
 
         {activeTab === 'audio' && (
           <div className="space-y-3">
-            <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">URL do Áudio</label>
-              <input
-                type="text"
-                value={config.mediaUrl || ''}
-                onChange={(e) => update({ mediaUrl: e.target.value, uploadedMediaId: undefined })}
-                placeholder="https://exemplo.com/audio.mp3"
-                className="w-full px-3 py-2 bg-[#0d0d0d] border border-gray-700 rounded text-xs text-white"
-                disabled={!!config.uploadedMediaId}
-              />
-            </div>
-
-            {/* File upload section for Audio */}
-            {!config.uploadedMediaId ? (
-              <div className="mt-3">
-                <div className="flex items-center gap-2 my-2">
-                  <div className="flex-1 h-px bg-gray-700"></div>
-                  <span className="text-xs text-gray-500">ou</span>
-                  <div className="flex-1 h-px bg-gray-700"></div>
-                </div>
-                <label className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#151515] border border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-[#1a1a1a] transition-colors">
-                  <span className="text-sm text-gray-300">📎 Upload de arquivo</span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept=".mp3,.ogg,.aac"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-
-                      if (file.size > (10 * 1024 * 1024)) {
-                        alert(`Arquivo muito grande. Máximo para áudio: 10MB`)
-                        e.target.value = ''
-                        return
-                      }
-
-                      try {
-                        const formData = new FormData()
-                        formData.append('file', file)
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
-                        const token = localStorage.getItem('n9n_token')
-                        const headers: HeadersInit = {}
-                        if (token) {
-                          headers['Authorization'] = `Bearer ${token}`
-                        }
-                        const res = await fetch(
-                          `${API_URL}/api/media/upload?tenantId=${tenantId}&mediaType=audio&nodeId=${node?.id}&workflowId=${(node as any)?.workflowId || ''}`,
-                          { method: 'POST', headers, body: formData }
-                        )
-
-                        if (!res.ok) {
-                          const err = await res.json()
-                          alert(err.message || 'Erro ao fazer upload')
-                          e.target.value = ''
-                          return
-                        }
-
-                        const data = await res.json()
-                        update({
-                          mediaUrl: data.url,
-                          uploadedMediaId: data.id,
-                          uploadedFileName: data.originalName,
-                          uploadedFileSize: data.size,
-                        })
-                      } catch (err) {
-                        alert('Erro ao fazer upload do arquivo')
-                      }
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-                <p className="text-xs text-gray-500 mt-1.5">MP3, OGG, AAC — máx 10MB</p>
-              </div>
-            ) : (
-              <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-[#1a1a2e] border border-primary/30 rounded-lg">
-                <span className="text-xl">🎵</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-200 truncate">{config.uploadedFileName || 'Arquivo'}</p>
-                  <p className="text-xs text-gray-500">
-                    {config.uploadedFileSize ? `${(config.uploadedFileSize / 1024).toFixed(1)} KB` : ''}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="text-red-400 hover:text-red-300 text-sm px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
-                  onClick={async () => {
-                    try {
-                      if (tenantId && config.uploadedMediaId) {
-                        const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
-                        const token = localStorage.getItem('n9n_token')
-                        const headers: HeadersInit = {}
-                        if (token) {
-                          headers['Authorization'] = `Bearer ${token}`
-                        }
-                        await fetch(`${API_URL}/api/media/${config.uploadedMediaId}?tenantId=${tenantId}`, { method: 'DELETE', headers })
-                      }
-                    } catch (e) { /* ignore */ }
-                    update({
-                      mediaUrl: '',
-                      uploadedMediaId: undefined,
-                      uploadedFileName: undefined,
-                      uploadedFileSize: undefined,
-                    })
-                  }}
-                >
-                  🗑️ Remover
-                </button>
-              </div>
-            )}
+            <MediaUploadInput
+              fileType="audio"
+              tenantId={tenantId || ''}
+              nodeId={node?.id || ''}
+              workflowId={workflowId || (node as any)?.workflowId || ''}
+              value={
+                config.uploadedMediaId
+                  ? { mediaType: 'upload', mediaUrl: config.mediaUrl || '', uploadedMediaId: config.uploadedMediaId, uploadedFileName: config.uploadedFileName, uploadedFileSize: config.uploadedFileSize }
+                  : config.mediaUrl
+                  ? { mediaType: 'url', mediaUrl: config.mediaUrl }
+                  : null
+              }
+              onChange={(val: MediaValue | null) => update({
+                mediaUrl: val?.mediaUrl || '',
+                uploadedMediaId: val?.uploadedMediaId,
+                uploadedFileName: val?.uploadedFileName,
+                uploadedFileSize: val?.uploadedFileSize,
+              })}
+            />
 
             <div className="flex items-center justify-between p-2 bg-black/40 rounded-lg border border-primary/20">
               <span className="text-[10px] text-primary font-bold">🎤 Enviar como PTT (Gravado na hora)</span>
@@ -4442,118 +4192,27 @@ export default function NodeConfigModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2 text-gray-200">
-                URL da Mídia
-              </label>
-              <input
-                type="text"
-                value={config.mediaUrl || ''}
-                onChange={(e) => setConfig({ ...config, mediaUrl: e.target.value, uploadedMediaId: undefined })}
-                placeholder="https://example.com/media.jpg"
-                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500 font-mono text-sm"
-                disabled={!!config.uploadedMediaId}
+              <label className="block text-sm font-medium mb-2 text-gray-200">Mídia</label>
+              <MediaUploadInput
+                fileType={(config.mediaType as any) || 'image'}
+                tenantId={tenantId}
+                nodeId={node.id}
+                workflowId={workflowId || (node as any).workflowId || ''}
+                value={
+                  config.uploadedMediaId
+                    ? { mediaType: 'upload', mediaUrl: config.mediaUrl || '', uploadedMediaId: config.uploadedMediaId, uploadedFileName: config.uploadedFileName, uploadedFileSize: config.uploadedFileSize }
+                    : config.mediaUrl
+                    ? { mediaType: 'url', mediaUrl: config.mediaUrl }
+                    : null
+                }
+                onChange={(val: MediaValue | null) => setConfig({
+                  ...config,
+                  mediaUrl: val?.mediaUrl || '',
+                  uploadedMediaId: val?.uploadedMediaId,
+                  uploadedFileName: val?.uploadedFileName,
+                  uploadedFileSize: val?.uploadedFileSize,
+                })}
               />
-              <div className="flex items-center gap-2 mt-1.5">
-                <span className="text-xs text-gray-500">
-                  Use <code className="px-1.5 py-0.5 bg-gray-800 rounded text-primary">{`{{variables.imageUrl}}`}</code> para inserir variáveis
-                </span>
-              </div>
-
-              {/* File upload section */}
-              {!config.uploadedMediaId ? (
-                <div className="mt-3">
-                  <div className="flex items-center gap-2 my-2">
-                    <div className="flex-1 h-px bg-gray-700"></div>
-                    <span className="text-xs text-gray-500">ou</span>
-                    <div className="flex-1 h-px bg-gray-700"></div>
-                  </div>
-                  <label className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#151515] border border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-[#1a1a1a] transition-colors">
-                    <span className="text-sm text-gray-300">📎 Upload de arquivo</span>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept={
-                        config.mediaType === 'image' ? '.jpg,.jpeg,.png,.webp' :
-                          config.mediaType === 'audio' ? '.mp3,.ogg,.aac' :
-                            config.mediaType === 'video' ? '.mp4' :
-                              config.mediaType === 'document' ? '.pdf,.docx' : '*'
-                      }
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0]
-                        if (!file) return
-
-                        const mediaType = config.mediaType || 'image'
-                        const sizeLimits: Record<string, number> = {
-                          image: 5 * 1024 * 1024,
-                          audio: 10 * 1024 * 1024,
-                          video: 50 * 1024 * 1024,
-                          document: 20 * 1024 * 1024,
-                        }
-
-                        if (file.size > (sizeLimits[mediaType] || 5 * 1024 * 1024)) {
-                          const maxMB = Math.round((sizeLimits[mediaType] || 5 * 1024 * 1024) / (1024 * 1024))
-                          alert(`Arquivo muito grande. Máximo para ${mediaType}: ${maxMB}MB`)
-                          e.target.value = ''
-                          return
-                        }
-
-                        try {
-                          const targetWorkflowId = workflowId || (node as any).workflowId || '';
-                          const data = await apiClient.uploadMedia(file, tenantId, mediaType, node.id, targetWorkflowId);
-                          setConfig({
-                            ...config,
-                            mediaUrl: data.url,
-                            uploadedMediaId: data.id,
-                            uploadedFileName: data.originalName,
-                            uploadedFileSize: data.size,
-                          })
-                        } catch (err: any) {
-                          alert(err.response?.data?.message || err.message || 'Erro ao fazer upload do arquivo')
-                        }
-                        e.target.value = ''
-                      }}
-                    />
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1.5">
-                    {config.mediaType === 'image' ? 'JPG, PNG, WEBP — máx 5MB' :
-                      config.mediaType === 'audio' ? 'MP3, OGG, AAC — máx 10MB' :
-                        config.mediaType === 'video' ? 'MP4 — máx 50MB' :
-                          config.mediaType === 'document' ? 'PDF, DOCX — máx 20MB' : ''}
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-[#1a1a2e] border border-primary/30 rounded-lg">
-                  <span className="text-xl">
-                    {config.mediaType === 'image' ? '🖼️' :
-                      config.mediaType === 'audio' ? '🎵' :
-                        config.mediaType === 'video' ? '🎥' : '📄'}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-200 truncate">{config.uploadedFileName || 'Arquivo'}</p>
-                    <p className="text-xs text-gray-500">
-                      {config.uploadedFileSize ? `${(config.uploadedFileSize / 1024).toFixed(1)} KB` : ''}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="text-red-400 hover:text-red-300 text-sm px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
-                    onClick={async () => {
-                      try {
-                        await apiClient.deleteMedia(config.uploadedMediaId, tenantId)
-                      } catch (e) { /* ignore */ }
-                      setConfig({
-                        ...config,
-                        mediaUrl: '',
-                        uploadedMediaId: undefined,
-                        uploadedFileName: undefined,
-                        uploadedFileSize: undefined,
-                      })
-                    }}
-                  >
-                    🗑️ Remover
-                  </button>
-                </div>
-              )}
             </div>
 
             {(config.mediaType === 'image' || config.mediaType === 'video') && (
@@ -5145,107 +4804,27 @@ export default function NodeConfigModal({
 
                 {['image', 'audio', 'video'].includes(config.remarketingMessageType || 'text') && (
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-200">URL da Mídia (Remarketing)</label>
-                    <input
-                      type="text"
-                      value={config.remarketingMediaUrl || ''}
-                      onChange={(e) => setConfig({ ...config, remarketingMediaUrl: e.target.value, remarketingUploadedMediaId: undefined })}
-                      placeholder="https://example.com/arquivo.png"
-                      className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white text-sm font-mono"
-                      disabled={!!config.remarketingUploadedMediaId}
+                    <label className="block text-sm font-medium mb-2 text-gray-200">Mídia (Remarketing)</label>
+                    <MediaUploadInput
+                      fileType={(config.remarketingMessageType as any) || 'image'}
+                      tenantId={tenantId}
+                      nodeId={node.id}
+                      workflowId={workflowId || (node as any).workflowId || ''}
+                      value={
+                        config.remarketingUploadedMediaId
+                          ? { mediaType: 'upload', mediaUrl: config.remarketingMediaUrl || '', uploadedMediaId: config.remarketingUploadedMediaId, uploadedFileName: config.remarketingUploadedFileName, uploadedFileSize: config.remarketingUploadedFileSize }
+                          : config.remarketingMediaUrl
+                          ? { mediaType: 'url', mediaUrl: config.remarketingMediaUrl }
+                          : null
+                      }
+                      onChange={(val: MediaValue | null) => setConfig({
+                        ...config,
+                        remarketingMediaUrl: val?.mediaUrl || '',
+                        remarketingUploadedMediaId: val?.uploadedMediaId,
+                        remarketingUploadedFileName: val?.uploadedFileName,
+                        remarketingUploadedFileSize: val?.uploadedFileSize,
+                      })}
                     />
-
-                    {/* File upload section for WAIT_REPLY Remarketing */}
-                    {!config.remarketingUploadedMediaId ? (
-                      <div className="mt-3">
-                        <div className="flex items-center gap-2 my-2">
-                          <div className="flex-1 h-px bg-gray-700"></div>
-                          <span className="text-xs text-gray-500">ou</span>
-                          <div className="flex-1 h-px bg-gray-700"></div>
-                        </div>
-                        <label className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#151515] border border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-[#1a1a1a] transition-colors">
-                          <span className="text-sm text-gray-300">📎 Upload de arquivo</span>
-                          <input
-                            type="file"
-                            className="hidden"
-                            accept={
-                              config.remarketingMessageType === 'image' ? '.jpg,.jpeg,.png,.webp' :
-                                config.remarketingMessageType === 'audio' ? '.mp3,.ogg,.aac' :
-                                  config.remarketingMessageType === 'video' ? '.mp4' : '*'
-                            }
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0]
-                              if (!file) return
-
-                              const mediaType = config.remarketingMessageType || 'image'
-                              const sizeLimits: Record<string, number> = {
-                                image: 5 * 1024 * 1024,
-                                audio: 10 * 1024 * 1024,
-                                video: 50 * 1024 * 1024,
-                              }
-
-                              if (file.size > (sizeLimits[mediaType] || 5 * 1024 * 1024)) {
-                                const maxMB = Math.round((sizeLimits[mediaType] || 5 * 1024 * 1024) / (1024 * 1024))
-                                alert(`Arquivo muito grande. Máximo para ${mediaType}: ${maxMB}MB`)
-                                e.target.value = ''
-                                return
-                              }
-
-                              try {
-                                const targetWorkflowId = workflowId || (node as any).workflowId || '';
-                                const data = await apiClient.uploadMedia(file, tenantId, mediaType, node.id, targetWorkflowId);
-                                setConfig({
-                                  ...config,
-                                  remarketingMediaUrl: data.url,
-                                  remarketingUploadedMediaId: data.id,
-                                  remarketingUploadedFileName: data.originalName,
-                                  remarketingUploadedFileSize: data.size,
-                                })
-                              } catch (err: any) {
-                                alert(err.response?.data?.message || err.message || 'Erro ao fazer upload do arquivo')
-                              }
-                              e.target.value = ''
-                            }}
-                          />
-                        </label>
-                        <p className="text-xs text-gray-500 mt-1.5">
-                          {config.remarketingMessageType === 'image' ? 'JPG, PNG, WEBP — máx 5MB' :
-                            config.remarketingMessageType === 'audio' ? 'MP3, OGG, AAC — máx 10MB' :
-                              config.remarketingMessageType === 'video' ? 'MP4 — máx 50MB' : ''}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-[#1a1a2e] border border-primary/30 rounded-lg">
-                        <span className="text-xl">
-                          {config.remarketingMessageType === 'image' ? '🖼️' :
-                            config.remarketingMessageType === 'audio' ? '🎵' : '🎥'}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-200 truncate">{config.remarketingUploadedFileName || 'Arquivo'}</p>
-                          <p className="text-xs text-gray-500">
-                            {config.remarketingUploadedFileSize ? `${(config.remarketingUploadedFileSize / 1024).toFixed(1)} KB` : ''}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          className="text-red-400 hover:text-red-300 text-sm px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
-                          onClick={async () => {
-                            try {
-                              await apiClient.deleteMedia(config.remarketingUploadedMediaId, tenantId)
-                            } catch (e) { /* ignore */ }
-                            setConfig({
-                              ...config,
-                              remarketingMediaUrl: '',
-                              remarketingUploadedMediaId: undefined,
-                              remarketingUploadedFileName: undefined,
-                              remarketingUploadedFileSize: undefined,
-                            })
-                          }}
-                        >
-                          🗑️ Remover
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -5429,109 +5008,27 @@ export default function NodeConfigModal({
             {(['image', 'audio', 'video'].includes(config.messageType)) && (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-200">
-                    URL da Mídia
-                  </label>
-                  <input
-                    type="text"
-                    value={config.mediaUrl || ''}
-                    onChange={(e) => setConfig({ ...config, mediaUrl: e.target.value, uploadedMediaId: undefined })}
-                    placeholder="https://exemplo.com/imagem.jpg"
-                    className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500 font-mono text-sm"
-                    disabled={!!config.uploadedMediaId}
+                  <label className="block text-sm font-medium mb-2 text-gray-200">Mídia</label>
+                  <MediaUploadInput
+                    fileType={(config.messageType as any) || 'image'}
+                    tenantId={tenantId}
+                    nodeId={node.id}
+                    workflowId={workflowId || (node as any).workflowId || ''}
+                    value={
+                      config.uploadedMediaId
+                        ? { mediaType: 'upload', mediaUrl: config.mediaUrl || '', uploadedMediaId: config.uploadedMediaId, uploadedFileName: config.uploadedFileName, uploadedFileSize: config.uploadedFileSize }
+                        : config.mediaUrl
+                        ? { mediaType: 'url', mediaUrl: config.mediaUrl }
+                        : null
+                    }
+                    onChange={(val: MediaValue | null) => setConfig({
+                      ...config,
+                      mediaUrl: val?.mediaUrl || '',
+                      uploadedMediaId: val?.uploadedMediaId,
+                      uploadedFileName: val?.uploadedFileName,
+                      uploadedFileSize: val?.uploadedFileSize,
+                    })}
                   />
-
-                  {/* File upload section for RMKT */}
-                  {!config.uploadedMediaId ? (
-                    <div className="mt-3">
-                      <div className="flex items-center gap-2 my-2">
-                        <div className="flex-1 h-px bg-gray-700"></div>
-                        <span className="text-xs text-gray-500">ou</span>
-                        <div className="flex-1 h-px bg-gray-700"></div>
-                      </div>
-                      <label className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#151515] border border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-[#1a1a1a] transition-colors">
-                        <span className="text-sm text-gray-300">📎 Upload de arquivo</span>
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept={
-                            config.messageType === 'image' ? '.jpg,.jpeg,.png,.webp' :
-                              config.messageType === 'audio' ? '.mp3,.ogg,.aac' :
-                                config.messageType === 'video' ? '.mp4' : '*'
-                          }
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-
-                            const mediaType = config.messageType || 'image'
-                            const sizeLimits: Record<string, number> = {
-                              image: 5 * 1024 * 1024,
-                              audio: 10 * 1024 * 1024,
-                              video: 50 * 1024 * 1024,
-                            }
-
-                            if (file.size > (sizeLimits[mediaType] || 5 * 1024 * 1024)) {
-                              const maxMB = Math.round((sizeLimits[mediaType] || 5 * 1024 * 1024) / (1024 * 1024))
-                              alert(`Arquivo muito grande. Máximo para ${mediaType}: ${maxMB}MB`)
-                              e.target.value = ''
-                              return
-                            }
-
-                            try {
-                              const targetWorkflowId = workflowId || (node as any).workflowId || '';
-                              const data = await apiClient.uploadMedia(file, tenantId, mediaType, node.id, targetWorkflowId);
-                              setConfig({
-                                ...config,
-                                mediaUrl: data.url,
-                                uploadedMediaId: data.id,
-                                uploadedFileName: data.originalName,
-                                uploadedFileSize: data.size,
-                              })
-                            } catch (err: any) {
-                              alert(err.response?.data?.message || err.message || 'Erro ao fazer upload do arquivo')
-                            }
-                            e.target.value = ''
-                          }}
-                        />
-                      </label>
-                      <p className="text-xs text-gray-500 mt-1.5">
-                        {config.messageType === 'image' ? 'JPG, PNG, WEBP — máx 5MB' :
-                          config.messageType === 'audio' ? 'MP3, OGG, AAC — máx 10MB' :
-                            config.messageType === 'video' ? 'MP4 — máx 50MB' : ''}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-[#1a1a2e] border border-primary/30 rounded-lg">
-                      <span className="text-xl">
-                        {config.messageType === 'image' ? '🖼️' :
-                          config.messageType === 'audio' ? '🎵' : '🎥'}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-200 truncate">{config.uploadedFileName || 'Arquivo'}</p>
-                        <p className="text-xs text-gray-500">
-                          {config.uploadedFileSize ? `${(config.uploadedFileSize / 1024).toFixed(1)} KB` : ''}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="text-red-400 hover:text-red-300 text-sm px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
-                        onClick={async () => {
-                          try {
-                            await apiClient.deleteMedia(config.uploadedMediaId, tenantId)
-                          } catch (e) { /* ignore */ }
-                          setConfig({
-                            ...config,
-                            mediaUrl: '',
-                            uploadedMediaId: undefined,
-                            uploadedFileName: undefined,
-                            uploadedFileSize: undefined,
-                          })
-                        }}
-                      >
-                        🗑️ Remover
-                      </button>
-                    </div>
-                  )}
                 </div>
                 {['image', 'video'].includes(config.messageType) && (
                   <div>
