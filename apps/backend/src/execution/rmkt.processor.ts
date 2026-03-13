@@ -6,6 +6,7 @@ import { ExecutionEngineService } from './execution-engine.service';
 import { WhatsappSenderService } from './whatsapp-sender.service';
 import { ContextService } from './context.service';
 import { RmktConfig, ExecutionStatus } from '@n9n/shared';
+import { StorageService } from '../storage/storage.service';
 
 @Processor('rmkt')
 @Injectable()
@@ -18,8 +19,25 @@ export class RmktProcessor extends WorkerHost {
         private executionEngine: ExecutionEngineService,
         private whatsappSender: WhatsappSenderService,
         private contextService: ContextService,
+        private storageService: StorageService,
     ) {
         super();
+    }
+
+    private async resolveMediaUrl(uploadedMediaId: string | undefined, fallbackUrl: string): Promise<string> {
+        if (!uploadedMediaId) return fallbackUrl;
+        try {
+            const mediaFile = await this.prisma.mediaFile.findFirst({
+                where: { id: uploadedMediaId },
+                select: { objectName: true },
+            });
+            if (mediaFile?.objectName) {
+                return this.storageService.getPublicUrl(mediaFile.objectName);
+            }
+        } catch (err: any) {
+            this.logger.warn(`Could not resolve URL from DB for mediaId ${uploadedMediaId}: ${err.message}`);
+        }
+        return fallbackUrl;
     }
 
     async process(job: Job<any, any, string>): Promise<any> {
@@ -72,7 +90,10 @@ export class RmktProcessor extends WorkerHost {
 
                 await this.whatsappSender.sendMessage(execution.sessionId, execution.contactPhone, text);
             } else {
-                const mediaUrl = this.contextService.interpolate(rmktConfig.mediaUrl || '', context);
+                const mediaUrl = await this.resolveMediaUrl(
+                    rmktConfig.uploadedMediaId,
+                    this.contextService.interpolate(rmktConfig.mediaUrl || '', context),
+                );
                 const caption = rmktConfig.caption ? this.contextService.interpolate(rmktConfig.caption, context) : undefined;
 
                 // Humanization: Show "recording" or "typing" depending on media

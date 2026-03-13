@@ -1044,7 +1044,7 @@ function CampaignDrawer({
 
           {tab === 'sessions' && (
             <>
-              <p className="text-xs text-gray-400">Selecione as sessões WhatsApp (máx 10):</p>
+              <p className="text-xs text-gray-400">Selecione as sessões WhatsApp:</p>
               {sessions.length === 0 ? (
                 <p className="text-gray-500 text-sm">Nenhuma sessão disponível</p>
               ) : sessions.map(session => (

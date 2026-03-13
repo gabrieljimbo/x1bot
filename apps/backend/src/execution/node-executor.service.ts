@@ -55,6 +55,7 @@ import { WhatsappSenderService } from './whatsapp-sender.service';
 import { WhatsappSessionManager } from '../whatsapp/whatsapp-session-manager.service';
 import { MlOffersService } from './ml-offers.service';
 import { ApiConfigsService } from '../api-configs/api-configs.service';
+import { StorageService } from '../storage/storage.service';
 
 export interface NodeExecutionResult {
   nextNodeId: string | null;
@@ -100,7 +101,29 @@ export class NodeExecutorService {
     private whatsappSender: WhatsappSenderService,
     private mlOffersService: MlOffersService,
     private apiConfigsService: ApiConfigsService,
+    private storageService: StorageService,
   ) { }
+
+  /**
+   * Resolve media URL: if uploadedMediaId is present, fetch objectName from DB
+   * and generate a fresh URL from the current env config. Falls back to the
+   * stored URL when no ID is available or DB lookup fails.
+   */
+  private async resolveMediaUrl(uploadedMediaId: string | undefined, fallbackUrl: string): Promise<string> {
+    if (!uploadedMediaId) return fallbackUrl;
+    try {
+      const mediaFile = await this.prisma.mediaFile.findFirst({
+        where: { id: uploadedMediaId },
+        select: { objectName: true },
+      });
+      if (mediaFile?.objectName) {
+        return this.storageService.getPublicUrl(mediaFile.objectName);
+      }
+    } catch (err: any) {
+      console.warn(`[MEDIA] Could not resolve URL from DB for mediaId ${uploadedMediaId}:`, err.message);
+    }
+    return fallbackUrl;
+  }
 
   setWhatsappSessionManager(manager: any) {
     this.whatsappSessionManager = manager;
@@ -486,7 +509,8 @@ export class NodeExecutorService {
     const config = node.config as SendMediaConfig;
 
     // Interpolate media URL and caption
-    const mediaUrl = this.contextService.interpolate(config.mediaUrl, context);
+    const rawMediaUrl = this.contextService.interpolate(config.mediaUrl, context);
+    const mediaUrl = await this.resolveMediaUrl(config.uploadedMediaId, rawMediaUrl);
     const caption = config.caption ? this.contextService.interpolate(config.caption, context) : undefined;
     const fileName = config.fileName ? this.contextService.interpolate(config.fileName, context) : undefined;
 
@@ -2936,7 +2960,7 @@ ${config.footerText || ''}`;
     } else {
       messageToSend.media = {
         type: msgConfig.type,
-        url: this.contextService.interpolate(msgConfig.mediaUrl || '', context),
+        url: await this.resolveMediaUrl(msgConfig.uploadedMediaId, this.contextService.interpolate(msgConfig.mediaUrl || '', context)),
         caption: msgConfig.caption ? this.contextService.interpolate(msgConfig.caption, context) : undefined,
         sendAudioAsVoice: msgConfig.sendAudioAsVoice
       };
@@ -3015,7 +3039,7 @@ ${config.footerText || ''}`;
     } else {
       messageToSend.media = {
         type: msgConfig.type,
-        url: this.contextService.interpolate(msgConfig.mediaUrl || '', context),
+        url: await this.resolveMediaUrl(msgConfig.uploadedMediaId, this.contextService.interpolate(msgConfig.mediaUrl || '', context)),
         caption: msgConfig.caption ? this.contextService.interpolate(msgConfig.caption, context) : undefined,
         sendAudioAsVoice: msgConfig.sendAudioAsVoice
       };
@@ -3084,7 +3108,7 @@ ${config.footerText || ''}`;
     } else {
       messageToSend.media = {
         type: msgConfig.type,
-        url: this.contextService.interpolate(msgConfig.mediaUrl || '', context),
+        url: await this.resolveMediaUrl(msgConfig.uploadedMediaId, this.contextService.interpolate(msgConfig.mediaUrl || '', context)),
         caption: msgConfig.caption ? this.contextService.interpolate(msgConfig.caption, context) : undefined,
         sendAudioAsVoice: msgConfig.sendAudioAsVoice
       };
@@ -3131,7 +3155,7 @@ ${config.footerText || ''}`;
     } else {
       messageToSend.media = {
         type: msgConfig.type,
-        url: this.contextService.interpolate(msgConfig.mediaUrl || '', context),
+        url: await this.resolveMediaUrl(msgConfig.uploadedMediaId, this.contextService.interpolate(msgConfig.mediaUrl || '', context)),
         caption: msgConfig.caption ? this.contextService.interpolate(msgConfig.caption, context) : undefined,
         sendAudioAsVoice: msgConfig.sendAudioAsVoice
       };
@@ -3246,7 +3270,7 @@ ${config.footerText || ''}`;
     } else {
       messageToSend.media = {
         type: msgConfig.type,
-        url: this.contextService.interpolate(msgConfig.mediaUrl || '', context),
+        url: await this.resolveMediaUrl(msgConfig.uploadedMediaId, this.contextService.interpolate(msgConfig.mediaUrl || '', context)),
         caption: msgConfig.caption ? this.contextService.interpolate(msgConfig.caption, context) : undefined,
         sendAudioAsVoice: msgConfig.sendAudioAsVoice
       };
@@ -3582,7 +3606,8 @@ ${config.footerText || ''}`;
     }
 
     // ── Build message ────────────────────────────────────────────────────
-    const mediaUrl = this.contextService.interpolate(config.mediaUrl || '', context);
+    const rawMediaUrl = this.contextService.interpolate(config.mediaUrl || '', context);
+    const mediaUrl = await this.resolveMediaUrl(config.uploadedMediaId, rawMediaUrl);
     const caption = config.caption ? this.contextService.interpolate(config.caption, context) : undefined;
     const isPTT = config.mediaType === 'ptt';
     const maxAttempts = (parseInt(config.retryCount ?? '3', 10) || 0) + 1;

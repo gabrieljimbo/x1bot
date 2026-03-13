@@ -14,6 +14,7 @@ import { MlOffersService } from './ml-offers.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MlOffersController } from './ml-offers.controller';
 import { ApiConfigsService } from '../api-configs/api-configs.service';
+import { StorageModule } from '../storage/storage.module';
 
 @Global()
 @Module({
@@ -23,6 +24,7 @@ import { ApiConfigsService } from '../api-configs/api-configs.service';
     }),
     PrismaModule,
     ScheduleModule.forRoot(),
+    StorageModule,
   ],
   controllers: [MlOffersController],
   providers: [

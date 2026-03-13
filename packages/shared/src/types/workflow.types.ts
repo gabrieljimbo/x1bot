@@ -134,6 +134,7 @@ export interface GroupMessageConfig {
   type: 'text' | 'image' | 'video' | 'audio';
   text?: string;
   mediaUrl?: string;
+  uploadedMediaId?: string;
   caption?: string;
   simulateTyping?: boolean;
   typingDuration?: number;

@@ -640,7 +640,13 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
               messageContent.mimetype = audioMimetype;
               messageContent.ptt = isPtt;
             } catch (downloadError: any) {
-              console.error(`[SEND_MEDIA] Audio download failed, falling back to URL:`, downloadError.message);
+              console.error(`[SEND_MEDIA] Audio download failed:`, downloadError.message);
+              // For 404 errors, the file doesn't exist — falling back to URL will fail the same way
+              if (downloadError.message?.includes('HTTP 404') || downloadError.message?.includes('404')) {
+                throw new Error(`Audio file not found (404): ${mediaUrl}`);
+              }
+              // For transient errors, try passing the URL directly to Baileys as a last resort
+              console.warn(`[SEND_MEDIA] Falling back to URL after non-404 download error`);
               messageContent.audio = { url: mediaUrl };
               messageContent.mimetype = options?.mimetype || 'audio/ogg; codecs=opus';
               messageContent.ptt = options?.ptt ?? options?.sendAudioAsVoice ?? false;

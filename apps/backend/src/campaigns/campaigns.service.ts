@@ -849,30 +849,36 @@ export class CampaignsService {
         }
       }
 
-      // Rotate sessions respecting limit
-      let session = campaign.sessions[sessionIndex % Math.max(campaign.sessions.length, 1)];
-      if (!session) break;
+      // Find a session with available capacity for this recipient.
+      // Uses an inner while-loop so we never skip a recipient when rotating sessions.
+      let session: (typeof campaign.sessions)[0] | null = null;
+      let sessionsChecked = 0;
+      while (sessionsChecked < campaign.sessions.length) {
+        const candidate = campaign.sessions[sessionIndex % campaign.sessions.length];
+        if (!candidate) break;
 
-      const where: any = {
-        campaignId,
-        sessionId: session.sessionId,
-        status: 'sent',
-      };
+        const countWhere: any = {
+          campaignId,
+          sessionId: candidate.sessionId,
+          status: 'sent',
+        };
+        if ((campaign as any).limitType === 'DAILY') {
+          countWhere.sentAt = { gte: todayThreshold };
+        }
 
-      if ((campaign as any).limitType === 'DAILY') {
-        where.sentAt = { gte: todayThreshold };
+        const sentCount = await this.prisma.campaignLog.count({ where: countWhere });
+        if (sentCount < (campaign as any).limitPerSession) {
+          session = candidate;
+          break;
+        }
+
+        sessionIndex++;
+        sessionsChecked++;
       }
 
-      const sessionSentCount = await this.prisma.campaignLog.count({ where });
-
-        if (sessionSentCount >= (campaign as any).limitPerSession) {
-          sessionIndex++;
-          if (sessionIndex >= campaign.sessions.length) {
-            console.log(`[CampaignsService] All sessions exhausted for campaign ${campaignId} (${(campaign as any).limitType} limit)`);
-            break; // Stop for now
-          }
-        // Try next session
-        continue;
+      if (!session) {
+        console.log(`[CampaignsService] All sessions exhausted for campaign ${campaignId} (${(campaign as any).limitType} limit)`);
+        break;
       }
 
       try {
