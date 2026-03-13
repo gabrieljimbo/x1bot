@@ -56,8 +56,8 @@ interface MediaUploadInputProps {
 
 /** Infer mode from an existing value (backward-compat: no mediaType field saved yet) */
 function inferMode(value: MediaValue | null): 'upload' | 'url' {
-  if (!value || !value.mediaUrl) return 'upload'
-  if (value.mediaType) return value.mediaType
+  if (value?.mediaType) return value.mediaType
+  if (!value?.mediaUrl) return 'upload'
   return value.mediaUrl.startsWith('http') ? 'url' : 'upload'
 }
 
