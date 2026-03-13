@@ -1325,12 +1325,17 @@ function SimplePageContent() {
   const [editing, setEditing] = useState<Campaign | null>(null)
   const [statsId, setStatsId] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success' | 'info'; text: string } | null>(null)
+  const [liveSessions, setLiveSessions] = useState<{ id: string; name: string; status: string }[]>([])
 
   const load = async () => {
     try {
       setLoading(true)
-      const data = await apiClient.getCampaigns(undefined, false)
+      const [data, sessionsData] = await Promise.all([
+        apiClient.getCampaigns(undefined, false),
+        apiClient.getWhatsappSessions().catch(() => []),
+      ])
       setCampaigns(data)
+      setLiveSessions(sessionsData)
     } catch { /* noop */ } finally { setLoading(false) }
   }
 
@@ -1384,6 +1389,36 @@ function SimplePageContent() {
       setStatusMessage({ type: 'success', text: 'Campanha reativada! Agora você pode editá-la ou iniciá-la novamente.' })
     } catch (e: any) {
       setStatusMessage({ type: 'error', text: 'Erro ao reativar: ' + (e?.response?.data?.message || e.message) })
+    }
+  }
+
+  const handleStartCampaign = async (campaign: Campaign) => {
+    if (campaign.sessions.length === 0) {
+      setStatusMessage({ type: 'error', text: `A campanha "${campaign.name}" não tem sessão configurada. Edite a campanha → aba Sessões e selecione uma sessão WhatsApp.` })
+      return
+    }
+    // Check if configured session IDs still exist and are connected
+    const campaignSessionIds = campaign.sessions.map(s => s.sessionId)
+    const validSessions = liveSessions.filter(s => campaignSessionIds.includes(s.id) && s.status === 'CONNECTED')
+    if (validSessions.length === 0) {
+      const existingSessions = liveSessions.filter(s => campaignSessionIds.includes(s.id))
+      if (existingSessions.length === 0) {
+        setStatusMessage({ type: 'error', text: `A sessão configurada na campanha "${campaign.name}" não existe mais. Edite a campanha → aba Sessões e selecione uma sessão ativa.` })
+      } else {
+        const names = existingSessions.map(s => s.name).join(', ')
+        setStatusMessage({ type: 'error', text: `A sessão "${names}" está desconectada. Reconecte-a antes de iniciar a campanha "${campaign.name}".` })
+      }
+      return
+    }
+    if (campaign._count.recipients === 0) {
+      setStatusMessage({ type: 'error', text: `Adicione destinatários à campanha "${campaign.name}" antes de iniciá-la.` })
+      return
+    }
+    try {
+      await apiClient.startCampaign(campaign.id)
+      await load()
+    } catch (e: any) {
+      setStatusMessage({ type: 'error', text: e?.response?.data?.message || 'Erro ao iniciar campanha' })
     }
   }
 
@@ -1457,7 +1492,7 @@ function SimplePageContent() {
                     </button>
                     {(campaign.status === 'DRAFT' || campaign.status === 'PAUSED') && (
                       <button
-                        onClick={() => campaign.status === 'PAUSED' ? apiClient.resumeCampaign(campaign.id).then(load) : apiClient.startCampaign(campaign.id).then(load).catch(e => setStatusMessage({ type: 'error', text: e?.response?.data?.message || 'Erro ao iniciar campanha' }))}
+                        onClick={() => campaign.status === 'PAUSED' ? apiClient.resumeCampaign(campaign.id).then(load) : handleStartCampaign(campaign)}
                         className="p-2 text-green-400 hover:bg-green-500/10 rounded-lg transition" title={campaign.status === 'PAUSED' ? 'Retomar' : 'Iniciar'}>
                         <Play size={16} />
                       </button>

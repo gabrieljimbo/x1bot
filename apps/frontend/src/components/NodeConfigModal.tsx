@@ -616,7 +616,7 @@ function MessageComposer({ value, onChange, placeholder, tenantId, node, workflo
                         if (token) {
                           headers['Authorization'] = `Bearer ${token}`
                         }
-                        await fetch(`${API_URL}/media/${config.uploadedMediaId}?tenantId=${tenantId}`, { method: 'DELETE', headers })
+                        await fetch(`${API_URL}/api/media/${config.uploadedMediaId}?tenantId=${tenantId}`, { method: 'DELETE', headers })
                       }
                     } catch (e) { /* ignore */ }
                     update({
