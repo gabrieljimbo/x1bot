@@ -1366,6 +1366,10 @@ function SimplePageContent() {
     if (!keepOpen) {
       setShowDrawer(false)
       setEditing(null)
+    } else if (!editing && result?.id) {
+      // After creating a new campaign with keepOpen=true, set editing so
+      // subsequent saves use updateCampaign instead of creating duplicates
+      setEditing(result)
     }
     return result
   }
