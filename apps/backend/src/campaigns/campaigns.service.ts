@@ -942,6 +942,22 @@ export class CampaignsService {
         const candidate = campaign.sessions[sessionIndex % campaign.sessions.length];
         if (!candidate) break;
 
+        // Skip sessions that no longer exist in the session manager
+        const sessionClient = this.whatsappSessionManager.resolveSessionClient(candidate.sessionId);
+        if (!sessionClient) {
+          console.warn(`[CampaignsService] Session ${candidate.sessionId} not found, skipping`);
+          sessionIndex++;
+          sessionsChecked++;
+          continue;
+        }
+
+        if (sessionClient.status !== 'CONNECTED') {
+          console.warn(`[CampaignsService] Session ${candidate.sessionId} is ${sessionClient.status}, skipping`);
+          sessionIndex++;
+          sessionsChecked++;
+          continue;
+        }
+
         const countWhere: any = {
           campaignId,
           sessionId: candidate.sessionId,
@@ -963,7 +979,7 @@ export class CampaignsService {
       }
 
       if (!session) {
-        console.log(`[CampaignsService] All sessions exhausted for campaign ${campaignId} (${(campaign as any).limitType} limit)`);
+        console.log(`[CampaignsService] All sessions exhausted or unavailable for campaign ${campaignId}`);
         break;
       }
 

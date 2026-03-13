@@ -261,7 +261,7 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
    * Falls back to any connected session for the same tenant if the exact ID is not found.
    * This handles cases where executions store old session IDs (e.g., after server restarts).
    */
-  private resolveSessionClient(sessionId: string): SessionClient | undefined {
+  resolveSessionClient(sessionId: string): SessionClient | undefined {
     // 1. Direct lookup
     const direct = this.sessions.get(sessionId);
     if (direct) return direct;

@@ -410,7 +410,12 @@ function CampaignDrawer({
   const [selectedListId, setSelectedListId] = useState('')
 
   useEffect(() => {
-    apiClient.getWhatsappSessions().then(setSessions).catch(() => { })
+    apiClient.getWhatsappSessions().then(loaded => {
+      setSessions(loaded)
+      // Remove stale session IDs that no longer exist
+      const validIds = new Set(loaded.map((s: Session) => s.id))
+      setForm(f => ({ ...f, sessionIds: f.sessionIds.filter(id => validIds.has(id)) }))
+    }).catch(() => { })
     apiClient.getContactLists().then(setContactLists).catch(() => { })
     apiClient.getCampaignWorkflowsList().then(setWorkflows).catch(() => { })
   }, [])
