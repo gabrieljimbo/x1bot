@@ -9,18 +9,33 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3041
+      # App URLs
+      - BACKEND_URL=${BACKEND_URL}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      # Database
       - DATABASE_URL=${DATABASE_URL}
+      # Redis
       - REDIS_HOST=redis_vps
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      # Auth
       - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=${FRONTEND_URL}
-      - CORS_ORIGIN=${CORS_ORIGIN}
-      # ... other envs ...
-      # No public ports for internal services if used via Traefik
-      # ports:
-      #   - "3041:3041"
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      # MinIO
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_USE_SSL=false
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET:-x1bot}
+      # Browserless
+      - BROWSERLESS_URL=http://browserless:3000
+      - BROWSERLESS_TOKEN=${BROWSERLESS_TOKEN}
+      # Security
+      - TRUST_PROXY=1
+      - RATE_LIMIT_TTL=60000
+      - RATE_LIMIT_LIMIT=100
     volumes:
       - whatsapp_sessions:/app/apps/backend/.wwebjs_auth
       - whatsapp_sessions_data:/app/apps/backend/.wwebjs_cache
@@ -29,9 +44,16 @@ services:
     networks:
       - internal
       - traefik-public
+    depends_on:
+      postgres_vps:
+        condition: service_healthy
+      redis_vps:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:3041/health" ]
+      test: ["CMD", "curl", "-f", "http://localhost:3041/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -50,6 +72,38 @@ services:
       - "traefik.http.routers.backend-n9n.tls.certresolver=mytlschallenge"
       - "traefik.http.services.backend-n9n.loadbalancer.server.port=3041"
 
+  frontend-n9n:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${BACKEND_URL}
+    container_name: n9n-frontend
+    environment:
+      - NODE_ENV=production
+      - PORT=3040
+      - NEXT_PUBLIC_API_URL=${BACKEND_URL}
+      - NEXT_PUBLIC_WS_URL=${BACKEND_URL}
+    networks:
+      - traefik-public
+    depends_on:
+      - backend-n9n
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3040"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.frontend-n9n.rule=Host(`${FRONTEND_DOMAIN}`)"
+      - "traefik.http.routers.frontend-n9n.entrypoints=websecure"
+      - "traefik.http.routers.frontend-n9n.tls=true"
+      - "traefik.http.routers.frontend-n9n.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.frontend-n9n.loadbalancer.server.port=3040"
+
   postgres_vps:
     image: postgres:15-alpine
     container_name: n9n-postgres
@@ -60,16 +114,15 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./apps/backend/prisma/production.conf:/etc/postgresql/postgresql.conf:ro
-    # No public ports! accessible only via 'internal' network
     networks:
       - internal
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    command: [ "postgres", "-c", "config_file=/etc/postgresql/postgresql.conf" ]
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
 
   redis_vps:
     image: redis:7-alpine
@@ -80,24 +133,52 @@ services:
     networks:
       - internal
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
-  # ... other services like frontend-n9n, browserless ...
+
+  minio:
+    image: minio/minio:latest
+    container_name: n9n-minio
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    networks:
+      - internal
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+  browserless:
+    image: browserless/chrome:latest
+    container_name: n9n-browserless
+    environment:
+      - TOKEN=${BROWSERLESS_TOKEN}
+      - MAX_CONCURRENT_SESSIONS=5
+      - MAX_QUEUE_LENGTH=10
+    networks:
+      - internal
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
+  minio_data:
   whatsapp_sessions:
   whatsapp_sessions_data:
   logs:
   temp_data:
 
-
 networks:
   internal:
-    internal: true # Isolated from external access
+    internal: true
   traefik-public:
     external: true
