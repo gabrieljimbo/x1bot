@@ -48,6 +48,7 @@ describe('NodeExecutorService - HTTP_SCRAPE', () => {
 
     const mlOffersService = {} as any;
     const apiConfigsService = {} as any;
+    const storageService = {} as any;
 
     service = new NodeExecutorService(
       contextService,
@@ -59,6 +60,7 @@ describe('NodeExecutorService - HTTP_SCRAPE', () => {
       whatsappSenderService,
       mlOffersService,
       apiConfigsService,
+      storageService,
     );
 
     // Reset mocks
