@@ -50,3 +50,9 @@ ngrok.yml
 
 # Submodule clone
 n9n/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Claude Code
+.claude/
