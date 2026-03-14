@@ -1212,7 +1212,10 @@ export class CampaignsService {
 
     const metadata = await this.whatsappSessionManager.getGroupMetadata(sessionId, groupJid);
     const participants = (metadata.participants || []).map((p: any) => {
-      const phone = p.id.split('@')[0];
+      // Preserve @lid JIDs intact — stripping them produces a numeric ID that is
+      // NOT a phone number, so formatJid() would build an invalid @s.whatsapp.net JID.
+      // For regular @s.whatsapp.net / @c.us JIDs we strip the domain as usual.
+      const phone = p.id.includes('@lid') ? p.id : p.id.split('@')[0];
       return {
         phone,
         name: p.name || p.notify || null,
