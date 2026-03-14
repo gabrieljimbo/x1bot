@@ -105,12 +105,12 @@ export default function MediaUploadInput({
     e.target.value = ''
   }
 
-  const handleRemove = async () => {
-    if (value?.uploadedMediaId) {
-      try {
-        await apiClient.deleteMedia(value.uploadedMediaId, tenantId)
-      } catch { /* ignore */ }
-    }
+  const handleRemove = () => {
+    // Don't call deleteMedia eagerly here. If we delete now and the user
+    // closes the modal without saving the workflow, the node config still
+    // references the deleted file → "File not found in MinIO" at send time.
+    // cleanupOrphanedMedia() on the backend handles the actual deletion
+    // safely when the workflow is saved.
     onChange({ mediaType: 'upload', mediaUrl: '' })
   }
 

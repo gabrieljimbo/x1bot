@@ -136,11 +136,14 @@ export class WorkflowService {
       
       const findMediaIds = (obj: any) => {
         if (!obj || typeof obj !== 'object') return;
-        
+
         if (obj.uploadedMediaId) {
           usedMediaIds.add(obj.uploadedMediaId);
         }
-        
+        if (obj.remarketingUploadedMediaId) {
+          usedMediaIds.add(obj.remarketingUploadedMediaId);
+        }
+
         for (const key in obj) {
           if (typeof obj[key] === 'object') {
             findMediaIds(obj[key]);

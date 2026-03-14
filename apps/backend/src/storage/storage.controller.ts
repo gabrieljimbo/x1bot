@@ -88,20 +88,12 @@ export class StorageController {
       );
     }
 
-    // If replacing a file for the same nodeId, delete the old one
-    if (nodeId) {
-      const existing = await this.prisma.mediaFile.findFirst({
-        where: { nodeId, tenantId },
-      });
-      if (existing) {
-        try {
-          await this.storageService.deleteMedia(existing.objectName);
-        } catch (e) {
-          // Ignore delete errors for old files
-        }
-        await this.prisma.mediaFile.delete({ where: { id: existing.id } });
-      }
-    }
+    // Note: We intentionally do NOT delete the old file from MinIO here.
+    // If we deleted it eagerly and the user closes the modal without saving
+    // the workflow, the node config would still reference the old UUID — which
+    // would now be gone from MinIO — causing "File not found" errors.
+    // cleanupOrphanedMedia() in workflow.service.ts handles MinIO + DB cleanup
+    // safely whenever the workflow is actually saved.
 
     // Upload to MinIO (returns objectName directly)
     const result = await this.storageService.uploadMedia(
