@@ -1268,7 +1268,10 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
   private formatJid(contactPhone: string): string {
     if (contactPhone.includes('@')) return contactPhone;
-    return `${contactPhone.replace('+', '')}@s.whatsapp.net`;
+    // Strip multi-device suffix (:N) — group member JIDs are stored as
+    // "5511999887766:2" but must be sent as "5511999887766@s.whatsapp.net"
+    const phoneOnly = contactPhone.replace('+', '').split(':')[0];
+    return `${phoneOnly}@s.whatsapp.net`;
   }
 
   /**
