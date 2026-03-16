@@ -237,6 +237,12 @@ export interface WaitReplyConfig {
   timeoutAmount?: number;
   timeoutUnit?: 'seconds' | 'minutes' | 'hours' | 'days';
 
+  // Response normalization
+  normalizeResponse?: boolean;   // when true: buffers messages and normalizes before saving
+  bufferTime?: number;           // seconds to wait for more messages, default 8
+  positiveWords?: string[];      // words that map to "sim"
+  negativeWords?: string[];      // words that map to "não"
+
   // Remarketing configuration
   enableRemarketing?: boolean;
   remarketingMessageType?: 'text' | 'image' | 'audio' | 'video';

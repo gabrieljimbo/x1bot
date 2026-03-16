@@ -3439,6 +3439,42 @@ function CodeEditor({ value, onChange, language = 'javascript' }: any) {
 }
 
 // Input com suporte a drag-and-drop
+function NormalizeWordList({ label, words, onChange, placeholder, color }: { label: string; words: string[]; onChange: (words: string[]) => void; placeholder?: string; color: 'green' | 'red' }) {
+  const [input, setInput] = useState('')
+  const accent = color === 'green' ? 'border-green-500/40 bg-green-500/10 text-green-300' : 'border-red-500/40 bg-red-500/10 text-red-300'
+  const addWord = () => {
+    const trimmed = input.trim().toLowerCase()
+    if (trimmed && !words.includes(trimmed)) {
+      onChange([...words, trimmed])
+    }
+    setInput('')
+  }
+  return (
+    <div>
+      <label className="block text-xs font-medium mb-2 text-gray-300">{label}</label>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {words.map((w) => (
+          <span key={w} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border ${accent}`}>
+            {w}
+            <button type="button" onClick={() => onChange(words.filter((x) => x !== w))} className="opacity-60 hover:opacity-100 font-bold">×</button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addWord() } }}
+          placeholder={placeholder}
+          className="flex-1 px-3 py-1.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-sky-500 text-white text-xs"
+        />
+        <button type="button" onClick={addWord} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-white">+ Add</button>
+      </div>
+    </div>
+  )
+}
+
 function DroppableInput({ value, onChange, placeholder, className, type = 'text' }: any) {
   const [isDragOver, setIsDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
@@ -4824,6 +4860,63 @@ export default function NodeConfigModal({
               <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary relative"></div>
               <span className="ml-3 text-sm font-medium text-gray-200">🔄 Fazer Remarketing se nâo responder</span>
             </label>
+
+            {/* ── Normalize Response Toggle ── */}
+            <label className="flex items-center cursor-pointer p-4 bg-[#1a1a1a] rounded border border-gray-700">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={config.normalizeResponse || false}
+                onChange={(e) => {
+                  const enabled = e.target.checked
+                  setConfig({
+                    ...config,
+                    normalizeResponse: enabled,
+                    positiveWords: enabled && !config.positiveWords?.length ? ['sim', 's', 'quero', 'claro', 'pode', 'yes', 'com certeza', 'vai', 'bora'] : config.positiveWords,
+                    negativeWords: enabled && !config.negativeWords?.length ? ['não', 'nao', 'n', 'agora não', 'agora nao', 'nunca', 'pare', 'stop'] : config.negativeWords,
+                  })
+                }}
+              />
+              <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary relative"></div>
+              <span className="ml-3 text-sm font-medium text-gray-200">🔤 Normalizar resposta</span>
+            </label>
+
+            {config.normalizeResponse && (
+              <div className="space-y-4 p-4 border border-sky-500/30 bg-sky-500/5 rounded-lg">
+                <div>
+                  <label className="block text-xs font-medium mb-1.5 text-gray-300">⏱ Tempo de buffer (segundos)</label>
+                  <input
+                    type="number"
+                    min={2}
+                    max={30}
+                    value={config.bufferTime ?? 8}
+                    onChange={(e) => setConfig({ ...config, bufferTime: Math.min(30, Math.max(2, parseInt(e.target.value) || 8)) })}
+                    className="w-24 px-3 py-2 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-sky-500 text-white text-sm"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">Aguarda esse tempo por mensagens adicionais antes de avaliar</p>
+                </div>
+
+                <NormalizeWordList
+                  label="Palavras interpretadas como SIM"
+                  words={config.positiveWords || []}
+                  onChange={(words: string[]) => setConfig({ ...config, positiveWords: words })}
+                  placeholder="sim, s, quero..."
+                  color="green"
+                />
+
+                <NormalizeWordList
+                  label="Palavras interpretadas como NÃO"
+                  words={config.negativeWords || []}
+                  onChange={(words: string[]) => setConfig({ ...config, negativeWords: words })}
+                  placeholder="não, nao, n..."
+                  color="red"
+                />
+
+                <p className="text-[11px] text-sky-300/80">
+                  💡 O sistema aguardará <strong>{config.bufferTime ?? 8}s</strong> por mensagens adicionais antes de avaliar a resposta. Se nenhuma palavra bater, a primeira mensagem recebida é salva sem alteração.
+                </p>
+              </div>
+            )}
 
             {config.enableRemarketing && (
               <div className="space-y-4 p-4 border border-blue-500/30 bg-blue-500/5 rounded-lg">

@@ -8,6 +8,7 @@ import {
   EventType,
   RmktConfig,
   PixConfig,
+  WaitReplyConfig,
 } from '@n9n/shared';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -20,9 +21,23 @@ import { WhatsappSenderService } from './whatsapp-sender.service';
 import { ContactTagsService } from './contact-tags.service';
 import { ContextService } from './context.service';
 
+// ── Normalize response helper ──────────────────────────────────────────────
+const DEFAULT_POSITIVE_WORDS = ['sim', 's', 'quero', 'claro', 'pode', 'yes', 'quero sim', 'com certeza', 'vai', 'bora', '✅', '👍'];
+const DEFAULT_NEGATIVE_WORDS = ['não', 'nao', 'n', 'agora não', 'agora nao', 'no', 'nunca', 'pare', 'stop', '❌', '👎'];
+
+function normalizeWaitReplyResponse(messages: string[], positiveWords: string[], negativeWords: string[]): string {
+  const strip = (s: string) => s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const fullText = strip(messages.join(' '));
+  if (positiveWords.some(w => { const nw = strip(w); return fullText === nw || fullText.includes(nw); })) return 'sim';
+  if (negativeWords.some(w => { const nw = strip(w); return fullText === nw || fullText.includes(nw); })) return 'não';
+  return messages[0]; // no match — return original first message
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Injectable()
 export class ExecutionEngineService implements OnModuleInit {
   private activeTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private activeBuffers: Map<string, { messages: string[]; timeoutId: NodeJS.Timeout }> = new Map();
   private static readonly STALE_EXECUTION_MINUTES = 30; // Max time before an execution is considered stale
 
   constructor(
@@ -491,7 +506,41 @@ export class ExecutionEngineService implements OnModuleInit {
 
       // Process reply if current node is WAIT_REPLY
       if (currentNode.type === WorkflowNodeType.WAIT_REPLY) {
-        // Cancel WAIT_REPLY timeout in Redis
+        const waitReplyConfig = currentNode.config as WaitReplyConfig;
+
+        if (waitReplyConfig.normalizeResponse) {
+          // ── Buffer mode: collect messages for bufferTime seconds then normalize ──
+          const bufferKey = execution.id;
+          const existing = this.activeBuffers.get(bufferKey);
+
+          if (existing) {
+            // Already buffering — add message, reset flush timer
+            existing.messages.push(message);
+            clearTimeout(existing.timeoutId);
+            const bufferMs = (waitReplyConfig.bufferTime ?? 8) * 1000;
+            existing.timeoutId = setTimeout(
+              () => this.flushNormalizeBuffer(execution.id, execution.tenantId, currentNode),
+              bufferMs,
+            );
+            console.log(`[NORMALIZE] Buffer: adicionada mensagem "${message}" (total: ${existing.messages.length})`);
+          } else {
+            // First message — cancel main WAIT_REPLY timeout, start buffer
+            const timeoutKey = `execution:timeout:${execution.id}`;
+            await this.redis.delete(timeoutKey).catch(() => { });
+
+            const bufferMs = (waitReplyConfig.bufferTime ?? 8) * 1000;
+            const timeoutId = setTimeout(
+              () => this.flushNormalizeBuffer(execution.id, execution.tenantId, currentNode),
+              bufferMs,
+            );
+            this.activeBuffers.set(bufferKey, { messages: [message], timeoutId });
+            console.log(`[NORMALIZE] Buffer iniciado para execução ${execution.id} — aguardando ${waitReplyConfig.bufferTime ?? 8}s`);
+          }
+          // Return early — execution stays WAITING until buffer flushes
+          return;
+        }
+
+        // ── Normal mode (no normalization) ──
         const timeoutKey = `execution:timeout:${execution.id}`;
         await this.redis.delete(timeoutKey).catch(() => { });
 
@@ -1486,6 +1535,94 @@ export class ExecutionEngineService implements OnModuleInit {
     if (timeoutId) {
       clearTimeout(timeoutId);
       this.activeTimeouts.delete(executionId);
+    }
+    // Also cancel any in-progress normalize buffer
+    const buffer = this.activeBuffers.get(executionId);
+    if (buffer) {
+      clearTimeout(buffer.timeoutId);
+      this.activeBuffers.delete(executionId);
+    }
+  }
+
+  /**
+   * Flush normalize buffer: normalize all collected messages and advance the execution.
+   * Called by the buffer timer when bufferTime seconds have elapsed after the first message.
+   */
+  private async flushNormalizeBuffer(
+    executionId: string,
+    tenantId: string,
+    currentNode: WorkflowNode,
+  ): Promise<void> {
+    const buffer = this.activeBuffers.get(executionId);
+    if (!buffer) return;
+    this.activeBuffers.delete(executionId);
+
+    const config = currentNode.config as WaitReplyConfig;
+    const messages = buffer.messages;
+
+    const positiveWords = config.positiveWords?.length ? config.positiveWords : DEFAULT_POSITIVE_WORDS;
+    const negativeWords = config.negativeWords?.length ? config.negativeWords : DEFAULT_NEGATIVE_WORDS;
+    const normalized = normalizeWaitReplyResponse(messages, positiveWords, negativeWords);
+
+    console.log(`[NORMALIZE] Mensagens recebidas: ${JSON.stringify(messages)} → "${normalized}" (variável: ${config.saveAs})`);
+
+    const execution = await this.executionService.getExecution(tenantId, executionId);
+    if (!execution) {
+      console.error(`[NORMALIZE] Execution ${executionId} not found during buffer flush`);
+      return;
+    }
+    if (execution.status !== ExecutionStatus.WAITING) {
+      console.log(`[NORMALIZE] Execution ${executionId} no longer WAITING, skipping flush`);
+      return;
+    }
+
+    const workflowData = await this.prisma.workflow.findFirst({
+      where: { id: execution.workflowId, tenantId: execution.tenantId },
+    });
+    if (!workflowData) {
+      console.error(`[NORMALIZE] Workflow not found for execution ${executionId}`);
+      return;
+    }
+    const workflow: Workflow = {
+      ...workflowData,
+      description: workflowData.description || undefined,
+      nodes: workflowData.nodes as any,
+      edges: workflowData.edges as any,
+    };
+
+    const lockKey = `execution:lock:${execution.tenantId}:${execution.sessionId}:${execution.contactPhone}`;
+    const lockAcquired = await this.redis.acquireLock(lockKey, 30);
+    if (!lockAcquired) {
+      console.warn(`[NORMALIZE] Could not acquire lock for buffer flush ${executionId}`);
+      return;
+    }
+
+    try {
+      // Save normalized value
+      this.contextService.setVariable(execution.context, config.saveAs, normalized);
+      this.contextService.setVariable(execution.context, `${config.saveAs}_raw`, messages.join(' '));
+
+      // Advance to next node
+      const hasRemarketingFired = execution.context.variables._waitReplyRemarketingFired;
+      const condition = hasRemarketingFired ? 'remarketing' : 'success';
+      const nextEdge = workflow.edges.find((e) => e.source === currentNode.id && e.condition === condition);
+      if (nextEdge) {
+        execution.currentNodeId = nextEdge.target;
+      } else {
+        const fallbackEdge = workflow.edges.find((e) => e.source === currentNode.id && !e.condition);
+        if (fallbackEdge) execution.currentNodeId = fallbackEdge.target;
+      }
+
+      execution.status = ExecutionStatus.RUNNING;
+      await this.executionService.updateExecution(execution.id, {
+        status: ExecutionStatus.RUNNING,
+        currentNodeId: execution.currentNodeId,
+        context: execution.context,
+      });
+
+      await this.continueExecution(execution, workflow);
+    } finally {
+      await this.redis.releaseLock(lockKey);
     }
   }
 
