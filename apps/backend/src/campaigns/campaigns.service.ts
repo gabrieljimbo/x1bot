@@ -14,6 +14,7 @@ import { CampaignSettingsService } from './campaign-settings.service';
 import { RedisService } from '../redis/redis.service';
 import { QueueDiagnosticService } from './queue-diagnostic.service';
 import { EmergencyModeService } from './emergency-mode.service';
+import { PushNotificationService } from '../whatsapp/push-notification.service';
 
 // ─── Hardcoded safety caps (cannot be exceeded regardless of user config) ────
 const HARD_MAX_PER_DAY = 80;
@@ -38,6 +39,7 @@ export class CampaignsService {
     private readonly redis: RedisService,
     private readonly queueDiagnostic: QueueDiagnosticService,
     private readonly emergencyMode: EmergencyModeService,
+    private readonly pushNotification: PushNotificationService,
   ) { }
 
   private processingCampaigns = new Set<string>();
@@ -1396,15 +1398,39 @@ export class CampaignsService {
       });
       
       if (hasPending === 0) {
-        await this.prisma.campaign.update({ 
-          where: { id: campaignId }, 
-          data: { status: CampaignStatus.COMPLETED, completedAt: new Date() } 
+        await this.prisma.campaign.update({
+          where: { id: campaignId },
+          data: { status: CampaignStatus.COMPLETED, completedAt: new Date() },
         });
+
+        // Push notification with campaign insights — fire-and-forget
+        this.sendCampaignCompletedPush(campaignId, finalState.tenantId, finalState.name).catch(() => {});
       }
     }
     } finally {
       this.processingCampaigns.delete(campaignId);
     }
+  }
+
+  private async sendCampaignCompletedPush(campaignId: string, tenantId: string, campaignName: string): Promise<void> {
+    const recipients = await this.prisma.campaignRecipient.findMany({
+      where: { campaignId },
+      select: { status: true },
+    });
+
+    const total = recipients.length;
+    const sent = recipients.filter(r => r.status === 'sent').length;
+    const failed = recipients.filter(r => r.status === 'failed').length;
+    const successRate = total > 0 ? Math.round((sent / total) * 100) : 0;
+
+    await this.pushNotification.sendToTenant(tenantId, {
+      title: '🎯 Campanha concluída!',
+      body: `"${campaignName}" — ✅ ${sent} enviados | ❌ ${failed} falhas | 📊 ${successRate}%`,
+      icon: '/logo.png',
+      data: { url: '/campaigns/simple', campaignId },
+    });
+
+    console.log(`[PUSH] Campanha ${campaignId} concluída — push enviado para tenant ${tenantId}`);
   }
 
   // ─── TAGS & LABELS ────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { Injectable, OnModuleDestroy, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import type {
   WASocket,
@@ -29,6 +30,7 @@ import { useDatabaseAuthState } from './database-auth-state';
 import { MessageQueueService } from './message-queue.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { InboxService } from '../inbox/inbox.service';
+import { PushNotificationService } from './push-notification.service';
 
 /**
  * Map of DDDs to Brazilian states
@@ -100,11 +102,13 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
     private configService: ConfigService,
     private whatsappService: WhatsappService,
     private eventBus: EventBusService,
+    private eventEmitter: EventEmitter2,
     private messageHandler: WhatsappMessageHandler,
     private whatsappSender: WhatsappSenderService,
     private storageService: StorageService,
     private messageQueue: MessageQueueService,
     private prisma: PrismaService,
+    private pushNotification: PushNotificationService,
     @Inject(forwardRef(() => InboxService))
     private inboxService: InboxService,
   ) {
@@ -302,6 +306,8 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
     this.sessions.delete(sessionId);
 
+    const dbSession = await this.whatsappService.getSession(sessionClient.tenantId, sessionId).catch(() => null);
+
     await this.whatsappService.updateSession(sessionId, {
       status: WhatsappSessionStatus.DISCONNECTED,
     });
@@ -311,6 +317,22 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
       tenantId: sessionClient.tenantId,
       sessionId,
       timestamp: new Date(),
+    });
+
+    const disconnectPayload = {
+      tenantId: sessionClient.tenantId,
+      sessionId,
+      sessionName: dbSession?.name ?? sessionId,
+      phoneNumber: dbSession?.phoneNumber ?? null,
+      reason: 'DISCONNECTED',
+      timestamp: new Date().toISOString(),
+    };
+    this.eventEmitter.emit('session.disconnected', disconnectPayload);
+    await this.pushNotification.sendToTenant(sessionClient.tenantId, {
+      title: 'Sessao desconectada',
+      body: `${dbSession?.name ?? sessionId}${dbSession?.phoneNumber ? ` (${dbSession.phoneNumber})` : ''} foi desconectada`,
+      icon: '/logo.png',
+      data: { sessionId, url: '/settings/whatsapp' },
     });
   }
 
@@ -824,6 +846,8 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
           // Clear DB auth state
           await this.whatsappService.deleteAuthState(sessionId);
 
+          const dbSessionForCleanup = await this.whatsappService.getSession(tenantId, sessionId).catch(() => null);
+
           await this.whatsappService.updateSession(sessionId, {
             status: WhatsappSessionStatus.DISCONNECTED,
             qrCode: undefined
@@ -834,6 +858,25 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
             tenantId,
             sessionId,
             timestamp: new Date(),
+          });
+
+          const logoutReason = statusCode === this.baileys.DisconnectReason.loggedOut ? 'LOGOUT'
+            : statusCode === this.baileys.DisconnectReason.forbidden ? 'BANNED'
+            : 'CONNECTION_LOST';
+          const logoutPayload = {
+            tenantId,
+            sessionId,
+            sessionName: dbSessionForCleanup?.name ?? sessionId,
+            phoneNumber: dbSessionForCleanup?.phoneNumber ?? null,
+            reason: logoutReason,
+            timestamp: new Date().toISOString(),
+          };
+          this.eventEmitter.emit('session.disconnected', logoutPayload);
+          await this.pushNotification.sendToTenant(tenantId, {
+            title: 'Sessao desconectada',
+            body: `${dbSessionForCleanup?.name ?? sessionId}${dbSessionForCleanup?.phoneNumber ? ` (${dbSessionForCleanup.phoneNumber})` : ''} foi desconectada`,
+            icon: '/logo.png',
+            data: { sessionId, url: '/settings/whatsapp' },
           });
         }
       }

@@ -248,6 +248,7 @@ model Tenant {
   productRankings      ProductRanking[]
   contactReputations   ContactReputation[]
   campaignSettings     CampaignSettings?
+  pushSubscriptions    PushSubscription[]
   @@map("tenants")
 }
 
@@ -789,6 +790,22 @@ model MlDailyOffer {
 
   @@index([title])
   @@index([expiresAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model CampaignSettings {

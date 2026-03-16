@@ -6,6 +6,7 @@ import { Save, Loader2, ArrowLeft, ShieldCheck, Clock, MessageSquare, Zap } from
 import { apiClient } from '@/lib/api-client'
 import { SuperAdminGuardWrapper } from '@/components/SuperAdminGuard'
 import AppHeader from '@/components/AppHeader'
+import { setupPushNotifications } from '@/lib/push-notifications'
 
 function WhatsappSettingsPageContent() {
     const router = useRouter()
@@ -22,6 +23,15 @@ function WhatsappSettingsPageContent() {
 
     useEffect(() => {
         loadConfig()
+    }, [])
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
+        const token = localStorage.getItem('n9n_token') ?? ''
+        const apiBase = process.env.NEXT_PUBLIC_API_URL ?? ''
+        if (token && apiBase) {
+            setupPushNotifications(apiBase, token).catch(console.error)
+        }
     }, [])
 
     const loadConfig = async () => {

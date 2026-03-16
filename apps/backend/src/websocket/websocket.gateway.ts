@@ -5,6 +5,7 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { OnEvent } from '@nestjs/event-emitter';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { WorkflowEvent, EventType } from '@n9n/shared';
 
@@ -102,6 +103,13 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
    */
   sendToExecution(tenantId: string, executionId: string, event: any) {
     this.server.to(`tenant:${tenantId}`).emit(`execution:${executionId}`, event);
+  }
+
+  @OnEvent('session.disconnected')
+  handleSessionDisconnected(payload: any) {
+    this.server
+      .to(`tenant:${payload.tenantId}`)
+      .emit('session.disconnected', payload);
   }
 }
 
