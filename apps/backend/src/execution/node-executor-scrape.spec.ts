@@ -61,6 +61,7 @@ describe('NodeExecutorService - HTTP_SCRAPE', () => {
       mlOffersService,
       apiConfigsService,
       storageService,
+      { emit: jest.fn(), on: jest.fn() } as any,
     );
 
     // Reset mocks
