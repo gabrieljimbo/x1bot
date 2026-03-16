@@ -41,6 +41,7 @@ export enum WorkflowNodeType {
   SEND_CONTACT = 'SEND_CONTACT',
   PROMO_SHOPEE = 'PROMO_SHOPEE',
   NOTIFICACAO = 'NOTIFICACAO',
+  SEND_PWA_NOTIFICATION = 'SEND_PWA_NOTIFICATION',
   END = 'END',
 }
 
@@ -654,4 +655,10 @@ export interface NotificacaoConfig {
   pushcutTitle?: string; // title for Pushcut
   pushcutText?: string; // text for Pushcut
   pushcutDevices?: string[]; // devices to send notification to
+}
+
+export interface SendPwaNotificationConfig {
+  notificationType: 'CUSTOM' | 'LEAD_ARRIVED' | 'LEAD_STAGE' | 'LEAD_INACTIVE';
+  customTitle?: string;   // used when notificationType === 'CUSTOM'
+  customMessage?: string; // used when notificationType === 'CUSTOM'
 }

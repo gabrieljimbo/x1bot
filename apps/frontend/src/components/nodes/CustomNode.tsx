@@ -110,6 +110,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#a855f7]',
     iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600',
   },
+  'SEND_PWA_NOTIFICATION': {
+    label: 'Notificação PWA',
+    subtitle: 'PUSH',
+    icon: '📲',
+    bgColor: 'bg-[#0e1f2a]',
+    borderColor: 'border-[#2d7da8]',
+    iconBg: 'bg-gradient-to-br from-sky-500 to-blue-600',
+  },
   'HTTP_REQUEST': {
     label: 'HTTP Request',
     subtitle: 'AÇÃO',
@@ -620,6 +628,15 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
       const stageName = config.stageName || 'Nova Etapa'
       const emoji = config.emoji || '🚩'
       return `${emoji} Etapa: ${stageName}`
+    }
+    if (type === 'SEND_PWA_NOTIFICATION') {
+      const typeLabels: Record<string, string> = {
+        LEAD_ARRIVED: '🔔 Nova lead no WhatsApp',
+        LEAD_STAGE: '📍 Lead avançou de etapa',
+        LEAD_INACTIVE: '⏰ Lead parou de responder',
+        CUSTOM: `✏️ ${config.customTitle || 'Personalizada'}`,
+      }
+      return typeLabels[config.notificationType] || '📲 Notificação PWA'
     }
     if (type === 'MENCIONAR_TODOS') {
       return '📣 Chamar a atenção de todos'

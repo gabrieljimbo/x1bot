@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import * as webpush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -77,5 +78,11 @@ export class PushNotificationService {
         }
       }),
     );
+  }
+
+  /** Listener for workflow node SEND_PWA_NOTIFICATION (decoupled via EventEmitter2) */
+  @OnEvent('push.send.tenant')
+  async onPushSendTenant(event: { tenantId: string; payload: { title: string; body: string; icon?: string; data?: any } }): Promise<void> {
+    await this.sendToTenant(event.tenantId, event.payload);
   }
 }

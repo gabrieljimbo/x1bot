@@ -3495,6 +3495,70 @@ function DroppableInput({ value, onChange, placeholder, className, type = 'text'
 }
 
 
+// ────── SEND_PWA_NOTIFICATION CONFIG ──────
+function SendPwaNotificationNodeConfig({ config, setConfig }: any) {
+  const update = (partial: any) => setConfig((c: any) => ({ ...c, ...partial }))
+  const type = config.notificationType || 'CUSTOM'
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <label className="block text-sm font-medium mb-2 text-gray-200">Tipo de notificação</label>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { id: 'LEAD_ARRIVED', label: '🔔 Nova Lead', desc: 'Contato iniciou conversa' },
+            { id: 'LEAD_STAGE', label: '📍 Avançou Etapa', desc: 'Lead mudou de etapa' },
+            { id: 'LEAD_INACTIVE', label: '⏰ Lead Inativo', desc: 'Parou de responder' },
+            { id: 'CUSTOM', label: '✏️ Personalizado', desc: 'Título e texto livres' },
+          ].map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => update({ notificationType: opt.id })}
+              className={`flex flex-col items-start p-3 rounded-lg border text-left transition-all ${type === opt.id ? 'border-sky-500 bg-sky-500/10' : 'border-gray-700 bg-[#151515] hover:border-gray-500'}`}
+            >
+              <span className="text-xs font-bold text-white">{opt.label}</span>
+              <span className="text-[10px] text-gray-400 mt-0.5">{opt.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {type === 'CUSTOM' && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium mb-1.5 text-gray-300">Título</label>
+            <input
+              type="text"
+              value={config.customTitle || ''}
+              onChange={(e) => update({ customTitle: e.target.value })}
+              placeholder="Ex: 🔥 Lead quente chegou"
+              className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-sky-500 text-white text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1.5 text-gray-300">Mensagem</label>
+            <textarea
+              value={config.customMessage || ''}
+              onChange={(e) => update({ customMessage: e.target.value })}
+              placeholder="Ex: {nome} ({telefone}) está na etapa {etapa}"
+              rows={3}
+              className="w-full px-3 py-2 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-sky-500 text-white text-sm resize-none"
+            />
+            <p className="text-[10px] text-gray-500 mt-1">Variáveis disponíveis: {'{nome}'}, {'{telefone}'}, {'{etapa}'}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="p-3 bg-sky-500/5 border border-sky-500/20 rounded-lg">
+        <p className="text-[11px] text-sky-300/80">
+          📲 A notificação é enviada via Web Push para todos os dispositivos cadastrados do tenant. Funciona com o app fechado.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ────── NOTIFICACAO CONFIG ──────
 function NotificacaoNodeConfig({ config, setConfig, sessions, loading }: any) {
   const [activeTab, setActiveTab] = useState<'whatsapp' | 'pushcut'>('whatsapp')
@@ -3945,6 +4009,9 @@ export default function NodeConfigModal({
 
       case WorkflowNodeType.NOTIFICACAO:
         return <NotificacaoNodeConfig config={config} setConfig={setConfig} sessions={sessions} loading={loading} />
+
+      case 'SEND_PWA_NOTIFICATION' as WorkflowNodeType:
+        return <SendPwaNotificationNodeConfig config={config} setConfig={setConfig} />
 
       case 'TRIGGER_GRUPO':
       case WorkflowNodeType.TRIGGER_GRUPO:

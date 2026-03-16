@@ -303,6 +303,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         description: 'Envia notificação via WhatsApp ou Pushcut (iPhone) durante o fluxo'
       },
       {
+        type: 'SEND_PWA_NOTIFICATION' as WorkflowNodeType,
+        label: 'Notificação PWA',
+        icon: '📲',
+        color: 'from-sky-500 to-blue-600',
+        bgColor: 'bg-[#0e1f2a]',
+        borderColor: 'border-[#2d7da8]',
+        description: 'Envia notificação push nativa para o dono da sessão (funciona com app fechado)'
+      },
+      {
         type: 'END' as WorkflowNodeType,
         label: 'Finalizar',
         icon: '🏁',
@@ -402,6 +411,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         bgColor: 'bg-[#2a1942]',
         borderColor: 'border-[#8b5cf6]',
         description: 'Pausa o fluxo e retoma em dia/horário configurado',
+      },
+      {
+        type: 'SEND_PWA_NOTIFICATION' as WorkflowNodeType,
+        label: 'Notificação PWA',
+        icon: '📲',
+        color: 'from-sky-500 to-blue-600',
+        bgColor: 'bg-[#0e1f2a]',
+        borderColor: 'border-[#2d7da8]',
+        description: 'Envia notificação push nativa para o dono da sessão (funciona com app fechado)'
       },
     ]
   }

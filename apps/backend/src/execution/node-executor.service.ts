@@ -40,7 +40,9 @@ import {
   GroupMessageConfig,
   ExecutionStatus,
   NotificacaoConfig,
+  SendPwaNotificationConfig,
 } from '@n9n/shared';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ContextService } from './context.service';
@@ -102,6 +104,7 @@ export class NodeExecutorService {
     private mlOffersService: MlOffersService,
     private apiConfigsService: ApiConfigsService,
     private storageService: StorageService,
+    private eventEmitter: EventEmitter2,
   ) { }
 
   /**
@@ -357,6 +360,9 @@ export class NodeExecutorService {
       case WorkflowNodeType.NOTIFICACAO:
         return this.executeNotificacao(node, context, edges, sessionId, contactPhone);
 
+      case WorkflowNodeType.SEND_PWA_NOTIFICATION:
+        return this.executeSendPwaNotification(node, context, edges, sessionId, contactPhone);
+
       case WorkflowNodeType.END:
         return this.executeEnd(node, context);
 
@@ -442,6 +448,98 @@ export class NodeExecutorService {
       nextNodeId: nextEdge ? nextEdge.target : null,
       shouldWait: false,
     };
+  }
+
+  /**
+   * Execute SEND_PWA_NOTIFICATION node — sends a Web Push notification to the tenant owner.
+   * Uses EventEmitter2 to decouple from WhatsappModule/PushNotificationService.
+   */
+  private async executeSendPwaNotification(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+    sessionId?: string,
+    contactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as SendPwaNotificationConfig;
+
+    const tenantId =
+      context.globals?.tenantId ||
+      (context.variables as any)?._tenantId ||
+      (context.variables as any)?.tenantId;
+
+    const contactName =
+      (context.variables as any)?.contactName ||
+      (context.variables as any)?.pushName ||
+      (context.variables as any)?.nome ||
+      'Contato';
+
+    const phone =
+      contactPhone ||
+      (context.variables as any)?._contactPhone ||
+      (context.variables as any)?.phone ||
+      '';
+
+    const etapa =
+      (context.variables as any)?.etapa ||
+      (context.variables as any)?.contactStage ||
+      'Não definida';
+
+    const vars: Record<string, string> = {
+      nome: contactName,
+      telefone: phone.replace('@s.whatsapp.net', ''),
+      etapa,
+      customTitle: config.customTitle || '',
+      customMessage: config.customMessage || '',
+    };
+
+    const resolve = (tpl: string) =>
+      tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? `{${k}}`);
+
+    const TEMPLATES: Record<string, { title: string; body: string }> = {
+      LEAD_ARRIVED: {
+        title: '🔔 Nova lead no WhatsApp!',
+        body: '{nome} ({telefone}) acabou de entrar em contato.',
+      },
+      LEAD_STAGE: {
+        title: '📍 Lead avançou de etapa',
+        body: '{nome} ({telefone}) chegou em: {etapa}',
+      },
+      LEAD_INACTIVE: {
+        title: '⏰ Lead parou de responder',
+        body: '{nome} ({telefone}) não responde desde a última etapa: {etapa}',
+      },
+      CUSTOM: {
+        title: '{customTitle}',
+        body: '{customMessage}',
+      },
+    };
+
+    const template = TEMPLATES[config.notificationType] ?? TEMPLATES.LEAD_ARRIVED;
+    const title = resolve(template.title);
+    const body  = resolve(template.body);
+
+    if (tenantId) {
+      this.eventEmitter.emit('push.send.tenant', {
+        tenantId,
+        payload: {
+          title,
+          body,
+          icon: '/logo.png',
+          data: {
+            url: '/inbox',
+            phone: vars.telefone,
+            sessionId: sessionId || (context.variables as any)?._sessionId,
+          },
+        },
+      });
+      console.log(`[PWA_NODE] Notificação enviada para tenant ${tenantId}: ${title}`);
+    } else {
+      console.warn('[PWA_NODE] tenantId não encontrado no contexto — push não enviado');
+    }
+
+    const nextEdge = edges.find((e) => e.source === node.id);
+    return { nextNodeId: nextEdge ? nextEdge.target : null, shouldWait: false };
   }
 
   /**
