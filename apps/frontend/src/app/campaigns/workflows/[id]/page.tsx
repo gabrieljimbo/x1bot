@@ -381,6 +381,8 @@ function CampaignWorkflowEditorContent() {
           tenantId={tenant.id}
           workflowId={campaignId}
           onClose={() => setSelectedNode(null)}
+          nodes={nodesRef.current}
+          edges={edgesRef.current}
           onSave={async (nodeId, config) => {
             const updated = nodesRef.current.map(n => n.id === nodeId ? { ...n, config } : n)
             const currentEdges = edgesRef.current

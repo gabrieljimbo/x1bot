@@ -864,6 +864,8 @@ function WorkflowPageContent() {
           workflowId={workflowId}
           onClose={() => setSelectedNode(null)}
           onSave={handleNodeConfigSave}
+          nodes={currentNodesRef.current}
+          edges={currentEdgesRef.current}
         />
       )}
 

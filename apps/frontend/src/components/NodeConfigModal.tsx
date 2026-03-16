@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Search,
   Check,
@@ -24,6 +24,8 @@ interface NodeConfigModalProps {
   executionData?: any // Optional: full execution data
   executionLogs?: any[] // Optional: execution logs
   workflowId?: string // Optional: the ID of the workflow this node belongs to
+  nodes?: any[] // Optional: all nodes in the workflow (for detecting previous node type)
+  edges?: any[] // Optional: all edges in the workflow
 }
 
 // Component for SET_TAGS configuration
@@ -3895,6 +3897,8 @@ export default function NodeConfigModal({
   executionData,
   executionLogs,
   workflowId,
+  nodes: allNodes = [],
+  edges: allEdges = [],
 }: NodeConfigModalProps) {
   const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
   const [activeTab, setActiveTab] = useState<'parameters' | 'settings'>('parameters')
@@ -3914,6 +3918,25 @@ export default function NodeConfigModal({
   const [testingLoop, setTestingLoop] = useState(false)
   const [commandTestResult, setCommandTestResult] = useState<any>(null)
   const [testingCommand, setTestingCommand] = useState(false)
+  const [showCodeVarPicker, setShowCodeVarPicker] = useState(false)
+  const [codeVarInput, setCodeVarInput] = useState('')
+  const messageTextareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Detect if the node directly before this one is a CODE node
+  const previousNodeIsCode = useMemo(() => {
+    if (!node || !allEdges.length || !allNodes.length) return false
+    const incomingEdge = allEdges.find((e: any) => e.target === node.id)
+    if (!incomingEdge) return false
+    const sourceNode = allNodes.find((n: any) => n.id === incomingEdge.source)
+    return sourceNode?.type === 'CODE' || (sourceNode?.data as any)?.type === 'CODE'
+  }, [node, allEdges, allNodes])
+
+  // Available keys from code output (when execution data is present)
+  const codeOutputKeys = useMemo(() => {
+    const code = executionData?.context?.variables?.code ?? executionData?.context?.variables?.codeOutput
+    if (code && typeof code === 'object' && !Array.isArray(code)) return Object.keys(code)
+    return []
+  }, [executionData])
 
   useEffect(() => {
     if (node) {
@@ -4205,16 +4228,87 @@ export default function NodeConfigModal({
                 Message
               </label>
               <textarea
+                ref={messageTextareaRef}
                 value={config.message || ''}
                 onChange={(e) => setConfig({ ...config, message: e.target.value })}
                 placeholder="Type your message here..."
                 rows={8}
                 className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary resize-none text-white placeholder-gray-500 font-mono text-sm"
               />
-              <div className="flex items-center gap-2 mt-1.5">
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className="text-xs text-gray-500">
                   Use <code className="px-1.5 py-0.5 bg-gray-800 rounded text-primary">{`{{variables.name}}`}</code> to insert variables
                 </span>
+                {previousNodeIsCode && (
+                  <div className="relative ml-auto">
+                    <button
+                      type="button"
+                      title="Insere o resultado do node Code anterior na mensagem"
+                      onClick={() => { setShowCodeVarPicker(!showCodeVarPicker); setCodeVarInput('') }}
+                      className="flex items-center gap-1.5 text-xs text-green-400 hover:text-green-300 border border-green-400/30 rounded px-2.5 py-1 hover:bg-green-400/10 transition-colors"
+                    >
+                      ⚡ Usar resultado do Code
+                    </button>
+                    {showCodeVarPicker && (
+                      <div className="absolute right-0 top-8 z-50 bg-[#1a1a1a] border border-green-500/30 rounded-lg shadow-xl p-3 w-64">
+                        <p className="text-[11px] text-green-400 font-medium mb-2">⚡ Inserir variável do Code</p>
+                        {codeOutputKeys.length > 0 ? (
+                          <div className="flex flex-col gap-1 mb-2">
+                            {codeOutputKeys.map((key) => (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => {
+                                  const tag = `{{code.${key}}}`
+                                  const el = messageTextareaRef.current
+                                  if (el) {
+                                    const start = el.selectionStart ?? (config.message || '').length
+                                    const end = el.selectionEnd ?? start
+                                    const current = config.message || ''
+                                    setConfig({ ...config, message: current.substring(0, start) + tag + current.substring(end) })
+                                    setTimeout(() => { el.focus(); el.setSelectionRange(start + tag.length, start + tag.length) }, 0)
+                                  } else {
+                                    setConfig({ ...config, message: (config.message || '') + tag })
+                                  }
+                                  setShowCodeVarPicker(false)
+                                }}
+                                className="text-left px-2 py-1.5 rounded bg-black/30 hover:bg-green-500/10 text-xs text-gray-200 font-mono border border-transparent hover:border-green-500/30 transition-colors"
+                              >
+                                {`{{code.${key}}}`}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mb-2">
+                            <input
+                              type="text"
+                              value={codeVarInput}
+                              onChange={(e) => setCodeVarInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && codeVarInput.trim()) {
+                                  const tag = `{{code.${codeVarInput.trim()}}}`
+                                  setConfig({ ...config, message: (config.message || '') + tag })
+                                  setShowCodeVarPicker(false)
+                                }
+                              }}
+                              placeholder="nome da variável (ex: saudacao)"
+                              autoFocus
+                              className="w-full px-2 py-1.5 bg-[#0d0d0d] border border-gray-700 rounded text-xs text-white focus:outline-none focus:border-green-500 font-mono"
+                            />
+                            <p className="text-[10px] text-gray-500 mt-1">Pressione Enter para inserir</p>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setShowCodeVarPicker(false)}
+                          className="text-[10px] text-gray-500 hover:text-gray-300 w-full text-right"
+                        >
+                          Fechar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -7691,10 +7785,10 @@ return produtos;`}
                   language="javascript"
                 />
               </div>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-xs text-gray-500">
-                  Use <code className="px-1.5 py-0.5 bg-gray-800 rounded text-primary font-mono">variables</code> para acessar variáveis do contexto
-                </span>
+              <div className="mt-2 p-3 bg-black/20 border border-gray-800 rounded-lg space-y-1">
+                <p className="text-[11px] text-gray-400">💡 Retorne um objeto com as variáveis que deseja usar nos próximos nodes.</p>
+                <p className="text-[11px] text-gray-500">Use <code className="px-1 bg-gray-800 rounded text-green-400 font-mono">{'{{code.varName}}'}</code> no SEND MESSAGE para acessar o resultado.</p>
+                <p className="text-[11px] text-gray-500">Disponível no código: <code className="text-gray-400 font-mono">contact.name</code>, <code className="text-gray-400 font-mono">contact.phoneNumber</code>, <code className="text-gray-400 font-mono">variables.*</code></p>
               </div>
 
               {/* Test Result */}

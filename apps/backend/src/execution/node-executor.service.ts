@@ -1890,8 +1890,11 @@ export class NodeExecutorService {
       // Sanitize result to remove non-serializable objects (DOM nodes, functions, etc.)
       const sanitizedResult = this.sanitizeForSerialization(result);
 
-      // Save result to context (for backward compatibility)
+      // Save result to context — both keys for compatibility
+      // codeOutput: legacy key (existing workflows keep working)
+      // code: new canonical key — use {{code.varName}} in SEND MESSAGE
       this.contextService.setVariable(context, 'codeOutput', sanitizedResult);
+      this.contextService.setVariable(context, 'code', sanitizedResult);
 
       // Set output - the output should be the result of the JavaScript code
       // If result is an object, spread it; otherwise, wrap it in codeOutput
