@@ -1,5 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SessionHealthMonitorService } from './session-health-monitor.service';
+import { parseSpintax, hasSpintax } from './spintax.util';
 import Bottleneck from 'bottleneck';
 
 export interface MessageJob {
@@ -16,6 +18,7 @@ export class MessageQueueService implements OnModuleInit {
 
     constructor(
         private prisma: PrismaService,
+        private healthMonitor: SessionHealthMonitorService,
     ) { }
 
     async onModuleInit() {
@@ -82,7 +85,19 @@ export class MessageQueueService implements OnModuleInit {
         const limiter = this.getLimiter(sessionId);
 
         return limiter.schedule(async () => {
-            const waitTime = bypassDelay ? 0 : this.calculateWaitTime(job);
+            // Apply spintax to text payloads before sending
+            job = this.applySpintax(job);
+
+            // Calculate wait time with adaptive multiplier from health monitor
+            let waitTime = 0;
+            if (!bypassDelay) {
+                const baseWait = this.calculateWaitTime(job);
+                const multiplier = await this.healthMonitor.getAdaptiveDelayMultiplier(sessionId);
+                waitTime = Math.round(baseWait * multiplier);
+                if (multiplier > 1) {
+                    this.logger.debug(`[QUEUE] Session ${sessionId}: Adaptive cooldown ×${multiplier} → ${waitTime}ms`);
+                }
+            }
 
             if (waitTime > 0) {
                 this.logger.debug(`[QUEUE] Session ${sessionId}: Waiting ${waitTime}ms for humanization`);
@@ -105,14 +120,44 @@ export class MessageQueueService implements OnModuleInit {
             }
 
             try {
-                return await sendFn();
+                const result = await sendFn();
+                await this.healthMonitor.recordSuccess(sessionId);
+                return result;
             } catch (error) {
+                const isRestriction = this.isRestrictionError(error);
+                await this.healthMonitor.recordFailure(sessionId, (error as any)?.message ?? '', isRestriction);
                 this.logger.error(`[QUEUE] Failed to send message in queue:`, error);
                 throw error;
             }
         });
     }
 
+    private applySpintax(job: MessageJob): MessageJob {
+        if (job.type === 'text' && job.payload?.text && hasSpintax(job.payload.text)) {
+            return {
+                ...job,
+                payload: { ...job.payload, text: parseSpintax(job.payload.text) },
+            };
+        }
+        if (job.type === 'media' && job.payload?.caption && hasSpintax(job.payload.caption)) {
+            return {
+                ...job,
+                payload: { ...job.payload, caption: parseSpintax(job.payload.caption) },
+            };
+        }
+        if (job.type === 'buttons' && job.payload?.text && hasSpintax(job.payload.text)) {
+            return {
+                ...job,
+                payload: { ...job.payload, text: parseSpintax(job.payload.text) },
+            };
+        }
+        return job;
+    }
+
+    /**
+     * Humanized jitter: base = random(min, max), then apply ±20% jitter.
+     * Result is never below minDelay.
+     */
     private calculateWaitTime(job: MessageJob): number {
         let baseDelay = 0;
 
@@ -129,11 +174,16 @@ export class MessageQueueService implements OnModuleInit {
         const min = this.config?.minDelay || 3000;
         const max = this.config?.maxDelay || 8000;
 
-        const randomExtra = Math.floor(
-            Math.random() * (max - min) + min
-        );
+        // Random base within [min, max]
+        const randomBase = Math.floor(Math.random() * (max - min) + min);
 
-        return baseDelay + randomExtra;
+        // ±20% jitter
+        const jitter = randomBase * (Math.random() * 0.4 - 0.2);
+
+        // Final value is never below minDelay
+        const total = Math.max(min, Math.round(randomBase + jitter));
+
+        return baseDelay + total;
     }
 
     private startPresenceUpdate(sessionId: string, contactPhone: string, socket: any, job: MessageJob): NodeJS.Timeout | null {
@@ -150,8 +200,8 @@ export class MessageQueueService implements OnModuleInit {
             if (isAudio) {
                 presenceType = 'recording';
             } else {
-                // For images, videos, documents, we don't send any presence update
-                return null;
+                // Images, videos, documents → composing (humanizes before sending)
+                presenceType = 'composing';
             }
         }
 
@@ -166,5 +216,10 @@ export class MessageQueueService implements OnModuleInit {
                 socket.sendPresenceUpdate(presenceType, contactPhone).catch(() => { });
             }
         }, 3000);
+    }
+
+    private isRestrictionError(error: any): boolean {
+        const msg = (error?.message ?? '').toLowerCase();
+        return msg.includes('restricted') || msg.includes('spam') || msg.includes('banned') || msg.includes('block');
     }
 }

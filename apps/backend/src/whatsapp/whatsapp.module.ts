@@ -8,6 +8,7 @@ import { StorageModule } from '../storage/storage.module';
 import { NodeExecutorService } from '../execution/node-executor.service';
 
 import { MessageQueueService } from './message-queue.service';
+import { SessionHealthMonitorService } from './session-health-monitor.service';
 import { WhatsappController } from './whatsapp.controller';
 import { InboxModule } from '../inbox/inbox.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -26,8 +27,9 @@ import { PrismaModule } from '../prisma/prisma.module';
     WhatsappMessageHandler,
     WhatsappInitService,
     MessageQueueService,
+    SessionHealthMonitorService,
   ],
-  exports: [WhatsappService, WhatsappSessionManager, MessageQueueService],
+  exports: [WhatsappService, WhatsappSessionManager, MessageQueueService, SessionHealthMonitorService],
 })
 export class WhatsappModule implements OnModuleInit {
   constructor(

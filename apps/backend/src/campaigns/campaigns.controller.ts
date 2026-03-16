@@ -5,6 +5,9 @@ import {
 import { Tenant } from '../auth/decorators/tenant.decorator';
 import { CampaignsService } from './campaigns.service';
 import { ContactListsService } from './contact-lists.service';
+import { CampaignSettingsService } from './campaign-settings.service';
+import { QueueDiagnosticService } from './queue-diagnostic.service';
+import { EmergencyModeService } from './emergency-mode.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CampaignType } from '@prisma/client';
 
@@ -14,6 +17,9 @@ export class CampaignsController {
   constructor(
     private readonly campaignsService: CampaignsService,
     private readonly contactListsService: ContactListsService,
+    private readonly campaignSettingsService: CampaignSettingsService,
+    private readonly queueDiagnosticService: QueueDiagnosticService,
+    private readonly emergencyModeService: EmergencyModeService,
   ) {}
 
   // ─── CAMPAIGN CRUD ────────────────────────────────────────────────────────────
@@ -84,6 +90,33 @@ export class CampaignsController {
     return this.campaignsService.removeFromBlacklist(req.user.tenantId, phone);
   }
 
+  @Get('settings')
+  getCampaignSettings(@Request() req: any) {
+    return this.campaignSettingsService.getSettings(req.user.tenantId);
+  }
+
+  @Put('settings')
+  updateCampaignSettings(@Request() req: any, @Body() body: any) {
+    return this.campaignSettingsService.updateSettings(req.user.tenantId, body);
+  }
+
+  // ─── EMERGENCY MODE ───────────────────────────────────────────────────────────
+
+  @Get('emergency')
+  getEmergencyStatus(@Tenant() tenantId: string) {
+    return this.emergencyModeService.getStatus(tenantId);
+  }
+
+  @Post('emergency/activate')
+  activateEmergency(@Tenant() tenantId: string, @Body('reason') reason: string) {
+    return this.emergencyModeService.activate(tenantId, reason);
+  }
+
+  @Post('emergency/deactivate')
+  deactivateEmergency(@Tenant() tenantId: string) {
+    return this.emergencyModeService.deactivate(tenantId);
+  }
+
   @Get(':id')
   getCampaign(@Request() req: any, @Param('id') id: string) {
     return this.campaignsService.getCampaignById(req.user.tenantId, id);
@@ -135,6 +168,35 @@ export class CampaignsController {
   @Get(':id/insights')
   getCampaignInsights(@Request() req: any, @Param('id') id: string) {
     return this.campaignsService.getCampaignInsights(req.user.tenantId, id);
+  }
+
+  /**
+   * GET /campaigns/:id/list-health
+   * Returns reputation-based health summary for the campaign's recipient list.
+   * Uses Redis cache (30min TTL); triggers background recalculation if stale.
+   */
+  @Get(':id/list-health')
+  getListHealth(@Request() req: any, @Param('id') id: string) {
+    return this.campaignsService.getCampaignListHealthCached(req.user.tenantId, id);
+  }
+
+  /**
+   * POST /campaigns/:id/list-health/calculate
+   * Triggers async list health calculation.
+   */
+  @Post(':id/list-health/calculate')
+  triggerListHealthCalculation(@Request() req: any, @Param('id') id: string) {
+    this.campaignsService.triggerListHealthCalculation(req.user.tenantId, id);
+    return { status: 'calculating' };
+  }
+
+  /**
+   * GET /campaigns/:id/stall
+   * Returns current stall reason for a RUNNING campaign (if stalled).
+   */
+  @Get(':id/stall')
+  getCampaignStallReason(@Param('id') id: string) {
+    return this.queueDiagnosticService.getStallReason(id);
   }
 
   // ─── RECIPIENTS ──────────────────────────────────────────────────────────────

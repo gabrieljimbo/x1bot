@@ -5,6 +5,7 @@ import { ExecutionEngineService } from '../execution/execution-engine.service';
 import { WorkflowNodeType, ExecutionStatus, TriggerMessagePayload } from '@n9n/shared';
 import { InboxService } from '../inbox/inbox.service';
 import { MessageStatus } from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class WhatsappMessageHandler {
@@ -14,6 +15,7 @@ export class WhatsappMessageHandler {
     private executionEngine: ExecutionEngineService,
     @Inject(forwardRef(() => InboxService))
     private inboxService: InboxService,
+    private eventEmitter: EventEmitter2,
   ) { }
 
   /**
@@ -65,6 +67,44 @@ export class WhatsappMessageHandler {
       status: MessageStatus.DELIVERED,
     } as any);
     // --- End CRM / Inbox Registration ---
+
+    // ── Reputation: detect contact reply for score boost ──────────────────
+    if (!normalizedPayload.fromMe && !skipTrigger && !contactPhone.endsWith('@g.us')) {
+      try {
+        // Find the last campaign log for this phone to compute response time
+        const lastCampaignLog = await this.prisma.campaignLog.findFirst({
+          where: {
+            phone: { contains: contactPhone.split('@')[0] },
+            status: 'sent',
+            campaign: { tenantId },
+          },
+          orderBy: { sentAt: 'desc' },
+        });
+
+        const responseTimeMs = lastCampaignLog
+          ? Date.now() - lastCampaignLog.sentAt.getTime()
+          : 0;
+
+        // Detect stop keywords
+        const textLower = (normalizedPayload.text ?? '').toLowerCase().trim();
+        const isStop = /^(pare|stop|n[aã]o\s+quero|cancelar|sair|remover|descadastrar|chega|basta)/.test(textLower);
+
+        // Detect interest signals
+        const isInterested = /\?|quero|interesse|quanto|valor|pre[çc]o|comprar|informa[çc]|mais|sim|pode/.test(textLower);
+
+        // Emit event — ContactReputationService listens via @OnEvent
+        this.eventEmitter.emit('contact.replied', {
+          tenantId,
+          phone: contactPhone.split('@')[0],
+          responseTimeMs,
+          isStop,
+          isInterested,
+        });
+      } catch {
+        // Non-critical — never block message processing
+      }
+    }
+    // ── End Reputation ────────────────────────────────────────────────────
 
     // 1. Loop Protection & Skip Trigger: Ignore messages from bot itself for workflow triggering
     // or if skipTrigger is explicitly requested (e.g. for history sync)

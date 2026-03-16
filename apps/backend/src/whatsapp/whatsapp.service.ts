@@ -445,5 +445,16 @@ export class WhatsappService {
       updatedAt: data.updatedAt,
     };
   }
+
+  async setWarmupOverride(tenantId: string, sessionId: string, override: boolean, userId?: string): Promise<void> {
+    await this.prisma.whatsappSession.update({
+      where: { id: sessionId, tenantId },
+      data: {
+        warmupOverride: override,
+        warmupOverriddenAt: override ? new Date() : null,
+        warmupOverriddenBy: override ? (userId ?? null) : null,
+      },
+    });
+  }
 }
 

@@ -7,6 +7,22 @@ import { StorageService } from '../storage/storage.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { EventType } from '@n9n/shared';
+import { SessionHealthMonitorService } from '../whatsapp/session-health-monitor.service';
+import { parseSpintax, hasSpintax } from '../whatsapp/spintax.util';
+import { ContactReputationService } from './contact-reputation.service';
+import { CampaignSettingsService } from './campaign-settings.service';
+import { RedisService } from '../redis/redis.service';
+import { QueueDiagnosticService } from './queue-diagnostic.service';
+import { EmergencyModeService } from './emergency-mode.service';
+
+// ─── Hardcoded safety caps (cannot be exceeded regardless of user config) ────
+const HARD_MAX_PER_DAY = 80;
+const HARD_MAX_PER_HOUR = 15;
+const HARD_MAX_PER_MINUTE = 2;
+const ALLOWED_HOUR_START_SP = 8;   // 08:00 Brasília
+const ALLOWED_HOUR_END_SP = 20;    // 20:00 Brasília
+const MIN_HEALTH_SCORE_TO_SEND = 40;
+const RECIPIENT_COOLDOWN_MS = 60_000; // 60s same recipient across sessions (kept for reference)
 
 @Injectable()
 export class CampaignsService {
@@ -16,12 +32,48 @@ export class CampaignsService {
     private readonly executionEngine: ExecutionEngineService,
     private readonly storageService: StorageService,
     private readonly eventBus: EventBusService,
+    private readonly healthMonitor: SessionHealthMonitorService,
+    private readonly reputation: ContactReputationService,
+    private readonly campaignSettings: CampaignSettingsService,
+    private readonly redis: RedisService,
+    private readonly queueDiagnostic: QueueDiagnosticService,
+    private readonly emergencyMode: EmergencyModeService,
   ) { }
 
   private processingCampaigns = new Set<string>();
+  // Track last send timestamp per recipient (kept for legacy reference; active lock is now Redis-based)
+  private recentRecipients = new Map<string, number>();
+
+  // Redis key for cross-session active lock per recipient
+  private kActiveRecipient = (tenantId: string, phone: string) => `wa:active:${tenantId}:${phone}`;
+
+  /**
+   * Daily reset at 09:00 São Paulo: clears DMS state for all active sessions.
+   * Runs at 12:00 UTC (09:00 BRT / America/Sao_Paulo).
+   */
+  @Cron('0 12 * * *') // 09:00 BRT = 12:00 UTC
+  async handleDailyReset() {
+    try {
+      const sessions = await this.prisma.whatsappSession.findMany({
+        where: { status: { in: ['CONNECTED', 'OPEN'] } },
+        select: { id: true },
+      });
+      for (const session of sessions) {
+        await this.healthMonitor.resetDmsState(session.id);
+        console.log(`[RESET] Sessão ${session.id}: contadores diários + DMS resetados às 09:00`);
+      }
+    } catch (err) {
+      console.error('[RESET] Erro no daily reset:', err);
+    }
+  }
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleCampaignScheduler() {
+    // Purge stale entries from recentRecipients (older than 2 minutes)
+    const staleThreshold = Date.now() - 120_000;
+    for (const [key, ts] of this.recentRecipients) {
+      if (ts < staleThreshold) this.recentRecipients.delete(key);
+    }
     const now = new Date();
     
     // 1. Auto-start scheduled campaigns
@@ -864,6 +916,15 @@ export class CampaignsService {
     // campaign.workflowId is now available directly from the model
     if (!campaign) return;
 
+    const protectionSettings = await this.campaignSettings.getSettings(campaign.tenantId);
+
+    // Emergency mode: apply capacity factor to daily/hour limits
+    const emergencyStatus = await this.emergencyMode.getStatus(campaign.tenantId);
+    const capacityFactor = (emergencyStatus as any).emergencyMode ? ((emergencyStatus as any).emergencyCapacity ?? 0.2) : 1.0;
+    if (capacityFactor < 1.0) {
+      console.warn(`[EMERGENCY] Campanha ${campaignId}: modo de emergência ativo — capacidade ${Math.round(capacityFactor * 100)}%`);
+    }
+
     let shadowWorkflowId: string | null = null;
     if (campaign.type === 'WORKFLOW') {
       const campaignWf = await this.prisma.campaignWorkflow.findUnique({
@@ -895,40 +956,98 @@ export class CampaignsService {
     }
 
     let pendingRecipients = campaign.recipients.filter((r) => r.status === 'pending');
-    if (campaign.randomOrder) {
-      for (let i = pendingRecipients.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [pendingRecipients[i], pendingRecipients[j]] = [pendingRecipients[j], pendingRecipients[i]];
+
+    // Validate and filter phone numbers (Brazilian format or international)
+    pendingRecipients = pendingRecipients.filter((r) => {
+      if (!this.isValidPhone(r.phone)) {
+        console.warn(`[CampaignsService] Número inválido ignorado: ${r.phone}`);
+        return false;
       }
+      return true;
+    });
+
+    // ── Sort by reputation + filter quarantined before randomOrder ─────────
+    {
+      const allPhones = pendingRecipients.map(r => r.phone);
+      const { sorted: sortedPhones, skipped } = await this.reputation.sortAndFilterPhones(
+        campaign.tenantId, allPhones,
+      );
+      if (skipped.length > 0) {
+        console.log(`[REPUTATION] ${skipped.length} contatos em quarentena/baixa reputação pulados`);
+      }
+      const sortedSet = new Set(sortedPhones);
+      // Keep only allowed phones, in sorted order
+      const sortedMap = new Map(sortedPhones.map((p, i) => [p, i]));
+      pendingRecipients = pendingRecipients
+        .filter(r => sortedSet.has(r.phone))
+        .sort((a, b) => (sortedMap.get(a.phone) ?? 999) - (sortedMap.get(b.phone) ?? 999));
+    }
+
+    if (campaign.randomOrder) {
+      // Shuffle within each reputation tier to avoid sending in obvious order
+      // but preserve the overall high → medium → low priority from reputation sort
+      const third = Math.ceil(pendingRecipients.length / 3);
+      const tier1 = pendingRecipients.slice(0, third);
+      const tier2 = pendingRecipients.slice(third, third * 2);
+      const tier3 = pendingRecipients.slice(third * 2);
+      [tier1, tier2, tier3].forEach(tier => {
+        for (let i = tier.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [tier[i], tier[j]] = [tier[j], tier[i]];
+        }
+      });
+      pendingRecipients = [...tier1, ...tier2, ...tier3];
     }
     let sessionIndex = 0;
     const todayThreshold = this.getResetThresholdInUTC((campaign as any).dailyResetTime);
 
-    // Rate limiting counters
-    const maxPerMinute: number = (campaign as any).maxPerMinute ?? 5;
-    const maxPerHour: number = (campaign as any).maxPerHour ?? 100;
+    // Rate limiting counters — applied per session for proper throttling
+    // Configured limits are capped by hardcoded safety ceiling, then adjusted by emergency capacity factor
+    const configuredMaxPerMinute: number = (campaign as any).maxPerMinute ?? 5;
+    const configuredMaxPerHour: number = (campaign as any).maxPerHour ?? 100;
+    const maxPerMinute: number = Math.max(1, Math.floor(Math.min(configuredMaxPerMinute, HARD_MAX_PER_MINUTE) * capacityFactor));
+    const maxPerHour: number = Math.max(1, Math.floor(Math.min(configuredMaxPerHour, HARD_MAX_PER_HOUR) * capacityFactor));
     const errorThreshold: number = (campaign as any).errorThreshold ?? 30;
     const allowedDays: number[] = Array.isArray((campaign as any).allowedDays)
       ? (campaign as any).allowedDays
       : JSON.parse((campaign as any).allowedDays ?? '[0,1,2,3,4,5,6]');
 
-    let sentThisMinute = 0;
-    let sentThisHour = 0;
-    let minuteStart = Date.now();
-    let hourStart = Date.now();
+    // Per-session rate counters (session ID → count)
+    const sentThisMinuteBySession = new Map<string, number>();
+    const sentThisHourBySession = new Map<string, number>();
+    const minuteStartBySession = new Map<string, number>();
+    const hourStartBySession = new Map<string, number>();
 
     for (const recipient of pendingRecipients) {
       const current = await this.prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
       if (!current || (current.status as string) !== CampaignStatus.RUNNING) break;
 
-      // Allowed days check (São Paulo timezone)
+      // ── Time window check (08:00–20:00 Brasília) ──────────────────────────
       const nowSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const currentHourSP = nowSP.getHours();
+      if (currentHourSP < ALLOWED_HOUR_START_SP || currentHourSP >= ALLOWED_HOUR_END_SP) {
+        console.log(`[CampaignsService] Fora do horário permitido (${currentHourSP}h BRT) — aguardando 08:00`);
+        // Wait until 08:00 next day
+        const nextStart = new Date(nowSP);
+        if (currentHourSP >= ALLOWED_HOUR_END_SP) {
+          nextStart.setDate(nextStart.getDate() + 1);
+        }
+        nextStart.setHours(ALLOWED_HOUR_START_SP, 0, 0, 0);
+        const waitMs = nextStart.getTime() - Date.now() + 60_000; // +1min buffer
+        await new Promise((r) => setTimeout(r, Math.max(waitMs, 60_000)));
+        // Re-check status after waiting
+        const statusAfterWait = await this.prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+        if (!statusAfterWait || (statusAfterWait.status as string) !== CampaignStatus.RUNNING) break;
+      }
+
+      // ── Allowed days check (São Paulo timezone) ───────────────────────────
       const todayDay = nowSP.getDay();
       if (!allowedDays.includes(todayDay)) {
         console.log(`[CampaignsService] Today (${todayDay}) is not an allowed day for campaign ${campaignId}. Stopping loop.`);
         break;
       }
 
+      // ── Blacklist check ───────────────────────────────────────────────────
       if (campaign.excludeBlocked) {
         const blocked = await this.isBlacklisted(campaign.tenantId, recipient.phone);
         if (blocked) {
@@ -937,29 +1056,103 @@ export class CampaignsService {
         }
       }
 
-      // Find a session with available capacity for this recipient.
-      // Uses an inner while-loop so we never skip a recipient when rotating sessions.
+      // ── Auto-blacklist: 3+ delivery failures in different campaigns ───────
+      if (await this.shouldAutoBlacklist(campaign.tenantId, recipient.phone)) {
+        await this.addToBlacklist(campaign.tenantId, recipient.phone, 'AUTO_BLACKLIST_DELIVERY_FAILURE');
+        await this.prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'blocked' } });
+        console.warn(`[CampaignsService] Auto-blacklist: ${recipient.phone} — 3+ falhas em campanhas diferentes`);
+        continue;
+      }
+
+      // ── Reputation check: exposure limit + quarantine + delay multiplier ──
+      const repCheck = await this.reputation.check(campaign.tenantId, recipient.phone, protectionSettings);
+      if (!repCheck.canSend) {
+        if (repCheck.reason === 'DAILY_LIMIT' || repCheck.reason === 'WEEKLY_LIMIT') {
+          // Skip silently — exposure limit reached, not a failure
+          console.log(`[EXPOSURE] Contato ${recipient.phone} atingiu limite de exposição, pulado`);
+        } else {
+          // Quarantine (opt-out) or bad number
+          console.log(`[REPUTATION] Contato ${recipient.phone} bloqueado (${repCheck.reason}), pulado`);
+        }
+        continue;
+      }
+
+      // ── Timing check: LOW_ENGAGEMENT_HOUR ────────────────────────────────
+      const nowSPCheck = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const currentHourForTiming = nowSPCheck.getHours();
+      const isLowHour = protectionSettings.timingOptimizationEnabled
+        && await this.reputation.isLowEngagementHour(campaign.tenantId, currentHourForTiming);
+      if (isLowHour) {
+        const betterHour = await this.reputation.getBestNextHour(campaign.tenantId, currentHourForTiming);
+        console.log(`[TIMING] Horário ${currentHourForTiming}h com baixo engajamento, envio reagendado para ${betterHour}h`);
+        const waitMinutes = ((betterHour - currentHourForTiming + 24) % 24) * 60;
+        const waitMs = waitMinutes * 60 * 1000;
+        if (waitMs > 0 && waitMs < 12 * 60 * 60 * 1000) {
+          await new Promise((r) => setTimeout(r, waitMs));
+        }
+      }
+
+      // ── Cross-session recipient lock (only when number is being processed simultaneously) ─
+      const recipientKey = `${campaign.tenantId}:${recipient.phone}`;
+      const lockKey = this.kActiveRecipient(campaign.tenantId, recipient.phone);
+      const redisClient = this.redis.getClient();
+      const isActiveLocked = await redisClient.exists(lockKey);
+      if (isActiveLocked) {
+        const ttl = await redisClient.ttl(lockKey);
+        console.log(`[CROSS_SESSION] Número ${recipient.phone} sendo processado por outra sessão, cooldown ${ttl}s aplicado`);
+        await new Promise(r => setTimeout(r, Math.min(ttl * 1000, 60000)));
+      }
+      // Set the lock for 30s (duration of one message processing)
+      await redisClient.set(lockKey, '1', 'EX', 30);
+
+      // ── Find a session with available capacity, prioritizing by health score ─
       let session: (typeof campaign.sessions)[0] | null = null;
+
+      // Sort sessions by health score (descending) before checking
+      const sessionsCandidates = [...campaign.sessions];
+      const sessionScores = await Promise.all(
+        sessionsCandidates.map(s => this.healthMonitor.getScore(s.sessionId))
+      );
+      // Round-robin within the healthy sessions (score >= MIN_HEALTH_SCORE_TO_SEND)
+      const healthySessions = sessionsCandidates
+        .map((s, i) => ({ session: s, score: sessionScores[i] }))
+        .filter(({ score }) => !protectionSettings.sessionHealthFilterEnabled || score >= MIN_HEALTH_SCORE_TO_SEND)
+        .sort((a, b) => b.score - a.score)
+        .map(({ session: s }) => s);
+
       let sessionsChecked = 0;
-      while (sessionsChecked < campaign.sessions.length) {
-        const candidate = campaign.sessions[sessionIndex % campaign.sessions.length];
+      while (sessionsChecked < healthySessions.length) {
+        const candidate = healthySessions[sessionIndex % healthySessions.length];
+        sessionIndex++;
+        sessionsChecked++;
         if (!candidate) break;
 
-        // Skip sessions that no longer exist in the session manager
+        // Skip sessions not in session manager
         const sessionClient = this.whatsappSessionManager.resolveSessionClient(candidate.sessionId);
         if (!sessionClient) {
           console.warn(`[CampaignsService] Session ${candidate.sessionId} not found, skipping`);
-          sessionIndex++;
-          sessionsChecked++;
           continue;
         }
 
         if (sessionClient.status !== 'CONNECTED') {
           console.warn(`[CampaignsService] Session ${candidate.sessionId} is ${sessionClient.status}, skipping`);
-          sessionIndex++;
-          sessionsChecked++;
           continue;
         }
+
+        // Circuit breaker check
+        const canSend = await this.healthMonitor.canSend(candidate.sessionId);
+        if (!canSend) {
+          console.warn(`[CampaignsService] Session ${candidate.sessionId} blocked by circuit breaker or DMS`);
+          continue;
+        }
+
+        // Per-session daily limit (with warmup + tourist mode applied)
+        const configuredDailyLimit = (campaign as any).limitPerSession ?? 50;
+        const effectiveDailyLimit = await this.healthMonitor.getEffectiveDailyLimit(
+          candidate.sessionId,
+          Math.min(configuredDailyLimit, HARD_MAX_PER_DAY),
+          HARD_MAX_PER_DAY,
+        );
 
         const countWhere: any = {
           campaignId,
@@ -971,14 +1164,23 @@ export class CampaignsService {
         }
 
         const sentCount = await this.prisma.campaignLog.count({ where: countWhere });
-        if (sentCount < (campaign as any).limitPerSession) {
-          session = candidate;
-          sessionIndex++; // advance so next lead goes to the next session (round-robin)
-          break;
+        if (sentCount >= effectiveDailyLimit) {
+          console.log(`[CampaignsService] Session ${candidate.sessionId} atingiu limite (${sentCount}/${effectiveDailyLimit}), skipping`);
+          continue;
         }
 
-        sessionIndex++;
-        sessionsChecked++;
+        // Tourist mode: skip cold contacts (no conversation history)
+        const isTourist = await this.healthMonitor.isTouristMode(candidate.sessionId);
+        if (isTourist) {
+          const hasHistory = await this.hasConversationHistory(candidate.sessionId, recipient.phone);
+          if (!hasHistory) {
+            console.log(`[TOURIST] Session ${candidate.sessionId}: pulando contato frio ${recipient.phone}`);
+            continue;
+          }
+        }
+
+        session = candidate;
+        break;
       }
 
       if (!session) {
@@ -986,31 +1188,63 @@ export class CampaignsService {
         break;
       }
 
-      // Per-minute rate limit
+      // ── Per-session per-minute rate limit ─────────────────────────────────
+      const sId = session.sessionId;
       const nowTs = Date.now();
-      if (nowTs - minuteStart >= 60_000) {
-        sentThisMinute = 0;
-        minuteStart = nowTs;
+
+      if (!minuteStartBySession.has(sId)) minuteStartBySession.set(sId, nowTs);
+      if (!sentThisMinuteBySession.has(sId)) sentThisMinuteBySession.set(sId, 0);
+      if (!hourStartBySession.has(sId)) hourStartBySession.set(sId, nowTs);
+      if (!sentThisHourBySession.has(sId)) sentThisHourBySession.set(sId, 0);
+
+      if (nowTs - minuteStartBySession.get(sId)! >= 60_000) {
+        sentThisMinuteBySession.set(sId, 0);
+        minuteStartBySession.set(sId, nowTs);
       }
-      if (sentThisMinute >= maxPerMinute) {
-        const waitMs = 60_000 - (Date.now() - minuteStart);
-        console.log(`[CampaignsService] Per-minute limit (${maxPerMinute}) reached, waiting ${Math.ceil(waitMs / 1000)}s`);
+      if (sentThisMinuteBySession.get(sId)! >= maxPerMinute) {
+        const waitMs = 60_000 - (Date.now() - minuteStartBySession.get(sId)!);
+        console.log(`[CampaignsService] Session ${sId}: Per-minute limit (${maxPerMinute}) reached, waiting ${Math.ceil(waitMs / 1000)}s`);
         await new Promise((r) => setTimeout(r, waitMs > 0 ? waitMs : 1000));
-        sentThisMinute = 0;
-        minuteStart = Date.now();
+        sentThisMinuteBySession.set(sId, 0);
+        minuteStartBySession.set(sId, Date.now());
       }
 
-      // Per-hour rate limit
-      if (Date.now() - hourStart >= 3_600_000) {
-        sentThisHour = 0;
-        hourStart = Date.now();
+      // ── Per-session per-hour rate limit ───────────────────────────────────
+      if (Date.now() - hourStartBySession.get(sId)! >= 3_600_000) {
+        sentThisHourBySession.set(sId, 0);
+        hourStartBySession.set(sId, Date.now());
       }
-      if (sentThisHour >= maxPerHour) {
-        const waitMs = 3_600_000 - (Date.now() - hourStart);
-        console.log(`[CampaignsService] Per-hour limit (${maxPerHour}) reached, waiting ${Math.ceil(waitMs / 60000)}min`);
+      if (sentThisHourBySession.get(sId)! >= maxPerHour) {
+        const waitMs = 3_600_000 - (Date.now() - hourStartBySession.get(sId)!);
+        console.log(`[CampaignsService] Session ${sId}: Per-hour limit (${maxPerHour}) reached, waiting ${Math.ceil(waitMs / 60000)}min`);
         await new Promise((r) => setTimeout(r, waitMs > 0 ? waitMs : 1000));
-        sentThisHour = 0;
-        hourStart = Date.now();
+        sentThisHourBySession.set(sId, 0);
+        hourStartBySession.set(sId, Date.now());
+      }
+
+      // ── Pressure valve check — applies factor to per-minute and per-hour limits ─
+      const pvFactor = await this.healthMonitor.getPressureValveFactor(sId);
+      const effectiveMaxPerMin = Math.max(1, Math.floor(maxPerMinute * pvFactor));
+      const effectiveMaxPerHour = Math.max(1, Math.floor(maxPerHour * pvFactor));
+      if (pvFactor < 1.0) {
+        console.log(`[PRESSURE_VALVE] Fator ${pvFactor} aplicado na sessão ${sId}: limite/min reduzido de ${maxPerMinute} para ${effectiveMaxPerMin}, limite/hora reduzido de ${maxPerHour} para ${effectiveMaxPerHour}`);
+      }
+      await this.healthMonitor.updatePressureValve(sId, maxPerMinute);
+
+      // Apply effective limits (pressure-valve-adjusted)
+      if ((sentThisMinuteBySession.get(sId) ?? 0) >= effectiveMaxPerMin) {
+        const waitMs = 60_000 - (Date.now() - minuteStartBySession.get(sId)!);
+        console.log(`[CampaignsService] Session ${sId}: Per-minute effective limit (${effectiveMaxPerMin}) reached, waiting ${Math.ceil(waitMs / 1000)}s`);
+        await new Promise((r) => setTimeout(r, waitMs > 0 ? waitMs : 1000));
+        sentThisMinuteBySession.set(sId, 0);
+        minuteStartBySession.set(sId, Date.now());
+      }
+      if ((sentThisHourBySession.get(sId) ?? 0) >= effectiveMaxPerHour) {
+        const waitMs = 3_600_000 - (Date.now() - hourStartBySession.get(sId)!);
+        console.log(`[CampaignsService] Session ${sId}: Per-hour effective limit (${effectiveMaxPerHour}) reached, waiting ${Math.ceil(waitMs / 60000)}min`);
+        await new Promise((r) => setTimeout(r, waitMs > 0 ? waitMs : 1000));
+        sentThisHourBySession.set(sId, 0);
+        hourStartBySession.set(sId, Date.now());
       }
 
       try {
@@ -1019,7 +1253,6 @@ export class CampaignsService {
           await this.prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'processing' } });
 
           if (shadowWorkflowId) {
-            // Execute CampaignWorkflow via shadow Workflow using ExecutionEngine
             await this.executionEngine.startExecution(
               campaign.tenantId,
               shadowWorkflowId,
@@ -1030,7 +1263,6 @@ export class CampaignsService {
               { triggerType: 'CAMPAIGN_START', campaignId: campaign.id }
             );
           } else {
-            // Fallback: workflowId references a regular Workflow
             await this.executionEngine.startExecution(
               campaign.tenantId,
               campaign.workflowId,
@@ -1042,18 +1274,41 @@ export class CampaignsService {
             );
           }
         } else {
-          // Simple campaign: send messages directly
+          // Simple campaign: send messages with humanization enabled
           for (const msg of campaign.messages) {
+            // NOTE: Variable substitution ({nome}, {empresa}, {telefone}) must happen
+          // BEFORE spintax parsing ([[opt1|opt2]]). If variable substitution is added
+          // in the future, apply it here first, then call parseSpintax.
+          // Apply spintax to message content
+            const msgContent = msg.content && hasSpintax(msg.content)
+              ? parseSpintax(msg.content)
+              : msg.content;
+            const msgCaption = msg.caption && hasSpintax(msg.caption)
+              ? parseSpintax(msg.caption)
+              : msg.caption;
+
+            // Check for repetitive content pattern
+            const contentToCheck = msgContent ?? msgCaption ?? '';
+            const isRepetitive = contentToCheck
+              ? await this.healthMonitor.checkRepetitiveContent(sId, contentToCheck)
+              : false;
+            if (isRepetitive) {
+              // Extra delay for repetitive content
+              const extraDelay = Math.floor(Math.random() * 10_000) + 10_000;
+              console.log(`[PATTERN] Session ${sId}: delay extra ${Math.ceil(extraDelay / 1000)}s por conteúdo repetitivo`);
+              await new Promise((r) => setTimeout(r, extraDelay));
+            }
+
             if (msg.mediaUrl && msg.type !== 'text') {
               await this.whatsappSessionManager.sendMedia(
                 session.sessionId,
                 recipient.phone,
                 msg.type as 'image' | 'video' | 'audio' | 'document',
                 msg.mediaUrl,
-                { caption: msg.caption ?? undefined, bypassDelay: true },
+                { caption: msgCaption ?? undefined, bypassDelay: false },
               );
-            } else if (msg.content) {
-              await this.whatsappSessionManager.sendMessage(session.sessionId, recipient.phone, msg.content, true);
+            } else if (msgContent) {
+              await this.whatsappSessionManager.sendMessage(session.sessionId, recipient.phone, msgContent, false);
             }
           }
           // Only mark as sent directly for simple campaigns
@@ -1061,15 +1316,39 @@ export class CampaignsService {
           await this.prisma.campaignLog.create({ data: { campaignId, phone: recipient.phone, sessionId: session.sessionId, status: 'sent' } });
         }
 
-        sentThisMinute++;
-        sentThisHour++;
+        sentThisMinuteBySession.set(sId, (sentThisMinuteBySession.get(sId) ?? 0) + 1);
+        sentThisHourBySession.set(sId, (sentThisHourBySession.get(sId) ?? 0) + 1);
+        this.recentRecipients.set(recipientKey, Date.now());
+
+        // DMS tick (2h continuous check)
+        await this.healthMonitor.tickDmsSuccess(sId);
+
+        // Record progress for stall detection
+        await this.queueDiagnostic.recordProgress(campaignId);
+
+        // Record send in reputation system
+        const nowSPSend = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+        await this.reputation.recordSend(campaign.tenantId, recipient.phone, nowSPSend.getHours());
+
       } catch (e: any) {
         const isBlocked = e.message?.includes('blocked') || e.message?.includes('forbidden');
+        const isRestriction = e.message?.includes('restricted') || e.message?.includes('spam');
         await this.prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'failed', error: e.message } });
         await this.prisma.campaignLog.create({
           data: { campaignId, phone: recipient.phone, sessionId: session.sessionId, status: isBlocked ? 'blocked' : 'failed', error: e.message },
         });
         if (isBlocked) await this.addToBlacklist(campaign.tenantId, recipient.phone, 'blocked');
+
+        // Record delivery error in reputation
+        await this.reputation.recordDeliveryError(campaign.tenantId, recipient.phone, protectionSettings);
+
+        // Restriction: pause 6h minimum
+        if (isRestriction) {
+          console.error(`[CampaignsService] Session ${sId}: RESTRIÇÃO detectada — pausando campanha por 6h`);
+          await this.prisma.campaign.update({ where: { id: campaignId }, data: { status: CampaignStatus.PAUSED } });
+          await this.healthMonitor.recordFailure(sId, e.message, true);
+          break;
+        }
 
         // Error threshold check: pause campaign if error rate exceeds limit
         if (errorThreshold > 0) {
@@ -1098,8 +1377,16 @@ export class CampaignsService {
         }
       }
 
-      const delay = Math.floor(Math.random() * (campaign.delayMax - campaign.delayMin + 1)) + campaign.delayMin;
-      await new Promise((r) => setTimeout(r, delay * 1000));
+      // ── Inter-recipient delay: health score × reputation multipliers ────────
+      const adaptiveMultiplier = await this.healthMonitor.getAdaptiveDelayMultiplier(sId);
+      // Combine both multipliers (take the higher of the two)
+      const combinedMultiplier = Math.max(adaptiveMultiplier, repCheck.delayMultiplier);
+      const baseDelaySec = Math.floor(Math.random() * (campaign.delayMax - campaign.delayMin + 1)) + campaign.delayMin;
+      const effectiveDelaySec = Math.round(baseDelaySec * combinedMultiplier);
+      if (combinedMultiplier > 1) {
+        console.log(`[CampaignsService] Session ${sId}: Delay ×${combinedMultiplier} (health:${adaptiveMultiplier}, rep:${repCheck.delayMultiplier}) → ${effectiveDelaySec}s`);
+      }
+      await new Promise((r) => setTimeout(r, effectiveDelaySec * 1000));
     }
 
     const finalState = await this.prisma.campaign.findUnique({ where: { id: campaignId } });
@@ -1368,6 +1655,138 @@ export class CampaignsService {
     const campaign = await this.prisma.campaign.findFirst({ where: { id: campaignId, tenantId } });
     if (!campaign) throw new NotFoundException('Campaign not found');
     return campaign;
+  }
+
+  async getCampaignListHealth(tenantId: string, campaignId: string) {
+    await this.assertCampaignBelongs(tenantId, campaignId);
+    const recipients = await this.prisma.campaignRecipient.findMany({
+      where: { campaignId },
+      select: { phone: true },
+    });
+    const phones = recipients.map(r => r.phone);
+    return this.reputation.getListHealth(tenantId, phones);
+  }
+
+  async triggerListHealthCalculation(tenantId: string, campaignId: string): Promise<void> {
+    const cacheKey = `list-health:${campaignId}`;
+    // Run calculation in background (don't await)
+    this.doListHealthCalculation(tenantId, campaignId, cacheKey).catch(err =>
+      console.error(`[LIST_HEALTH] Erro ao calcular health para campanha ${campaignId}:`, err),
+    );
+  }
+
+  private async doListHealthCalculation(tenantId: string, campaignId: string, cacheKey: string): Promise<void> {
+    const client = this.redis.getClient();
+    const recipients = await this.prisma.campaignRecipient.findMany({
+      where: { campaignId },
+      select: { phone: true },
+    });
+    const phones = recipients.map(r => r.phone);
+    const result = await this.reputation.getListHealth(tenantId, phones);
+    const payload = JSON.stringify({ ...result, calculatedAt: new Date().toISOString(), stale: false });
+    await client.set(cacheKey, payload, 'EX', 1800); // 30 min TTL
+
+    // Notify frontend via event
+    this.eventBus.emit({
+      type: 'list-health.ready' as any,
+      tenantId,
+      campaignId,
+      result,
+      timestamp: new Date(),
+    } as any).catch(() => {});
+  }
+
+  async getCampaignListHealthCached(tenantId: string, campaignId: string): Promise<any> {
+    await this.assertCampaignBelongs(tenantId, campaignId);
+    const client = this.redis.getClient();
+    const cacheKey = `list-health:${campaignId}`;
+    const cached = await client.get(cacheKey);
+
+    if (cached) {
+      const data = JSON.parse(cached);
+      const ageMs = Date.now() - new Date(data.calculatedAt).getTime();
+      if (ageMs > 25 * 60 * 1000) { // stale after 25 min
+        // Return stale result and trigger background refresh
+        this.triggerListHealthCalculation(tenantId, campaignId);
+        return { ...data, stale: true };
+      }
+      return data;
+    }
+
+    // No cache — trigger calculation and return status
+    this.triggerListHealthCalculation(tenantId, campaignId);
+    return { status: 'calculating' };
+  }
+
+  /**
+   * Validates phone format. Accepts Brazilian (DDI 55 + DDD + 8-9 digits)
+   * and international (E.164 format, 7-15 digits).
+   */
+  private isValidPhone(phone: string): boolean {
+    if (!phone) return false;
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length < 7 || cleaned.length > 15) return false;
+
+    // Brazilian: 55 + 2-digit DDD + 8 or 9 digits = 12 or 13 digits total
+    if (cleaned.startsWith('55') && (cleaned.length === 12 || cleaned.length === 13)) {
+      const ddd = parseInt(cleaned.substring(2, 4), 10);
+      const validDDDs = [
+        11,12,13,14,15,16,17,18,19, // SP
+        21,22,24,                    // RJ
+        27,28,                       // ES
+        31,32,33,34,35,37,38,        // MG
+        41,42,43,44,45,46,           // PR
+        47,48,49,                    // SC
+        51,53,54,55,                 // RS
+        61,                          // DF
+        62,64,                       // GO
+        63,                          // TO
+        65,66,                       // MT
+        67,                          // MS
+        68,                          // AC
+        69,                          // RO
+        71,73,74,75,77,              // BA
+        79,                          // SE
+        81,87,                       // PE
+        82,                          // AL
+        83,                          // PB
+        84,                          // RN
+        85,88,                       // CE
+        86,89,                       // PI
+        91,93,94,                    // PA
+        92,97,                       // AM
+        95,                          // RR
+        96,                          // AP
+        98,99,                       // MA
+      ];
+      return validDDDs.includes(ddd);
+    }
+
+    // General international: 7-15 digits
+    return cleaned.length >= 7 && cleaned.length <= 15;
+  }
+
+  /**
+   * Returns true if this phone has delivery failures in 3+ different campaigns
+   * (should be auto-blacklisted).
+   */
+  private async shouldAutoBlacklist(tenantId: string, phone: string): Promise<boolean> {
+    const result = await this.prisma.campaignLog.findMany({
+      where: { phone, status: 'failed', campaign: { tenantId } },
+      select: { campaignId: true },
+      distinct: ['campaignId'],
+    });
+    return result.length >= 3;
+  }
+
+  /**
+   * Returns true if there is any prior conversation between this session and phone.
+   */
+  private async hasConversationHistory(sessionId: string, phone: string): Promise<boolean> {
+    const count = await this.prisma.conversation.count({
+      where: { sessionId, contactPhone: { contains: phone.replace(/\D/g, '').slice(-10) } },
+    });
+    return count > 0;
   }
 
   private getResetThresholdInUTC(resetTimeStr: string): Date {

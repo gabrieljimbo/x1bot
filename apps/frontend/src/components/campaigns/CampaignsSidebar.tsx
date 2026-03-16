@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Send, GitBranch, Users, Ban, BarChart3 } from 'lucide-react'
+import { Send, GitBranch, Users, Ban, BarChart3, ShieldCheck } from 'lucide-react'
 
 const links = [
   { href: '/campaigns/simple', label: 'Disparos', icon: Send },
@@ -10,6 +10,7 @@ const links = [
   { href: '/campaigns/lists', label: 'Listas', icon: Users },
   { href: '/campaigns/blacklist', label: 'Blacklist', icon: Ban },
   { href: '/campaigns/insights', label: 'Insights', icon: BarChart3 },
+  { href: '/campaigns/settings', label: 'Proteções', icon: ShieldCheck },
 ]
 
 export default function CampaignsSidebar() {

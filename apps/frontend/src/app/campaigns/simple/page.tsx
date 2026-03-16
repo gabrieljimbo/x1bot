@@ -749,7 +749,7 @@ function CampaignDrawer({
                     {msg.type === 'text' ? (
                       <textarea rows={3} value={msg.content ?? ''} onChange={e => updateMsg(idx, 'content', e.target.value)}
                         className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm resize-none focus:outline-none focus:border-[#00ff88]/50"
-                        placeholder="Digite a mensagem..." />
+                        placeholder="Digite a mensagem... Variáveis: {nome}, {empresa}, {telefone} | Variação aleatória: [[Olá|Oi|Bom dia]]" />
                     ) : (
                       <>
                         <input value={msg.mediaUrl ?? ''} onChange={e => updateMsg(idx, 'mediaUrl', e.target.value)}

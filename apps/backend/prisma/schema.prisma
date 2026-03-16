@@ -130,6 +130,9 @@ model WhatsappSession {
   createdAt              DateTime                 @default(now())
   updatedAt              DateTime                 @updatedAt
   isBusiness             Boolean                  @default(false)
+  warmupOverride         Boolean                  @default(false)
+  warmupOverriddenAt     DateTime?
+  warmupOverriddenBy     String?
   conversations          Conversation[]
   authInfo               WhatsappAuthState?
   groupConfigs           WhatsappGroupConfig[]
@@ -222,22 +225,29 @@ model User {
 }
 
 model Tenant {
-  id                  String                @id @default(cuid())
-  name                String
-  email               String                @unique
-  isActive            Boolean               @default(true)
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  conversations       Conversation[]
-  users               User[]
-  whatsappSessions    WhatsappSession[]
-  workflowExecutions  WorkflowExecution[]
-  workflows           Workflow[]
-  campaigns           Campaign[]
-  campaignBlacklist   CampaignBlacklist[]
-  contactLists        ContactList[]
-  sentProducts        SentProduct[]
-  productRankings     ProductRanking[]
+  id                   String                @id @default(cuid())
+  name                 String
+  email                String                @unique
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  emergencyMode        Boolean               @default(false)
+  emergencyActivatedAt DateTime?
+  emergencyExpiresAt   DateTime?
+  emergencyReason      String?
+  emergencyCapacity    Float                 @default(1.0)
+  conversations        Conversation[]
+  users                User[]
+  whatsappSessions     WhatsappSession[]
+  workflowExecutions   WorkflowExecution[]
+  workflows            Workflow[]
+  campaigns            Campaign[]
+  campaignBlacklist    CampaignBlacklist[]
+  contactLists         ContactList[]
+  sentProducts         SentProduct[]
+  productRankings      ProductRanking[]
+  contactReputations   ContactReputation[]
+  campaignSettings     CampaignSettings?
   @@map("tenants")
 }
 
@@ -737,6 +747,32 @@ model ProductRanking {
   @@map("product_rankings")
 }
 
+model ContactReputation {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  phone                String
+  score                Int       @default(70)
+  consecutiveNoReply   Int       @default(0)
+  lastCampaignSentAt   DateTime?
+  campaign7DayCount    Int       @default(0)
+  campaignTodayCount   Int       @default(0)
+  todayResetDate       String?               // YYYY-MM-DD (SP timezone), for daily counter reset
+  avgResponseTimeMs    BigInt?               // rolling avg for engagement drop detection
+  lastRespondedAt      DateTime?
+  engagementDrop       Boolean   @default(false)
+  quarantineUntil      DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  tenant               Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, phone])
+  @@index([tenantId])
+  @@index([tenantId, score])
+  @@index([quarantineUntil])
+  @@map("contact_reputations")
+}
+
 model MlDailyOffer {
   id            String   @id @default(cuid())
   title         String
@@ -753,4 +789,32 @@ model MlDailyOffer {
 
   @@index([title])
   @@index([expiresAt])
+}
+
+model CampaignSettings {
+  id                          String   @id @default(cuid())
+  tenantId                    String   @unique
+
+  // Auto-blacklist toggles
+  autoBlacklistOptOut         Boolean  @default(true)   // blacklist after explicit stop keyword
+  autoBlacklistBadNumbers     Boolean  @default(true)   // blacklist after 2+ delivery errors
+
+  // Exposure limits: max 1/day, 3/week per contact number
+  exposureLimitsEnabled       Boolean  @default(true)
+
+  // Quarantine: respect opt-out quarantine periods
+  reputationQuarantineEnabled Boolean  @default(true)
+
+  // Session health filter: skip sessions with health score < 40
+  sessionHealthFilterEnabled  Boolean  @default(true)
+
+  // Timing optimization: skip low-engagement hours (data-driven, after 100+ sends)
+  timingOptimizationEnabled   Boolean  @default(false)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("campaign_settings")
 }

@@ -773,6 +773,41 @@ export const apiClient = {
     await client.delete(`/campaigns/blacklist/${phone}`);
   },
 
+  getCampaignSettings: async () => {
+    const { data } = await client.get('/campaigns/settings');
+    return data;
+  },
+
+  updateCampaignSettings: async (settings: any) => {
+    const { data } = await client.put('/campaigns/settings', settings);
+    return data;
+  },
+
+  getCampaignStallReason: async (id: string) => {
+    const { data } = await client.get(`/campaigns/${id}/stall`);
+    return data;
+  },
+
+  triggerListHealthCalculation: async (id: string) => {
+    const { data } = await client.post(`/campaigns/${id}/list-health/calculate`);
+    return data;
+  },
+
+  getEmergencyStatus: async () => {
+    const { data } = await client.get('/campaigns/emergency');
+    return data;
+  },
+
+  activateEmergency: async (reason: string) => {
+    const { data } = await client.post('/campaigns/emergency/activate', { reason });
+    return data;
+  },
+
+  deactivateEmergency: async () => {
+    const { data } = await client.post('/campaigns/emergency/deactivate');
+    return data;
+  },
+
   // Contact Lists
   getContactLists: async () => {
     const { data } = await client.get('/contact-lists');
