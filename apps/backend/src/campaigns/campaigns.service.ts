@@ -942,9 +942,11 @@ export class CampaignsService {
       console.warn(`[EMERGENCY] Campanha ${campaignId}: modo de emergência ativo — capacidade ${Math.round(capacityFactor * 100)}%`);
     }
 
-    // Shadow workflow is upserted per-dispatch (inside the loop) so that any
-    // edits made to the campaign workflow are picked up by the very next send.
+    // Shadow workflow: checked per-dispatch so edits are picked up immediately.
+    // Upsert only runs when CampaignWorkflow.updatedAt changed — avoids
+    // redundant DB writes when nothing has been edited.
     let shadowWorkflowId: string | null = null;
+    let lastCampaignWfUpdatedAt: Date | null = null;
 
     let pendingRecipients = campaign.recipients.filter((r) => r.status === 'pending');
 
@@ -1247,32 +1249,43 @@ export class CampaignsService {
 
       try {
         if (campaign.workflowId) {
-          // Re-upsert shadow workflow on every dispatch so edits made while the
-          // campaign is running are reflected in the next send immediately.
+          // Check for workflow changes on every dispatch (cheap read).
+          // Only re-upsert the shadow when the CampaignWorkflow was actually
+          // edited (updatedAt changed), avoiding unnecessary DB writes.
           if (campaign.type === 'WORKFLOW') {
             const campaignWf = await this.prisma.campaignWorkflow.findUnique({
               where: { campaignId: campaign.id },
+              select: { nodes: true, edges: true, updatedAt: true },
             });
             if (campaignWf && campaignWf.nodes) {
-              const shadowId = `shadow-${campaign.id}`;
-              const shadowWf = await this.prisma.workflow.upsert({
-                where: { id: shadowId },
-                create: {
-                  id: shadowId,
-                  tenantId: campaign.tenantId,
-                  name: `[Auto] Campanha: ${campaign.name}`,
-                  description: 'Workflow virtual gerado automaticamente',
-                  isActive: true,
-                  nodes: campaignWf.nodes ?? Prisma.JsonNull,
-                  edges: campaignWf.edges ?? Prisma.JsonNull,
-                },
-                update: {
-                  nodes: campaignWf.nodes ?? Prisma.JsonNull,
-                  edges: campaignWf.edges ?? Prisma.JsonNull,
-                  isActive: true,
-                },
-              });
-              shadowWorkflowId = shadowWf.id;
+              const needsUpsert =
+                !lastCampaignWfUpdatedAt ||
+                campaignWf.updatedAt > lastCampaignWfUpdatedAt;
+              if (needsUpsert) {
+                const shadowId = `shadow-${campaign.id}`;
+                const shadowWf = await this.prisma.workflow.upsert({
+                  where: { id: shadowId },
+                  create: {
+                    id: shadowId,
+                    tenantId: campaign.tenantId,
+                    name: `[Auto] Campanha: ${campaign.name}`,
+                    description: 'Workflow virtual gerado automaticamente',
+                    isActive: true,
+                    nodes: campaignWf.nodes ?? Prisma.JsonNull,
+                    edges: campaignWf.edges ?? Prisma.JsonNull,
+                  },
+                  update: {
+                    nodes: campaignWf.nodes ?? Prisma.JsonNull,
+                    edges: campaignWf.edges ?? Prisma.JsonNull,
+                    isActive: true,
+                  },
+                });
+                shadowWorkflowId = shadowWf.id;
+                lastCampaignWfUpdatedAt = campaignWf.updatedAt;
+                if (lastCampaignWfUpdatedAt) {
+                  console.log(`[CampaignsService] Shadow workflow atualizado para campanha ${campaign.id} — v: ${campaignWf.updatedAt.toISOString()}`);
+                }
+              }
             }
           }
 
