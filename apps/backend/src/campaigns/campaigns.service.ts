@@ -1012,11 +1012,9 @@ export class CampaignsService {
       ? cfg.allowedDays as number[]
       : JSON.parse((cfg.allowedDays as string) ?? '[0,1,2,3,4,5,6]');
 
-    // Per-session rate counters (session ID → count)
-    const sentThisMinuteBySession = new Map<string, number>();
-    const sentThisHourBySession = new Map<string, number>();
-    const minuteStartBySession = new Map<string, number>();
-    const hourStartBySession = new Map<string, number>();
+    // Per-session rate limiting via Redis sliding-window sorted sets.
+    // Keys: rl:<campaignId>:<sessionId>:min  /  rl:<campaignId>:<sessionId>:hr
+    const rlClient = this.redis.getClient();
 
     for (const recipient of pendingRecipients) {
       const current = await this.prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
@@ -1215,63 +1213,51 @@ export class CampaignsService {
         break;
       }
 
-      // ── Per-session per-minute rate limit ─────────────────────────────────
+      // ── Per-session sliding-window rate limit (Redis sorted set) ─────────────
+      // Uses timestamps as scores; entries older than the window are removed so
+      // zcount always reflects the true count in the rolling window.
+      // waitMs is derived from the OLDEST entry in the window — guarantees the
+      // wait is exactly as long as needed, never a fixed/arbitrary value.
       const sId = session.sessionId;
-      const nowTs = Date.now();
+      const keyMin  = `rl:${campaignId}:${sId}:min`;
+      const keyHour = `rl:${campaignId}:${sId}:hr`;
 
-      if (!minuteStartBySession.has(sId)) minuteStartBySession.set(sId, nowTs);
-      if (!sentThisMinuteBySession.has(sId)) sentThisMinuteBySession.set(sId, 0);
-      if (!hourStartBySession.has(sId)) hourStartBySession.set(sId, nowTs);
-      if (!sentThisHourBySession.has(sId)) sentThisHourBySession.set(sId, 0);
-
-      if (nowTs - minuteStartBySession.get(sId)! >= 60_000) {
-        sentThisMinuteBySession.set(sId, 0);
-        minuteStartBySession.set(sId, nowTs);
-      }
-      if (sentThisMinuteBySession.get(sId)! >= maxPerMinute) {
-        const waitMs = 60_000 - (Date.now() - minuteStartBySession.get(sId)!);
-        console.log(`[CampaignsService] Session ${sId}: Per-minute limit (${maxPerMinute}) reached, waiting ${Math.ceil(waitMs / 1000)}s`);
-        await new Promise((r) => setTimeout(r, waitMs > 0 ? waitMs : 1000));
-        sentThisMinuteBySession.set(sId, 0);
-        minuteStartBySession.set(sId, Date.now());
-      }
-
-      // ── Per-session per-hour rate limit ───────────────────────────────────
-      if (Date.now() - hourStartBySession.get(sId)! >= 3_600_000) {
-        sentThisHourBySession.set(sId, 0);
-        hourStartBySession.set(sId, Date.now());
-      }
-      if (sentThisHourBySession.get(sId)! >= maxPerHour) {
-        const waitMs = 3_600_000 - (Date.now() - hourStartBySession.get(sId)!);
-        console.log(`[CampaignsService] Session ${sId}: Per-hour limit (${maxPerHour}) reached, waiting ${Math.ceil(waitMs / 60000)}min`);
-        await new Promise((r) => setTimeout(r, waitMs > 0 ? waitMs : 1000));
-        sentThisHourBySession.set(sId, 0);
-        hourStartBySession.set(sId, Date.now());
-      }
-
-      // ── Pressure valve check — applies factor to per-minute and per-hour limits ─
+      // Pressure valve: may lower effective limits per-session
       const pvFactor = await this.healthMonitor.getPressureValveFactor(sId);
-      const effectiveMaxPerMin = Math.max(1, Math.floor(maxPerMinute * pvFactor));
+      const effectiveMaxPerMin  = Math.max(1, Math.floor(maxPerMinute  * pvFactor));
       const effectiveMaxPerHour = Math.max(1, Math.floor(maxPerHour * pvFactor));
       if (pvFactor < 1.0) {
-        console.log(`[PRESSURE_VALVE] Fator ${pvFactor} aplicado na sessão ${sId}: limite/min reduzido de ${maxPerMinute} para ${effectiveMaxPerMin}, limite/hora reduzido de ${maxPerHour} para ${effectiveMaxPerHour}`);
+        console.log(`[PRESSURE_VALVE] Fator ${pvFactor} na sessão ${sId}: limite/min ${maxPerMinute}→${effectiveMaxPerMin}, limite/hora ${maxPerHour}→${effectiveMaxPerHour}`);
       }
       await this.healthMonitor.updatePressureValve(sId, maxPerMinute);
 
-      // Apply effective limits (pressure-valve-adjusted)
-      if ((sentThisMinuteBySession.get(sId) ?? 0) >= effectiveMaxPerMin) {
-        const waitMs = 60_000 - (Date.now() - minuteStartBySession.get(sId)!);
-        console.log(`[CampaignsService] Session ${sId}: Per-minute effective limit (${effectiveMaxPerMin}) reached, waiting ${Math.ceil(waitMs / 1000)}s`);
-        await new Promise((r) => setTimeout(r, waitMs > 0 ? waitMs : 1000));
-        sentThisMinuteBySession.set(sId, 0);
-        minuteStartBySession.set(sId, Date.now());
+      // ── Per-minute window ──────────────────────────────────────────────────
+      {
+        const nowMs = Date.now();
+        await rlClient.zremrangebyscore(keyMin, 0, nowMs - 60_000);
+        const countMin = await rlClient.zcount(keyMin, '-inf', '+inf');
+        if (countMin >= effectiveMaxPerMin) {
+          // oldest entry still in window → wait until it expires
+          const oldest = await rlClient.zrangebyscore(keyMin, '-inf', '+inf', 'WITHSCORES', 'LIMIT', 0, 1);
+          const oldestScore = oldest.length >= 2 ? Number(oldest[1]) : nowMs - 60_000;
+          const waitMs = Math.max((oldestScore + 60_000) - nowMs + 100, 1_000);
+          console.log(`[CampaignsService] Session ${sId}: Per-minute limit (${effectiveMaxPerMin}) reached — aguardando ${Math.ceil(waitMs / 1000)}s até janela resetar`);
+          await new Promise((r) => setTimeout(r, waitMs));
+        }
       }
-      if ((sentThisHourBySession.get(sId) ?? 0) >= effectiveMaxPerHour) {
-        const waitMs = 3_600_000 - (Date.now() - hourStartBySession.get(sId)!);
-        console.log(`[CampaignsService] Session ${sId}: Per-hour effective limit (${effectiveMaxPerHour}) reached, waiting ${Math.ceil(waitMs / 60000)}min`);
-        await new Promise((r) => setTimeout(r, waitMs > 0 ? waitMs : 1000));
-        sentThisHourBySession.set(sId, 0);
-        hourStartBySession.set(sId, Date.now());
+
+      // ── Per-hour window ────────────────────────────────────────────────────
+      {
+        const nowMs = Date.now();
+        await rlClient.zremrangebyscore(keyHour, 0, nowMs - 3_600_000);
+        const countHour = await rlClient.zcount(keyHour, '-inf', '+inf');
+        if (countHour >= effectiveMaxPerHour) {
+          const oldest = await rlClient.zrangebyscore(keyHour, '-inf', '+inf', 'WITHSCORES', 'LIMIT', 0, 1);
+          const oldestScore = oldest.length >= 2 ? Number(oldest[1]) : nowMs - 3_600_000;
+          const waitMs = Math.max((oldestScore + 3_600_000) - nowMs + 100, 60_000);
+          console.log(`[CampaignsService] Session ${sId}: Per-hour limit (${effectiveMaxPerHour}) reached — aguardando ${Math.ceil(waitMs / 60_000)}min até janela resetar`);
+          await new Promise((r) => setTimeout(r, waitMs));
+        }
       }
 
       try {
@@ -1429,8 +1415,17 @@ export class CampaignsService {
           await this.prisma.campaignLog.create({ data: { campaignId, phone: recipient.phone, sessionId: session.sessionId, status: 'sent' } });
         }
 
-        sentThisMinuteBySession.set(sId, (sentThisMinuteBySession.get(sId) ?? 0) + 1);
-        sentThisHourBySession.set(sId, (sentThisHourBySession.get(sId) ?? 0) + 1);
+        // Record this dispatch in both sliding-window sorted sets
+        const rlTs = Date.now();
+        const rlMember = `${rlTs}-${recipient.id}`;
+        await Promise.all([
+          rlClient.zadd(keyMin,  rlTs, rlMember),
+          rlClient.zadd(keyHour, rlTs, rlMember),
+          rlClient.expire(keyMin,  120),    // auto-expire key after 2 min of inactivity
+          rlClient.expire(keyHour, 7_200),  // auto-expire key after 2 h of inactivity
+          rlClient.zremrangebyscore(keyMin,  0, rlTs - 60_000),
+          rlClient.zremrangebyscore(keyHour, 0, rlTs - 3_600_000),
+        ]);
         this.recentRecipients.set(recipientKey, Date.now());
 
         // DMS tick (2h continuous check)
