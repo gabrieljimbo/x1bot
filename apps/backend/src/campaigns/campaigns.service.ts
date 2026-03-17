@@ -1277,17 +1277,30 @@ export class CampaignsService {
       try {
         if (campaign.workflowId || campaign.type === 'WORKFLOW') {
           // ── Shadow workflow: re-upsert only when content changed ──────────────
-          // Checks both CampaignWorkflow (edited via campaign editor) AND the
-          // linked Workflow record (edited via main workflow editor). Uses whichever
-          // source was updated more recently so the user can edit from either place.
+          // Checks three sources (most recent wins):
+          //   1. Campaign's own CampaignWorkflow (edited via campaign workflow editor)
+          //   2. Template's CampaignWorkflow (campaign.workflowId treated as Campaign ID)
+          //      → covers "Fluxos de Campanha" templates linked to running campaigns
+          //   3. Linked Workflow record (campaign.workflowId treated as Workflow ID)
+          //      → covers workflows edited via the main workflow editor
           if (campaign.type === 'WORKFLOW') {
+            type WfSnapshot = { nodes: any; edges: any; updatedAt: Date };
+
             const campaignWf = await this.prisma.campaignWorkflow.findUnique({
               where: { campaignId: campaign.id },
               select: { nodes: true, edges: true, updatedAt: true },
             });
 
-            // Also check the linked Workflow record — user may have edited it via main editor
-            type WfSnapshot = { nodes: any; edges: any; updatedAt: Date };
+            // Source 2: template CampaignWorkflow — user edited the linked template
+            let templateWf: WfSnapshot | null = null;
+            if (campaign.workflowId) {
+              templateWf = await this.prisma.campaignWorkflow.findUnique({
+                where: { campaignId: campaign.workflowId },
+                select: { nodes: true, edges: true, updatedAt: true },
+              }) as WfSnapshot | null;
+            }
+
+            // Source 3: linked Workflow table record — user edited via main workflow editor
             let linkedWf: WfSnapshot | null = null;
             if (campaign.workflowId) {
               linkedWf = await this.prisma.workflow.findFirst({
@@ -1300,18 +1313,27 @@ export class CampaignsService {
             let wfNodes: any = null;
             let wfEdges: any = null;
             let wfUpdatedAt: Date | null = null;
+            let wfSource = 'próprio';
 
             if (campaignWf && Array.isArray(campaignWf.nodes) && (campaignWf.nodes as any[]).length > 0) {
               wfNodes = campaignWf.nodes;
               wfEdges = campaignWf.edges;
               wfUpdatedAt = campaignWf.updatedAt;
             }
+            if (templateWf && Array.isArray(templateWf.nodes) && (templateWf.nodes as any[]).length > 0) {
+              if (!wfUpdatedAt || templateWf.updatedAt > wfUpdatedAt) {
+                wfNodes = templateWf.nodes;
+                wfEdges = templateWf.edges;
+                wfUpdatedAt = templateWf.updatedAt;
+                wfSource = `template(${campaign.workflowId})`;
+              }
+            }
             if (linkedWf && Array.isArray(linkedWf.nodes) && (linkedWf.nodes as any[]).length > 0) {
               if (!wfUpdatedAt || linkedWf.updatedAt > wfUpdatedAt) {
                 wfNodes = linkedWf.nodes;
                 wfEdges = linkedWf.edges;
                 wfUpdatedAt = linkedWf.updatedAt;
-                console.log(`[CampaignsService] Usando Workflow principal (${campaign.workflowId}) para campanha ${campaign.id} — v: ${linkedWf.updatedAt.toISOString()}`);
+                wfSource = `workflow(${campaign.workflowId})`;
               }
             }
 
@@ -1338,7 +1360,7 @@ export class CampaignsService {
                 });
                 shadowWorkflowId = shadowWf.id;
                 lastCampaignWfUpdatedAt = wfUpdatedAt;
-                console.log(`[CampaignsService] Shadow workflow atualizado para campanha ${campaign.id} — v: ${wfUpdatedAt.toISOString()}`);
+                console.log(`[CampaignsService] Shadow workflow atualizado para campanha ${campaign.id} — fonte: ${wfSource} v: ${wfUpdatedAt.toISOString()}`);
               }
             }
           }
