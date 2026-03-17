@@ -196,9 +196,30 @@ export class NodeExecutorService {
     const config = node.config as SendContactConfig;
     const destination = (context.variables as any)?.groupJid || context.contactId || contactPhone;
 
+    let telefoneResolved: string;
+    if (config.useSessionPhone) {
+      if (!sessionId) {
+        console.error('[SEND_CONTACT] useSessionPhone ativo mas sessionId não disponível no contexto');
+        telefoneResolved = '';
+      } else {
+        const session = await this.prisma.whatsappSession.findFirst({
+          where: { id: sessionId },
+          select: { phoneNumber: true },
+        });
+        if (!session?.phoneNumber) {
+          console.error('[SEND_CONTACT] useSessionPhone ativo mas sessão sem phoneNumber');
+          telefoneResolved = '';
+        } else {
+          telefoneResolved = session.phoneNumber.replace('@s.whatsapp.net', '').replace(/\D/g, '');
+        }
+      }
+    } else {
+      telefoneResolved = this.contextService.interpolate(config.telefone, context);
+    }
+
     const interpolated: SendContactConfig = {
       nome: this.contextService.interpolate(config.nome, context),
-      telefone: this.contextService.interpolate(config.telefone, context),
+      telefone: telefoneResolved,
       empresa: config.empresa ? this.contextService.interpolate(config.empresa, context) : undefined,
     };
 

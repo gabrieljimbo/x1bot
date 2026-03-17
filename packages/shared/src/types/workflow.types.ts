@@ -443,6 +443,7 @@ export interface SendContactConfig {
   nome: string;
   telefone: string;
   empresa?: string;
+  useSessionPhone?: boolean;
 }
 
 export interface PromoShopeeConfig {

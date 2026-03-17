@@ -8007,6 +8007,24 @@ return {
               </div>
             </div>
 
+            <label
+              className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-all"
+            >
+              <div className={`relative w-11 h-6 rounded-full transition-all flex-shrink-0 ${config.useSessionPhone ? 'bg-primary' : 'bg-gray-700'}`}>
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${config.useSessionPhone ? 'left-6' : 'left-1'}`} />
+              </div>
+              <input
+                type="checkbox"
+                className="hidden"
+                checked={!!config.useSessionPhone}
+                onChange={(e) => setConfig({ ...config, useSessionPhone: e.target.checked })}
+              />
+              <div>
+                <p className="text-sm font-medium text-white">Usar número da sessão</p>
+                <p className="text-xs text-gray-400 mt-0.5">O telefone do contato enviado será o número da sessão que está disparando</p>
+              </div>
+            </label>
+
             <div>
               <label className="block text-sm font-medium mb-2 text-gray-200">Nome do Contato</label>
               <input
@@ -8018,30 +8036,40 @@ return {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-200">Telefone (com DDD e código do país)</label>
-              <input
-                type="text"
-                value={config.telefone || ''}
-                onChange={(e) => setConfig({ ...config, telefone: e.target.value })}
-                placeholder="Ex: 5511999998888"
-                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">Use somente números. Ex: 5511999998888 (55 = Brasil)</p>
-            </div>
+            {config.useSessionPhone && (
+              <div className="flex items-center gap-2 text-xs text-blue-400 bg-blue-400/10 border border-blue-400/20 rounded px-3 py-2">
+                📱 O número enviado será o da sessão que executar este fluxo
+              </div>
+            )}
 
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-200">Empresa / Cargo <span className="text-gray-500 font-normal">(opcional)</span></label>
-              <input
-                type="text"
-                value={config.empresa || ''}
-                onChange={(e) => setConfig({ ...config, empresa: e.target.value })}
-                placeholder="Ex: Suporte X1Bot"
-                className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
-              />
-            </div>
+            {!config.useSessionPhone && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-200">Telefone (com DDD e código do país)</label>
+                  <input
+                    type="text"
+                    value={config.telefone || ''}
+                    onChange={(e) => setConfig({ ...config, telefone: e.target.value })}
+                    placeholder="Ex: 5511999998888"
+                    className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Use somente números. Ex: 5511999998888 (55 = Brasil)</p>
+                </div>
 
-            {(config.nome || config.telefone) && (
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-200">Empresa / Cargo <span className="text-gray-500 font-normal">(opcional)</span></label>
+                  <input
+                    type="text"
+                    value={config.empresa || ''}
+                    onChange={(e) => setConfig({ ...config, empresa: e.target.value })}
+                    placeholder="Ex: Suporte X1Bot"
+                    className="w-full px-4 py-2.5 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary text-white placeholder-gray-500"
+                  />
+                </div>
+              </>
+            )}
+
+            {(config.nome || config.telefone || config.useSessionPhone) && (
               <div className="bg-[#0f1f2e] border border-blue-800/40 rounded-xl p-4">
                 <p className="text-xs text-gray-400 mb-3 font-medium uppercase tracking-wider">Preview do cartão</p>
                 <div className="bg-[#1a2535] border border-blue-700/20 rounded-xl p-4 flex items-center gap-3">
@@ -8050,8 +8078,10 @@ return {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-semibold truncate">{config.nome || 'Nome do Contato'}</p>
-                    {config.empresa && <p className="text-gray-400 text-xs truncate">{config.empresa}</p>}
-                    <p className="text-gray-500 text-xs truncate">+{(config.telefone || '').replace(/\D/g, '')}</p>
+                    {!config.useSessionPhone && config.empresa && <p className="text-gray-400 text-xs truncate">{config.empresa}</p>}
+                    <p className="text-gray-500 text-xs truncate">
+                      {config.useSessionPhone ? '📱 número da sessão' : `+${(config.telefone || '').replace(/\D/g, '')}`}
+                    </p>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
