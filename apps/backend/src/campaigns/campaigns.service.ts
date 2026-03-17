@@ -16,10 +16,12 @@ import { QueueDiagnosticService } from './queue-diagnostic.service';
 import { EmergencyModeService } from './emergency-mode.service';
 import { PushNotificationService } from '../whatsapp/push-notification.service';
 
-// ─── Hardcoded safety caps (cannot be exceeded regardless of user config) ────
-const HARD_MAX_PER_DAY = 80;
-const HARD_MAX_PER_HOUR = 15;
-const HARD_MAX_PER_MINUTE = 2;
+// ─── Absolute safety ceilings (user config is applied up to these limits) ────
+// These must be >= schema defaults (limitPerSession=50, maxPerHour=100, maxPerMinute=5)
+// so that user-configured values are never silently overridden.
+const HARD_MAX_PER_DAY = 200;
+const HARD_MAX_PER_HOUR = 120;
+const HARD_MAX_PER_MINUTE = 10;
 const ALLOWED_HOUR_START_SP = 8;   // 08:00 Brasília
 const ALLOWED_HOUR_END_SP = 20;    // 20:00 Brasília
 const MIN_HEALTH_SCORE_TO_SEND = 40;
@@ -149,7 +151,7 @@ export class CampaignsService {
         randomOrder: dto.randomOrder ?? true,
         excludeBlocked: dto.excludeBlocked ?? true,
         limitType: (dto.limitType ?? 'TOTAL') as any,
-        dailyResetTime: dto.dailyResetTime ?? '00:00',
+        dailyResetTime: dto.dailyResetTime ?? '09:00',
         maxPerHour: dto.maxPerHour ?? 100,
         maxPerMinute: dto.maxPerMinute ?? 5,
         errorThreshold: dto.errorThreshold ?? 30,
@@ -342,7 +344,7 @@ export class CampaignsService {
         randomOrder: original.randomOrder,
         excludeBlocked: original.excludeBlocked,
         limitType: (original as any).limitType as any,
-        dailyResetTime: (original as any).dailyResetTime ?? '00:00',
+        dailyResetTime: (original as any).dailyResetTime ?? '09:00',
         status: CampaignStatus.DRAFT,
       } as any,
       include: { messages: true, workflow: true, sessions: true }
@@ -918,6 +920,19 @@ export class CampaignsService {
     // campaign.workflowId is now available directly from the model
     if (!campaign) return;
 
+    // Typed config — Prisma returns all scalar fields at runtime even when TypeScript
+    // types are stale (Prisma client not regenerated after schema change). This single
+    // cast ensures all config fields are properly typed throughout the function.
+    const cfg = campaign as typeof campaign & {
+      limitPerSession: number;
+      limitType: string;
+      dailyResetTime: string;
+      maxPerHour: number;
+      maxPerMinute: number;
+      errorThreshold: number;
+      allowedDays: number[] | string;
+    };
+
     const protectionSettings = await this.campaignSettings.getSettings(campaign.tenantId);
 
     // Emergency mode: apply capacity factor to daily/hour limits
@@ -1001,18 +1016,25 @@ export class CampaignsService {
       pendingRecipients = [...tier1, ...tier2, ...tier3];
     }
     let sessionIndex = 0;
-    const todayThreshold = this.getResetThresholdInUTC((campaign as any).dailyResetTime);
+    const todayThreshold = this.getResetThresholdInUTC(cfg.dailyResetTime ?? '09:00');
 
     // Rate limiting counters — applied per session for proper throttling
-    // Configured limits are capped by hardcoded safety ceiling, then adjusted by emergency capacity factor
-    const configuredMaxPerMinute: number = (campaign as any).maxPerMinute ?? 5;
-    const configuredMaxPerHour: number = (campaign as any).maxPerHour ?? 100;
+    // User-configured limits are respected up to the absolute safety ceiling,
+    // then adjusted by emergency capacity factor.
+    const configuredMaxPerMinute: number = cfg.maxPerMinute ?? 5;
+    const configuredMaxPerHour: number = cfg.maxPerHour ?? 100;
     const maxPerMinute: number = Math.max(1, Math.floor(Math.min(configuredMaxPerMinute, HARD_MAX_PER_MINUTE) * capacityFactor));
     const maxPerHour: number = Math.max(1, Math.floor(Math.min(configuredMaxPerHour, HARD_MAX_PER_HOUR) * capacityFactor));
-    const errorThreshold: number = (campaign as any).errorThreshold ?? 30;
-    const allowedDays: number[] = Array.isArray((campaign as any).allowedDays)
-      ? (campaign as any).allowedDays
-      : JSON.parse((campaign as any).allowedDays ?? '[0,1,2,3,4,5,6]');
+    if (configuredMaxPerMinute > HARD_MAX_PER_MINUTE) {
+      console.warn(`[CampaignsService] maxPerMinute configurado (${configuredMaxPerMinute}) limitado ao teto de segurança (${HARD_MAX_PER_MINUTE})`);
+    }
+    if (configuredMaxPerHour > HARD_MAX_PER_HOUR) {
+      console.warn(`[CampaignsService] maxPerHour configurado (${configuredMaxPerHour}) limitado ao teto de segurança (${HARD_MAX_PER_HOUR})`);
+    }
+    const errorThreshold: number = cfg.errorThreshold ?? 30;
+    const allowedDays: number[] = Array.isArray(cfg.allowedDays)
+      ? cfg.allowedDays as number[]
+      : JSON.parse((cfg.allowedDays as string) ?? '[0,1,2,3,4,5,6]');
 
     // Per-session rate counters (session ID → count)
     const sentThisMinuteBySession = new Map<string, number>();
@@ -1149,7 +1171,7 @@ export class CampaignsService {
         }
 
         // Per-session daily limit (with warmup + tourist mode applied)
-        const configuredDailyLimit = (campaign as any).limitPerSession ?? 50;
+        const configuredDailyLimit = cfg.limitPerSession ?? 50;
         const effectiveDailyLimit = await this.healthMonitor.getEffectiveDailyLimit(
           candidate.sessionId,
           Math.min(configuredDailyLimit, HARD_MAX_PER_DAY),
@@ -1161,7 +1183,7 @@ export class CampaignsService {
           sessionId: candidate.sessionId,
           status: 'sent',
         };
-        if ((campaign as any).limitType === 'DAILY') {
+        if (cfg.limitType === 'DAILY') {
           countWhere.sentAt = { gte: todayThreshold };
         }
 
