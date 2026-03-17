@@ -1119,11 +1119,15 @@ export class CampaignsService {
         sessionsCandidates.map(s => this.healthMonitor.getScore(s.sessionId))
       );
       // Round-robin within the healthy sessions (score >= MIN_HEALTH_SCORE_TO_SEND)
-      const healthySessions = sessionsCandidates
-        .map((s, i) => ({ session: s, score: sessionScores[i] }))
+      const scoredSessions = sessionsCandidates.map((s, i) => ({ session: s, score: sessionScores[i] }));
+      const healthySessions = scoredSessions
         .filter(({ score }) => !protectionSettings.sessionHealthFilterEnabled || score >= MIN_HEALTH_SCORE_TO_SEND)
         .sort((a, b) => b.score - a.score)
         .map(({ session: s }) => s);
+      const filteredByHealth = scoredSessions.length - healthySessions.length;
+      if (filteredByHealth > 0) {
+        console.warn(`[CampaignsService] ${filteredByHealth} sessão(ões) filtradas por saúde <${MIN_HEALTH_SCORE_TO_SEND}: ${scoredSessions.filter(({ score }) => score < MIN_HEALTH_SCORE_TO_SEND).map(({ session: s, score }) => `${s.sessionId}(${score})`).join(', ')}`);
+      }
 
       let sessionsChecked = 0;
       // Tracks whether every session was skipped exclusively due to daily limit
@@ -1271,19 +1275,48 @@ export class CampaignsService {
       }
 
       try {
-        if (campaign.workflowId) {
-          // Check for workflow changes on every dispatch (cheap read).
-          // Only re-upsert the shadow when the CampaignWorkflow was actually
-          // edited (updatedAt changed), avoiding unnecessary DB writes.
+        if (campaign.workflowId || campaign.type === 'WORKFLOW') {
+          // ── Shadow workflow: re-upsert only when content changed ──────────────
+          // Checks both CampaignWorkflow (edited via campaign editor) AND the
+          // linked Workflow record (edited via main workflow editor). Uses whichever
+          // source was updated more recently so the user can edit from either place.
           if (campaign.type === 'WORKFLOW') {
             const campaignWf = await this.prisma.campaignWorkflow.findUnique({
               where: { campaignId: campaign.id },
               select: { nodes: true, edges: true, updatedAt: true },
             });
-            if (campaignWf && campaignWf.nodes) {
-              const needsUpsert =
-                !lastCampaignWfUpdatedAt ||
-                campaignWf.updatedAt > lastCampaignWfUpdatedAt;
+
+            // Also check the linked Workflow record — user may have edited it via main editor
+            type WfSnapshot = { nodes: any; edges: any; updatedAt: Date };
+            let linkedWf: WfSnapshot | null = null;
+            if (campaign.workflowId) {
+              linkedWf = await this.prisma.workflow.findFirst({
+                where: { id: campaign.workflowId, tenantId: campaign.tenantId },
+                select: { nodes: true, edges: true, updatedAt: true },
+              }) as WfSnapshot | null;
+            }
+
+            // Pick the most recently updated source
+            let wfNodes: any = null;
+            let wfEdges: any = null;
+            let wfUpdatedAt: Date | null = null;
+
+            if (campaignWf && Array.isArray(campaignWf.nodes) && (campaignWf.nodes as any[]).length > 0) {
+              wfNodes = campaignWf.nodes;
+              wfEdges = campaignWf.edges;
+              wfUpdatedAt = campaignWf.updatedAt;
+            }
+            if (linkedWf && Array.isArray(linkedWf.nodes) && (linkedWf.nodes as any[]).length > 0) {
+              if (!wfUpdatedAt || linkedWf.updatedAt > wfUpdatedAt) {
+                wfNodes = linkedWf.nodes;
+                wfEdges = linkedWf.edges;
+                wfUpdatedAt = linkedWf.updatedAt;
+                console.log(`[CampaignsService] Usando Workflow principal (${campaign.workflowId}) para campanha ${campaign.id} — v: ${linkedWf.updatedAt.toISOString()}`);
+              }
+            }
+
+            if (wfNodes && wfUpdatedAt) {
+              const needsUpsert = !lastCampaignWfUpdatedAt || wfUpdatedAt > lastCampaignWfUpdatedAt;
               if (needsUpsert) {
                 const shadowId = `shadow-${campaign.id}`;
                 const shadowWf = await this.prisma.workflow.upsert({
@@ -1294,48 +1327,43 @@ export class CampaignsService {
                     name: `[Auto] Campanha: ${campaign.name}`,
                     description: 'Workflow virtual gerado automaticamente',
                     isActive: true,
-                    nodes: campaignWf.nodes ?? Prisma.JsonNull,
-                    edges: campaignWf.edges ?? Prisma.JsonNull,
+                    nodes: wfNodes ?? Prisma.JsonNull,
+                    edges: wfEdges ?? Prisma.JsonNull,
                   },
                   update: {
-                    nodes: campaignWf.nodes ?? Prisma.JsonNull,
-                    edges: campaignWf.edges ?? Prisma.JsonNull,
+                    nodes: wfNodes ?? Prisma.JsonNull,
+                    edges: wfEdges ?? Prisma.JsonNull,
                     isActive: true,
                   },
                 });
                 shadowWorkflowId = shadowWf.id;
-                lastCampaignWfUpdatedAt = campaignWf.updatedAt;
-                if (lastCampaignWfUpdatedAt) {
-                  console.log(`[CampaignsService] Shadow workflow atualizado para campanha ${campaign.id} — v: ${campaignWf.updatedAt.toISOString()}`);
-                }
+                lastCampaignWfUpdatedAt = wfUpdatedAt;
+                console.log(`[CampaignsService] Shadow workflow atualizado para campanha ${campaign.id} — v: ${wfUpdatedAt.toISOString()}`);
               }
             }
+          }
+
+          // No shadow and no fallback workflowId — cannot dispatch
+          const workflowToRun = shadowWorkflowId ?? campaign.workflowId;
+          if (!workflowToRun) {
+            console.warn(`[CampaignsService] Campanha WORKFLOW ${campaign.id} sem workflow configurado — pulando destinatário`);
+            await this.prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'failed', error: 'Workflow não configurado' } });
+            continue;
           }
 
           // Mark as processing, engine will mark as sent/failed later
           await this.prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: 'processing' } });
 
-          if (shadowWorkflowId) {
-            await this.executionEngine.startExecution(
-              campaign.tenantId,
-              shadowWorkflowId,
-              session.sessionId,
-              recipient.phone,
-              undefined,
-              undefined,
-              { triggerType: 'CAMPAIGN_START', campaignId: campaign.id }
-            );
-          } else {
-            await this.executionEngine.startExecution(
-              campaign.tenantId,
-              campaign.workflowId,
-              session.sessionId,
-              recipient.phone,
-              undefined,
-              undefined,
-              { triggerType: 'CAMPAIGN', campaignId: campaign.id },
-            );
-          }
+          console.log(`[CampaignsService] Disparando para ${recipient.phone} via sessão ${session.sessionId} — workflow: ${workflowToRun}`);
+          await this.executionEngine.startExecution(
+            campaign.tenantId,
+            workflowToRun,
+            session.sessionId,
+            recipient.phone,
+            undefined,
+            undefined,
+            { triggerType: shadowWorkflowId ? 'CAMPAIGN_START' : 'CAMPAIGN', campaignId: campaign.id },
+          );
         } else {
           // Simple campaign: send messages with humanization enabled
           for (const msg of campaign.messages) {
@@ -1446,9 +1474,7 @@ export class CampaignsService {
       const combinedMultiplier = Math.max(adaptiveMultiplier, repCheck.delayMultiplier);
       const baseDelaySec = Math.floor(Math.random() * (campaign.delayMax - campaign.delayMin + 1)) + campaign.delayMin;
       const effectiveDelaySec = Math.round(baseDelaySec * combinedMultiplier);
-      if (combinedMultiplier > 1) {
-        console.log(`[CampaignsService] Session ${sId}: Delay ×${combinedMultiplier} (health:${adaptiveMultiplier}, rep:${repCheck.delayMultiplier}) → ${effectiveDelaySec}s`);
-      }
+      console.log(`[CampaignsService] Aguardando ${effectiveDelaySec}s antes do próximo disparo (base:${baseDelaySec}s delayMin:${campaign.delayMin} delayMax:${campaign.delayMax} ×${combinedMultiplier})`);
       await new Promise((r) => setTimeout(r, effectiveDelaySec * 1000));
     }
 
