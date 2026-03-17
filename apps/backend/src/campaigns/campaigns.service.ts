@@ -992,7 +992,7 @@ export class CampaignsService {
       pendingRecipients = [...tier1, ...tier2, ...tier3];
     }
     let sessionIndex = 0;
-    const todayThreshold = this.getResetThresholdInUTC(cfg.dailyResetTime ?? '09:00');
+    let todayThreshold = this.getResetThresholdInUTC(cfg.dailyResetTime ?? '09:00');
 
     // Rate limiting counters — applied per session for proper throttling
     // User-configured limits are respected up to the absolute safety ceiling,
@@ -1043,8 +1043,13 @@ export class CampaignsService {
       // ── Allowed days check (São Paulo timezone) ───────────────────────────
       const todayDay = nowSP.getDay();
       if (!allowedDays.includes(todayDay)) {
-        console.log(`[CampaignsService] Today (${todayDay}) is not an allowed day for campaign ${campaignId}. Stopping loop.`);
-        break;
+        const waitMs = this.msUntilNextAllowedReset(cfg.dailyResetTime ?? '09:00', allowedDays);
+        console.log(`[CampaignsService] Hoje (${todayDay}) não é dia permitido para campanha ${campaignId}. Aguardando ${Math.round(waitMs / 60000)}min até próximo dia permitido.`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        const statusAfterWait = await this.prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+        if (!statusAfterWait || (statusAfterWait.status as string) !== CampaignStatus.RUNNING) break;
+        todayThreshold = this.getResetThresholdInUTC(cfg.dailyResetTime ?? '09:00');
+        continue;
       }
 
       // ── Blacklist check ───────────────────────────────────────────────────
@@ -1121,21 +1126,26 @@ export class CampaignsService {
         .map(({ session: s }) => s);
 
       let sessionsChecked = 0;
+      // Tracks whether every session was skipped exclusively due to daily limit
+      // (as opposed to being disconnected, circuit-broken, etc.)
+      let allSkippedDueToDailyLimit = healthySessions.length > 0;
       while (sessionsChecked < healthySessions.length) {
         const candidate = healthySessions[sessionIndex % healthySessions.length];
         sessionIndex++;
         sessionsChecked++;
-        if (!candidate) break;
+        if (!candidate) { allSkippedDueToDailyLimit = false; break; }
 
         // Skip sessions not in session manager
         const sessionClient = this.whatsappSessionManager.resolveSessionClient(candidate.sessionId);
         if (!sessionClient) {
           console.warn(`[CampaignsService] Session ${candidate.sessionId} not found, skipping`);
+          allSkippedDueToDailyLimit = false;
           continue;
         }
 
         if (sessionClient.status !== 'CONNECTED') {
           console.warn(`[CampaignsService] Session ${candidate.sessionId} is ${sessionClient.status}, skipping`);
+          allSkippedDueToDailyLimit = false;
           continue;
         }
 
@@ -1143,6 +1153,7 @@ export class CampaignsService {
         const canSend = await this.healthMonitor.canSend(candidate.sessionId);
         if (!canSend) {
           console.warn(`[CampaignsService] Session ${candidate.sessionId} blocked by circuit breaker or DMS`);
+          allSkippedDueToDailyLimit = false;
           continue;
         }
 
@@ -1166,6 +1177,7 @@ export class CampaignsService {
         const sentCount = await this.prisma.campaignLog.count({ where: countWhere });
         if (sentCount >= effectiveDailyLimit) {
           console.log(`[CampaignsService] Session ${candidate.sessionId} atingiu limite (${sentCount}/${effectiveDailyLimit}), skipping`);
+          // allSkippedDueToDailyLimit stays true — this IS a daily limit skip
           continue;
         }
 
@@ -1175,6 +1187,7 @@ export class CampaignsService {
           const hasHistory = await this.hasConversationHistory(candidate.sessionId, recipient.phone);
           if (!hasHistory) {
             console.log(`[TOURIST] Session ${candidate.sessionId}: pulando contato frio ${recipient.phone}`);
+            allSkippedDueToDailyLimit = false;
             continue;
           }
         }
@@ -1184,6 +1197,16 @@ export class CampaignsService {
       }
 
       if (!session) {
+        if (allSkippedDueToDailyLimit && healthySessions.length > 0) {
+          // All sessions hit their daily limit — wait until next reset on next allowed day
+          const waitMs = this.msUntilNextAllowedReset(cfg.dailyResetTime ?? '09:00', allowedDays);
+          console.log(`[CampaignsService] Todas as sessões atingiram o limite diário. Aguardando ${Math.round(waitMs / 60000)}min até próximo reset (${cfg.dailyResetTime ?? '09:00'}).`);
+          await new Promise((r) => setTimeout(r, waitMs));
+          const statusAfterWait = await this.prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+          if (!statusAfterWait || (statusAfterWait.status as string) !== CampaignStatus.RUNNING) break;
+          todayThreshold = this.getResetThresholdInUTC(cfg.dailyResetTime ?? '09:00');
+          continue;
+        }
         console.log(`[CampaignsService] All sessions exhausted or unavailable for campaign ${campaignId}`);
         break;
       }
@@ -1851,6 +1874,25 @@ export class CampaignsService {
       where: { sessionId, contactPhone: { contains: phone.replace(/\D/g, '').slice(-10) } },
     });
     return count > 0;
+  }
+
+  /**
+   * Returns milliseconds to wait until `resetTimeStr` (HH:MM, SP timezone) on the
+   * next day included in `allowedDays`. Minimum 60 seconds.
+   */
+  private msUntilNextAllowedReset(resetTimeStr: string, allowedDays: number[]): number {
+    const [hours, minutes] = (resetTimeStr || '09:00').split(':').map(Number);
+    const nowSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const effectiveAllowedDays = allowedDays.length > 0 ? allowedDays : [0, 1, 2, 3, 4, 5, 6];
+    for (let daysAhead = 1; daysAhead <= 7; daysAhead++) {
+      const candidate = new Date(nowSP);
+      candidate.setDate(candidate.getDate() + daysAhead);
+      candidate.setHours(hours, minutes, 0, 0);
+      if (effectiveAllowedDays.includes(candidate.getDay())) {
+        return Math.max(candidate.getTime() - nowSP.getTime(), 60_000);
+      }
+    }
+    return 24 * 60 * 60 * 1000; // fallback: 24h
   }
 
   private getResetThresholdInUTC(resetTimeStr: string): Date {
