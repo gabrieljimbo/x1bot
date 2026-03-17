@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "coolify": {
+      "command": "C:\\Program Files\\nodejs\\npx.cmd",
+      "args": [
+        "-y",
+        "@masonator/coolify-mcp"
+      ],
+      "env": {
+        "COOLIFY_ACCESS_TOKEN": "1|2lSZPysiLGUyYVf58nFNp8Ikb6L7eBLR53LWJ20d7afbbd99",
+        "COOLIFY_BASE_URL": "http://72.61.46.86:8000"
+      }
+    }
+  }
+}

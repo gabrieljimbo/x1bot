@@ -17,7 +17,23 @@
       "Bash(npx tsc --noEmit -p apps/frontend/tsconfig.json)",
       "Bash(git add apps/backend/prisma/migrations/20260309_add_sent_products/migration.sql apps/backend/src/products/products.service.ts apps/frontend/src/app/products/page.tsx)",
       "Bash(npx prisma migrate resolve --rolled-back 20260309_add_sent_products)",
-      "Bash(git add apps/backend/docker-entrypoint.sh)"
+      "Bash(git add apps/backend/docker-entrypoint.sh)",
+      "Bash(curl -s -H \"Authorization: Bearer 1|2lSZPysiLGUyYVf58nFNp8Ikb6L7eBLR53LWJ20d7afbbd99\" \"http://72.61.46.86:8000/api/v1/deployments/a8z688pnnc5soje84fmtiw3t\")",
+      "Bash(node -e \":*)",
+      "Bash(node -e \"const d=[];process.stdin.on\\(''''data'''',c=>d.push\\(c\\)\\);process.stdin.on\\(''''end'''',\\(\\)=>{const r=JSON.parse\\(d.join\\(''''''''\\)\\);const dep=r.deployments[0];console.log\\(''''Backend:'''',dep.status,''''|'''',dep.deployment_uuid\\)}\\)\")",
+      "Bash(node -e \"const d=[];process.stdin.on\\(''''data'''',c=>d.push\\(c\\)\\);process.stdin.on\\(''''end'''',\\(\\)=>{const r=JSON.parse\\(d.join\\(''''''''\\)\\);const dep=r.deployments[0];console.log\\(''''Backend:'''',dep.status\\)}\\)\")",
+      "Bash(curl -s -H \"Authorization: Bearer 1|2lSZPysiLGUyYVf58nFNp8Ikb6L7eBLR53LWJ20d7afbbd99\" \"http://72.61.46.86:8000/api/v1/deployments/applications/fk0c4k4ww8so0so8o8c0s8gg\")",
+      "Bash(node -e \"const d=[];process.stdin.on\\(''''data'''',c=>d.push\\(c\\)\\);process.stdin.on\\(''''end'''',\\(\\)=>{const r=JSON.parse\\(d.join\\(''''''''\\)\\);const dep=r.deployments[0];console.log\\(''''Frontend:'''',dep.status\\)}\\)\")",
+      "Bash(node -e \"const d=[];process.stdin.on\\(''''data'''',c=>d.push\\(c\\)\\);process.stdin.on\\(''''end'''',\\(\\)=>{const r=JSON.parse\\(d.join\\(''''''''\\)\\);const dep=r.deployments[0];console.log\\(''''Backend:'''',dep.status,''''commit:'''',dep.commit?.substring\\(0,7\\)\\)}\\)\")",
+      "Bash(node -e \"const d=[];process.stdin.on\\(''''data'''',c=>d.push\\(c\\)\\);process.stdin.on\\(''''end'''',\\(\\)=>{const r=JSON.parse\\(d.join\\(''''''''\\)\\);const dep=r.deployments[0];console.log\\(''''Frontend:'''',dep.status,''''commit:'''',dep.commit?.substring\\(0,7\\)\\)}\\)\")",
+      "Bash(curl -s -X GET -H \"Authorization: Bearer 1|2lSZPysiLGUyYVf58nFNp8Ikb6L7eBLR53LWJ20d7afbbd99\" \"http://72.61.46.86:8000/api/v1/deploy?uuid=l048c48gws4s4c00ckcgk4ow&force=false\")",
+      "Bash(node -e \"const d=[];process.stdin.on\\(''''data'''',c=>d.push\\(c\\)\\);process.stdin.on\\(''''end'''',\\(\\)=>{const r=JSON.parse\\(d.join\\(''''''''\\)\\);const dep=r.deployments[0];console.log\\(''''Status:'''',dep.status,''''| commit:'''',dep.commit?.substring\\(0,7\\)\\)}\\)\")",
+      "Bash(python3 -c \"import sys,json; apps=json.load\\(sys.stdin\\); [print\\(a.get\\(''''uuid'''',''''?''''\\), a.get\\(''''name'''',''''?''''\\)\\) for a in apps.get\\(''''data'''',[]\\)]\")",
+      "Bash(curl -s -H \"Authorization: Bearer 1|2lSZPysiLGUyYVf58nFNp8Ikb6L7eBLR53LWJ20d7afbbd99\" http://72.61.46.86:8000/api/v1/applications)",
+      "Bash(curl -s -H \"Authorization: Bearer 1|2lSZPysiLGUyYVf58nFNp8Ikb6L7eBLR53LWJ20d7afbbd99\" \"http://72.61.46.86:8000/api/v1/applications\" -o /tmp/apps.json)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }
