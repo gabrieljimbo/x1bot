@@ -1,16 +1,32 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import axios from 'axios';
+import { ApiConfigsService } from '../api-configs/api-configs.service';
 
 @Injectable()
 export class AiOcrService {
   private readonly DEFAULT_MODEL = 'google/gemini-2.0-flash-exp:free';
   private readonly GENERIC_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
+  constructor(
+    @Inject(forwardRef(() => ApiConfigsService))
+    private apiConfigsService: ApiConfigsService
+  ) {}
+
   async analyzeReceipt(
     fileUrl: string, 
-    options: { model?: string, apiKey?: string } = {}
+    options: { tenantId?: string, model?: string, apiKey?: string } = {}
   ): Promise<any> {
-    const apiKey = options.apiKey || this.GENERIC_API_KEY;
+    let apiKey = options.apiKey;
+
+    // If no key in node options, try global tenant config
+    if (!apiKey && options.tenantId) {
+       const globalConfig = await this.apiConfigsService.getByProvider(options.tenantId, 'openrouter');
+       if (globalConfig?.isActive && globalConfig.secret) {
+          apiKey = globalConfig.secret;
+       }
+    }
+
+    apiKey = apiKey || this.GENERIC_API_KEY;
     const model = options.model || this.DEFAULT_MODEL;
 
     if (!apiKey) {

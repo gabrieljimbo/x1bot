@@ -14,7 +14,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MlOffersService } from './ml-offers.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MlOffersController } from './ml-offers.controller';
-import { ApiConfigsService } from '../api-configs/api-configs.service';
+import { ApiConfigsModule } from '../api-configs/api-configs.module';
 import { StorageModule } from '../storage/storage.module';
 
 @Global()
@@ -26,6 +26,7 @@ import { StorageModule } from '../storage/storage.module';
     PrismaModule,
     ScheduleModule.forRoot(),
     StorageModule,
+    ApiConfigsModule,
   ],
   controllers: [MlOffersController],
   providers: [
@@ -39,7 +40,6 @@ import { StorageModule } from '../storage/storage.module';
     OCRService,
     RmktProcessor,
     MlOffersService,
-    ApiConfigsService,
     AiOcrService,
   ],
   exports: [

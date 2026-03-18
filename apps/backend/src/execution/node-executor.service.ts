@@ -2586,6 +2586,7 @@ export class NodeExecutorService {
 
       try {
         pixData = await this.aiOcrService.analyzeReceipt(imageUrl, {
+          tenantId: context.tenantId,
           model: config.model,
           apiKey: config.apiKey
         });
@@ -2594,6 +2595,7 @@ export class NodeExecutorService {
           console.warn(`[AI_OCR_PIX] Primary AI failed, trying fallback: ${err.message}`);
           usedFallback = true;
           pixData = await this.aiOcrService.analyzeReceipt(imageUrl, {
+            tenantId: context.tenantId,
             model: config.fallbackModel,
             apiKey: config.fallbackApiKey
           });
@@ -2606,6 +2608,7 @@ export class NodeExecutorService {
       if (config.useFallback && config.fallbackModel && !pixData.is_payment && !usedFallback) {
          console.log(`[AI_OCR_PIX] Primary model said "no payment", testing with fallback model...`);
          const fallbackData = await this.aiOcrService.analyzeReceipt(imageUrl, {
+           tenantId: context.tenantId,
            model: config.fallbackModel,
            apiKey: config.fallbackApiKey
          });

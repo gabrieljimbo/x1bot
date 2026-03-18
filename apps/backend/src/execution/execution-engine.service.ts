@@ -274,7 +274,12 @@ export class ExecutionEngineService implements OnModuleInit {
         input: {},
         output: {},
         variables: {},
+        tenantId,
       };
+
+      if (!baseContext.tenantId) {
+        baseContext.tenantId = tenantId;
+      }
 
       // Ensure variables object exists
       if (!baseContext.variables) {

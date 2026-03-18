@@ -95,6 +95,7 @@ export interface ExecutionContext {
   input: Record<string, any>;
   output: Record<string, any>;
   variables: Record<string, any>;
+  tenantId: string;
   workflowId?: string;
   executionId?: string;
   contactId?: string;
