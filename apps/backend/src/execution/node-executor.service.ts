@@ -407,11 +407,11 @@ export class NodeExecutorService {
     // 1. WhatsApp Notification
     if (config.phoneNumber && config.message) {
       const sessionId = defaultSessionId; 
-      let phone = this.contextService.interpolate(config.phoneNumber, context).replace(/\D/g, '');
+      let phone = this.contextService.interpolate(config.phoneNumber, context).trim();
       const message = this.contextService.interpolate(config.message, context);
       
       if (!phone.includes('@')) {
-        phone = `${phone}@s.whatsapp.net`;
+        phone = `${phone.replace(/\D/g, '')}@s.whatsapp.net`;
       }
       
       if (sessionId && phone) {
@@ -1014,13 +1014,45 @@ export class NodeExecutorService {
   ): Promise<void> {
     const finalSessionId  = sessionId  || context.variables._sessionId;
     const finalContactPhone = contactPhone || context.variables._contactPhone;
-    const tenantId = context.variables._tenantId;
+    const tenantId = context.globals?.tenantId || (context.variables as any)?._tenantId || (context.variables as any)?.tenantId;
+    
     if (!finalSessionId || !finalContactPhone || !tenantId) return;
-    const currentTags = await this.contactTagsService.getTags(tenantId, finalSessionId, finalContactPhone);
-    const otherTags   = currentTags.filter((t: string) => !t.startsWith('stage:'));
-    await this.contactTagsService.setTags(tenantId, finalSessionId, finalContactPhone, [...otherTags, `stage:${stageName}`]);
-    context.variables.etapa        = stageName;
+
+    // 1. CRM Variable Updates
+    context.variables._contactStage = stageName;
+    context.variables.etapa = stageName;
     context.variables.contactStage = stageName;
+
+    try {
+      // 2. WhatsApp Label Sync (Business Accounts only)
+      try {
+        const labels = await this.prisma.whatsappLabel.findMany({
+          where: { 
+            sessionId: finalSessionId,
+            whatsappSession: { tenantId }
+          },
+        });
+        
+        const matchingLabel = labels.find(l => 
+          l.name.toLowerCase().trim() === stageName.toLowerCase().trim()
+        );
+
+        if (matchingLabel) {
+          console.log(`[MARK_STAGE] Syncing with WhatsApp label: "${matchingLabel.name}" (${matchingLabel.id})`);
+          await this.whatsappSessionManager.addLabels(finalSessionId, finalContactPhone, [matchingLabel.labelId]);
+        }
+      } catch (labelError: any) {
+        console.warn(`[MARK_STAGE] Optional labeling failed:`, labelError.message);
+      }
+
+      // 3. System Contact Stage (Isolated field)
+      // @ts-ignore - 'setStage' is added and DB is updated
+      await this.contactTagsService.setStage(tenantId, finalSessionId, finalContactPhone, stageName);
+      
+      console.log(`[MARK_STAGE] Updated stage to "${stageName}" for ${finalContactPhone}`);
+    } catch (error: any) {
+      console.error(`[MARK_STAGE] Error specifically in tagging:`, error.message);
+    }
   }
 
   /**

@@ -27,6 +27,28 @@ export class ContactTagsService {
   }
 
   /**
+   * Get stage for a contact (independent from regular tags)
+   */
+  async getStage(
+    tenantId: string,
+    sessionId: string,
+    contactPhone: string,
+  ): Promise<string | null> {
+    const record = await this.prisma.contactTag.findUnique({
+      where: {
+        tenantId_sessionId_contactPhone: {
+          tenantId,
+          sessionId,
+          contactPhone,
+        },
+      },
+    });
+
+    // @ts-ignore
+    return record?.stage || null;
+  }
+
+  /**
    * Add tags to a contact
    */
   async addTags(
@@ -128,6 +150,41 @@ export class ContactTagsService {
     });
 
     return uniqueTags;
+  }
+
+  /**
+   * Set the stage for a contact (independent from regular tags)
+   */
+  async setStage(
+    tenantId: string,
+    sessionId: string,
+    contactPhone: string,
+    stage: string | null,
+  ): Promise<string | null> {
+    await this.prisma.contactTag.upsert({
+      where: {
+        tenantId_sessionId_contactPhone: {
+          tenantId,
+          sessionId,
+          contactPhone,
+        },
+      },
+      create: {
+        tenantId,
+        sessionId,
+        contactPhone,
+        // @ts-ignore
+        stage,
+        tags: [],
+      },
+      update: {
+        // @ts-ignore
+        stage,
+        updatedAt: new Date(),
+      },
+    });
+
+    return stage;
   }
 
   /**
