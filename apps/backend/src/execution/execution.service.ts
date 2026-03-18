@@ -24,6 +24,7 @@ export class ExecutionService {
     const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
 
     const context: ExecutionContext = {
+      tenantId,
       globals: {},
       input: {},
       output: {},
