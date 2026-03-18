@@ -397,6 +397,9 @@ export class WhatsappMessageHandler {
         await this.executionEngine.resumeExecution(activeExecution, resumeText, normalizedPayload);
         return;
       }
+
+      // Execution exists but is RUNNING (not waiting) — drop message to avoid concurrency
+      console.log(`[HANDLER] Session ${sessionId}: Execution ${activeExecution.id} is ${activeExecution.status} (not WAITING), dropping message from ${contactPhone}`);
     } else {
       // If it's a group and not enabled, do not try to match triggers
       if (isGroup && !isGroupEnabled) {
@@ -404,7 +407,8 @@ export class WhatsappMessageHandler {
         return;
       }
 
-      // Try to match trigger
+      // No active execution — try to match trigger and start a new one
+      console.log(`[HANDLER] Session ${sessionId}: No active execution for ${contactPhone}, matching trigger`);
       await this.matchTriggerAndStart(tenantId, sessionId, contactPhone, normalizedPayload, isGroup, whitelistedWorkflows);
     }
   }

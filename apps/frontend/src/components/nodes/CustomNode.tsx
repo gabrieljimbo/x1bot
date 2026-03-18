@@ -5,6 +5,20 @@ import { Handle, Position } from 'reactflow'
 import { WorkflowNodeType } from '@n9n/shared'
 import { Trash2, Play, Copy } from 'lucide-react'
 
+function renderWhatsAppPreview(text: string): string {
+  // Sanitize before inserting as HTML
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+  return escaped
+    .replace(/\*([^*]+)\*/g,       '<strong>$1</strong>')
+    .replace(/_([^_]+)_/g,         '<em>$1</em>')
+    .replace(/~([^~]+)~/g,         '<s>$1</s>')
+    .replace(/```([^`]+)```/g,     '<code>$1</code>')
+}
+
 const nodeConfig: Record<string, any> = {
   'TRIGGER_MESSAGE': {
     label: 'Nova Mensagem',
@@ -394,11 +408,13 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
   const isLoop = data.type === 'LOOP'
   const isButtons = data.type === 'SEND_BUTTONS'
   const isPix = data.type === 'SEND_PIX'
+  const isPixRecognition = data.type === 'PIX_RECOGNITION'
 
   // Get switch/randomizer rules for dynamic handles
   const switchRules = isSwitch && data.config.rules ? data.config.rules : []
   const randomizerSaidas = isRandomizer && data.config.saidas ? data.config.saidas : []
   const buttonsNode = isButtons && data.config.buttons ? data.config.buttons : []
+  const pixValueRules: any[] = isPixRecognition && data.config?.valueRules ? data.config.valueRules : []
 
   const handleDelete = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -560,11 +576,13 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
       }
     }
     if (type === 'PIX_RECOGNITION') {
+      const rules: any[] = config.valueRules || []
+      if (rules.length > 0) {
+        return `💸 ${rules.map((r: any) => `R$${r.value || '?'}`).join(' / ')}`
+      }
       const validate = config.validateAmount
       const amount = config.expectedAmount
-      return validate
-        ? `💸 Validar R$ ${amount || '?'}`
-        : '💸 Ler comprovante PIX'
+      return validate ? `💸 Validar R$ ${amount || '?'}` : '💸 Ler comprovante PIX'
     }
     if (type === 'RMKT') {
       const amount = config.amount || 0
@@ -798,9 +816,16 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
         {/* Preview/Description */}
         {previewText && (
           <div className="mt-2 pt-2 border-t border-gray-700/50">
-            <p className="text-xs text-gray-400 leading-relaxed">
-              {previewText}
-            </p>
+            {data.type === 'SEND_MESSAGE' ? (
+              <p
+                className="text-xs text-gray-400 leading-relaxed line-clamp-2"
+                dangerouslySetInnerHTML={{ __html: renderWhatsAppPreview(data.config?.message ?? '') }}
+              />
+            ) : (
+              <p className="text-xs text-gray-400 leading-relaxed">
+                {previewText}
+              </p>
+            )}
           </div>
         )}
 
@@ -1045,6 +1070,46 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
                     </div>
                   </div>
                 ))}
+              </div>
+            </>
+          ) : isPixRecognition && pixValueRules.length > 0 ? (
+            <>
+              {pixValueRules.map((rule: any, index: number) => {
+                const total    = pixValueRules.length + 1 // +1 for no_match
+                const position = ((index + 1) / (total + 1)) * 100
+                return (
+                  <Handle
+                    key={rule.id}
+                    type="source"
+                    position={Position.Right}
+                    id={rule.id}
+                    style={{ top: `${position}%` }}
+                    className="!w-3 !h-3 !bg-emerald-400 !border-2 !border-emerald-600 hover:!bg-emerald-300 transition-colors"
+                  />
+                )
+              })}
+              {/* no_match handle — always last */}
+              <Handle
+                type="source"
+                position={Position.Right}
+                id="no_match"
+                style={{ top: `${((pixValueRules.length + 1) / (pixValueRules.length + 2)) * 100}%` }}
+                className="!w-3 !h-3 !bg-red-400 !border-2 !border-red-600 hover:!bg-red-300 transition-colors"
+              />
+              {/* Labels */}
+              <div className="absolute -right-2 top-0 bottom-0 flex flex-col justify-around text-[8px] font-bold py-2 translate-x-full">
+                {pixValueRules.map((rule: any) => (
+                  <div key={rule.id} className="flex items-center">
+                    <div className="bg-[#151515] px-1.5 py-0.5 rounded border border-emerald-900/50 text-emerald-400 truncate max-w-[80px] shadow-sm">
+                      {rule.label || `R$${rule.value}`}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center">
+                  <div className="bg-[#151515] px-1.5 py-0.5 rounded border border-red-900/50 text-red-400 shadow-sm">
+                    sem match
+                  </div>
+                </div>
               </div>
             </>
           ) : data.type === 'WAIT_REPLY' ? (

@@ -31,14 +31,17 @@ self.addEventListener('notificationclick', (event) => {
 
   if (event.action === 'dismiss') return;
 
-  const url = event.notification.data?.url ?? '/settings/whatsapp';
+  const url = event.notification.data?.url ?? '/';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Navegar qualquer aba já aberta do mesmo origin para a URL da notificação
       for (const client of clientList) {
-        if (client.url.includes(url) && 'focus' in client) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          client.navigate(url);
           return client.focus();
         }
       }
+      // Nenhuma aba aberta — abrir nova
       if (clients.openWindow) {
         return clients.openWindow(url);
       }

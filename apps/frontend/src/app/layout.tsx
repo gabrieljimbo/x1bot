@@ -4,6 +4,7 @@ import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { LicenseBanner } from '@/components/LicenseBanner'
 import { ExpiredAccountScreen } from '@/components/ExpiredAccountScreen'
+import { PushNotificationInit } from '@/components/PushNotificationInit'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -50,6 +51,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <AuthProvider>
+          <PushNotificationInit />
           <LicenseBanner />
           <ExpiredAccountScreen />
           {children}

@@ -300,7 +300,7 @@ export class NodeExecutorService {
         return this.executeManageLabels(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.CONDITION:
-        return this.executeCondition(node, context, edges);
+        return await this.executeCondition(node, context, edges, sessionId, contactPhone);
 
       case WorkflowNodeType.SWITCH:
         return this.executeSwitch(node, context, edges);
@@ -506,9 +506,18 @@ export class NodeExecutorService {
       (context.variables as any)?.contactStage ||
       'Não definida';
 
+    const phoneClean = phone
+      .replace(/@s\.whatsapp\.net/g, '')
+      .replace(/@lid/g, '')
+      .replace(/[^0-9]/g, '');
+
+    console.log(
+      `[PWA_NOTIFICATION] contact="${contactName}" phone="${phoneClean}" tenant="${tenantId}"`,
+    );
+
     const vars: Record<string, string> = {
       nome: contactName,
-      telefone: phone.replace('@s.whatsapp.net', ''),
+      telefone: phoneClean,
       etapa,
       customTitle: config.customTitle || '',
       customMessage: config.customMessage || '',
@@ -876,51 +885,137 @@ export class NodeExecutorService {
   /**
    * Execute CONDITION node
    */
-  private executeCondition(
+  private async executeCondition(
     node: WorkflowNode,
     context: ExecutionContext,
     edges: any[],
-  ): NodeExecutionResult {
-    const config = node.config as ConditionConfig;
+    sessionId?: string,
+    contactPhone?: string,
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as any;
 
-    // Check if expression uses string methods with multiple values
     let result = false;
-    const expression = config.expression || '';
 
-    // Match patterns like: value.toLowerCase().includes("word1, word2, word3".toLowerCase())
-    // or: value.includes("word1, word2, word3")
-    const multiValueMatch = expression.match(/(.+?)\.(includes|startsWith|endsWith)\("([^"]+)"(?:\.toLowerCase\(\))?\)/);
-
-    if (multiValueMatch && multiValueMatch[3].includes(',')) {
-      // Multiple values detected - check each one
-      const [, value1, operator, value2String] = multiValueMatch;
-      const values = value2String.split(',').map(v => v.trim());
-
-      for (const value of values) {
-        const singleExpression = `${value1}.${operator}("${value}")`;
-        result = this.contextService.evaluateExpression(singleExpression, context);
-        if (result) break; // Stop at first match
-      }
+    // NEW: structured evaluation when config.variable is set (new format)
+    if (config.variable !== undefined) {
+      result = this.evaluateConditionStructured(
+        config.variable,
+        config.operator || 'equals',
+        config.value ?? '',
+        context,
+      );
     } else {
-      // Single value or non-string operator - evaluate normally
-      result = this.contextService.evaluateExpression(expression, context);
+      // LEGACY: expression-based evaluation (backward compat — never remove)
+      const expression = (config as any).expression || '';
+      const multiValueMatch = expression.match(/(.+?)\.(includes|startsWith|endsWith)\("([^"]+)"(?:\.toLowerCase\(\))?\)/);
+
+      if (multiValueMatch && multiValueMatch[3].includes(',')) {
+        const [, value1, operator, value2String] = multiValueMatch;
+        const values = value2String.split(',').map((v: string) => v.trim());
+        for (const value of values) {
+          const singleExpression = `${value1}.${operator}("${value}")`;
+          result = this.contextService.evaluateExpression(singleExpression, context);
+          if (result) break;
+        }
+      } else {
+        result = this.contextService.evaluateExpression(expression, context);
+      }
     }
 
     this.contextService.setOutput(context, { conditionResult: result });
 
+    // Mark stage if configured for this branch
+    const stageName = result ? config.trueStageName : config.falseStageName;
+    if (stageName) {
+      await this.applyStageToContact(stageName, context, sessionId, contactPhone);
+      console.log(
+        `[CONDITION] Branch ${result ? 'true' : 'false'} — marcando etapa "${stageName}" para ${context.variables._contactPhone}`,
+      );
+    }
+
     const nextEdge = edges.find(
-      (e) => e.source === node.id && (
+      (e: any) => e.source === node.id && (
         e.condition === (result ? 'true' : 'false') ||
         e.label === (result ? 'true' : 'false')
       ),
     );
 
-    const nextNodeId = nextEdge ? nextEdge.target : null;
-
     return {
-      nextNodeId,
+      nextNodeId: nextEdge ? nextEdge.target : null,
       shouldWait: false,
     };
+  }
+
+  /**
+   * Evaluate a condition using structured operators (new simple format)
+   */
+  private evaluateConditionStructured(
+    variable: string,
+    operator: string,
+    value: string,
+    context: ExecutionContext,
+  ): boolean {
+    const resolved = this.resolveConditionVariable(variable, context);
+    const actual   = String(resolved ?? '').toLowerCase().trim();
+    const expected = String(value ?? '').toLowerCase().trim();
+
+    switch (operator) {
+      case 'equals':       return actual === expected;
+      case 'not_equals':   return actual !== expected;
+      case 'contains':     return actual.includes(expected);
+      case 'not_contains': return !actual.includes(expected);
+      case 'starts_with':  return actual.startsWith(expected);
+      case 'ends_with':    return actual.endsWith(expected);
+      case 'greater_than': return parseFloat(actual) > parseFloat(expected);
+      case 'less_than':    return parseFloat(actual) < parseFloat(expected);
+      case 'is_empty':     return actual === '' || actual === 'undefined' || actual === 'null';
+      case 'is_not_empty': return actual !== '' && actual !== 'undefined' && actual !== 'null';
+      default:
+        console.warn(`[CONDITION] Operador desconhecido: ${operator}`);
+        return false;
+    }
+  }
+
+  /**
+   * Resolve a condition variable reference to its value in the execution context
+   */
+  private resolveConditionVariable(variable: string, context: ExecutionContext): any {
+    if (!variable) return '';
+    const trimmed = variable.trim();
+    // Handle explicit {{...}} template syntax
+    if (trimmed.includes('{{')) {
+      return this.contextService.interpolate(trimmed, context);
+    }
+    // Handle dotted paths: variables.foo or globals.foo
+    const parts = trimmed.split('.');
+    if (parts[0] === 'variables') {
+      return parts.slice(1).reduce((obj: any, key: string) => obj?.[key], context.variables);
+    }
+    if (parts[0] === 'globals') {
+      return parts.slice(1).reduce((obj: any, key: string) => obj?.[key], context.globals);
+    }
+    // Direct variable name → look in variables
+    return context.variables?.[trimmed];
+  }
+
+  /**
+   * Apply a stage tag to the contact — shared by MARK_STAGE node and CONDITION inline stage
+   */
+  private async applyStageToContact(
+    stageName: string,
+    context: ExecutionContext,
+    sessionId?: string,
+    contactPhone?: string,
+  ): Promise<void> {
+    const finalSessionId  = sessionId  || context.variables._sessionId;
+    const finalContactPhone = contactPhone || context.variables._contactPhone;
+    const tenantId = context.variables._tenantId;
+    if (!finalSessionId || !finalContactPhone || !tenantId) return;
+    const currentTags = await this.contactTagsService.getTags(tenantId, finalSessionId, finalContactPhone);
+    const otherTags   = currentTags.filter((t: string) => !t.startsWith('stage:'));
+    await this.contactTagsService.setTags(tenantId, finalSessionId, finalContactPhone, [...otherTags, `stage:${stageName}`]);
+    context.variables.etapa        = stageName;
+    context.variables.contactStage = stageName;
   }
 
   /**
@@ -2273,9 +2368,19 @@ export class NodeExecutorService {
     context: ExecutionContext,
     edges: any[],
   ): Promise<NodeExecutionResult> {
-    const config = node.config as PixRecognitionConfig;
+    const config = node.config as any;
     const imageUrl = this.contextService.interpolate(config.imageUrl || '{{triggerMessage.media.url}}', context);
-    const saveAs = config.saveResponseAs || 'pixResult';
+    const saveAs   = config.saveResponseAs || 'pixResult';
+    const valueRules: any[] = config.valueRules || [];
+    const hasValueRules = valueRules.length > 0;
+
+    // Helper: route by handle id (same pattern as CONDITION)
+    const routeToHandle = (handle: string, result: any): NodeExecutionResult => {
+      const nextEdge = edges.find((e: any) =>
+        e.source === node.id && (e.condition === handle || e.label === handle),
+      ) ?? (handle === 'no_match' ? edges.find((e: any) => e.source === node.id) : undefined);
+      return { nextNodeId: nextEdge?.target ?? null, shouldWait: false, output: { [saveAs]: result } };
+    };
 
     try {
       if (!imageUrl || imageUrl.includes('{{')) {
@@ -2284,96 +2389,109 @@ export class NodeExecutorService {
 
       console.log(`[PIX_RECOGNITION] Processing file: ${imageUrl}`);
 
-      // 1. Run OCR via OCRService (handles pre-processing and PDF)
       const rawText = await this.ocrService.extractText(imageUrl);
-
-      // 2. Parse text with bank-specific logic
       const pixData = PixParser.parse(rawText);
 
-      // 3. Validations
-      let valid = true;
-      let reason = null;
+      let valid  = true;
+      let reason: string | null = null;
 
-      // Date Validation (Mandatory: must be today)
+      // ── Date validation ────────────────────────────────────────────────
       if (config.validateDate !== false) {
-        const today = new Date();
-        const dd = String(today.getDate()).padStart(2, '0');
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const yyyy = today.getFullYear();
-        const todayStr = `${dd}/${mm}/${yyyy}`;
+        const toleranceDays = config.dateToleranceDays ?? 0;
+        // Today in America/Sao_Paulo
+        const nowSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+        nowSP.setHours(0, 0, 0, 0);
 
-        if (pixData.date && pixData.date !== todayStr) {
-          valid = false;
-          reason = `Data inválida: encontrado ${pixData.date}, esperado ${todayStr}`;
-        } else if (!pixData.date) {
-          // If date is mandatory but not found, we might want to flag it or be lenient?
-          // User requested that "comprovantes com data anterior devem ser rejeitados".
-          // If not found, it's safer to fail or warn.
+        if (pixData.date) {
+          const pixDateObj = this.parsePixDateStr(pixData.date);
+          if (pixDateObj) {
+            pixDateObj.setHours(0, 0, 0, 0);
+            const diffDays = Math.round((nowSP.getTime() - pixDateObj.getTime()) / 86_400_000);
+            if (diffDays < 0 || diffDays > toleranceDays) {
+              valid  = false;
+              reason = `Data inválida: ${pixData.date} (tolerância: ${toleranceDays} dia(s))`;
+            }
+          }
         }
+        // If date not found, stay lenient (same as before)
       }
 
-      // Receiver Name Validation
-      if (valid && config.expectedReceiverName) {
+      // ── Receiver name validation ───────────────────────────────────────
+      if (valid && (config.validateReceiver ? config.expectedReceiverName : config.expectedReceiverName)) {
         const expected = this.contextService.interpolate(config.expectedReceiverName, context).toLowerCase().trim();
-        const found = (pixData.receiverName || '').toLowerCase().trim();
-
-        if (!found.includes(expected) && !expected.includes(found)) {
-          valid = false;
-          reason = `Recebedor não correspondente: encontrado "${pixData.receiverName || 'Não identificado'}", esperado "${config.expectedReceiverName}"`;
+        const found    = (pixData.receiverName || '').toLowerCase().trim();
+        if (found && expected && !found.includes(expected) && !expected.includes(found)) {
+          valid  = false;
+          reason = `Recebedor inválido: encontrado "${pixData.receiverName}", esperado "${config.expectedReceiverName}"`;
         }
       }
 
-      // Value Validation (Accepted list)
-      if (valid && (config.validateAmount || config.acceptedValues)) {
+      // ── Legacy single-value validation (backward compat) ──────────────
+      if (valid && !hasValueRules && (config.validateAmount || config.acceptedValues)) {
         if (config.acceptedValues) {
-          const acceptedList = config.acceptedValues.split(',').map(v => parseFloat(v.trim().replace(',', '.')));
-          const foundValue = pixData.amount;
-
-          if (!acceptedList.some(v => Math.abs(v - foundValue) < 0.01)) {
-            valid = false;
-            reason = `Valor não autorizado: encontrado R$ ${pixData.amount.toFixed(2)}, valores aceitos: ${config.acceptedValues}`;
+          const accepted = config.acceptedValues.split(',').map((v: string) => parseFloat(v.trim().replace(',', '.')));
+          if (!accepted.some((v: number) => Math.abs(v - pixData.amount) < 0.01)) {
+            valid  = false;
+            reason = `Valor não autorizado: R$ ${pixData.amount.toFixed(2)}`;
           }
         } else if (config.expectedAmount) {
-          const expectedStr = this.contextService.interpolate(config.expectedAmount, context);
-          const expectedAmount = parseFloat(expectedStr.replace(',', '.'));
-
-          if (!isNaN(expectedAmount) && Math.abs(pixData.amount - expectedAmount) >= 0.01) {
-            valid = false;
-            reason = `Valor divergente: encontrado R$ ${pixData.amount.toFixed(2)}, esperado R$ ${expectedAmount.toFixed(2)}`;
+          const expectedAmt = parseFloat(
+            this.contextService.interpolate(config.expectedAmount, context).replace(',', '.'),
+          );
+          if (!isNaN(expectedAmt) && Math.abs(pixData.amount - expectedAmt) >= 0.01) {
+            valid  = false;
+            reason = `Valor divergente: R$ ${pixData.amount.toFixed(2)}, esperado R$ ${expectedAmt.toFixed(2)}`;
           }
         }
       }
 
-      // General fallback validity check
+      // ── Fallback PIX keyword check ─────────────────────────────────────
       const hasPixKeywords = rawText.toLowerCase().includes('pix') || rawText.toLowerCase().includes('pagamento');
       if (valid && !hasPixKeywords && pixData.amount <= 0 && !pixData.transactionId) {
-        valid = false;
+        valid  = false;
         reason = 'O arquivo não parece ser um comprovante de PIX válido.';
       }
 
       const result = {
-        valid,
-        reason,
-        data: {
-          ...pixData,
-          rawText
-        },
+        valid, reason,
+        data: { ...pixData, rawText },
         timestamp: new Date().toISOString(),
       };
 
-      console.log(`[PIX_RECOGNITION] Result for ${imageUrl}: valid=${valid}${reason ? ` (${reason})` : ''}`);
+      console.log(`[PIX_RECOGNITION] Result: valid=${valid}${reason ? ` (${reason})` : ''}`);
 
       this.contextService.setVariable(context, saveAs, result);
       this.contextService.setOutput(context, { [saveAs]: result });
 
-      const nextEdge = edges.find((e) => e.source === node.id);
-      const nextNodeId = nextEdge ? nextEdge.target : null;
+      // ── NEW: multi-value routing ──────────────────────────────────────
+      if (hasValueRules) {
+        if (!valid) {
+          context.variables[`${saveAs}_error`] = reason ?? 'validation_failed';
+          console.log(`[PIX_RECOGNITION] → no_match (validation failed: ${reason})`);
+          return routeToHandle('no_match', result);
+        }
 
-      return {
-        nextNodeId,
-        shouldWait: false,
-        output: { [saveAs]: result },
-      };
+        const pixValue = pixData.amount; // float from PixParser
+        for (const rule of valueRules) {
+          const expected   = this.parsePixValue(rule.value);
+          const tolerance  = rule.tolerance ?? 0;
+          if (Math.abs(pixValue - expected) <= tolerance) {
+            context.variables[`${saveAs}_match`] = rule.label;
+            console.log(`[PIX_RECOGNITION] → "${rule.label}" (${pixValue} ≈ ${expected} ±${tolerance})`);
+            return routeToHandle(rule.id, result);
+          }
+        }
+
+        // No rule matched
+        context.variables[`${saveAs}_error`] = 'value_mismatch';
+        console.log(`[PIX_RECOGNITION] → no_match (valor ${pixValue} não bate com nenhuma regra)`);
+        return routeToHandle('no_match', result);
+      }
+
+      // ── LEGACY: single output (backward compat) ───────────────────────
+      const nextEdge = edges.find((e: any) => e.source === node.id);
+      return { nextNodeId: nextEdge?.target ?? null, shouldWait: false, output: { [saveAs]: result } };
+
     } catch (error: any) {
       console.error('[PIX_RECOGNITION] Fatal Error:', error.message);
       const result = {
@@ -2382,19 +2500,41 @@ export class NodeExecutorService {
         data: { rawText: '' },
         timestamp: new Date().toISOString(),
       };
-
       this.contextService.setVariable(context, saveAs, result);
       this.contextService.setOutput(context, { [saveAs]: result });
 
-      const nextEdge = edges.find((e) => e.source === node.id);
-      const nextNodeId = nextEdge ? nextEdge.target : null;
-
-      return {
-        nextNodeId,
-        shouldWait: false,
-        output: { [saveAs]: result },
-      };
+      if (hasValueRules) return routeToHandle('no_match', result);
+      const nextEdge = edges.find((e: any) => e.source === node.id);
+      return { nextNodeId: nextEdge?.target ?? null, shouldWait: false, output: { [saveAs]: result } };
     }
+  }
+
+  /** Parse a PIX value string to float — handles BR and US formats */
+  private parsePixValue(raw: string): number {
+    if (!raw) return 0;
+    const s = String(raw).replace(/[R$\s]/g, '').trim();
+    // Both . and , present: BR thousands format e.g. "1.990,00"
+    if (s.includes(',') && s.includes('.')) {
+      return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+    }
+    // Only comma: "19,90" → 19.90
+    if (s.includes(',')) return parseFloat(s.replace(',', '.')) || 0;
+    return parseFloat(s) || 0;
+  }
+
+  /** Parse a PIX date string (DD/MM/YYYY) to a Date object */
+  private parsePixDateStr(raw: string): Date | null {
+    if (!raw) return null;
+    const parts = raw.split('/');
+    if (parts.length === 3) {
+      const [dd, mm, yyyy] = parts.map(Number);
+      if (dd && mm && yyyy) {
+        const d = new Date(yyyy, mm - 1, dd);
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
   }
 
 
@@ -2542,7 +2682,7 @@ functions, etc.)
   }
 
   /**
-   * Execute MARK_STAGE node
+   * Execute MARK_STAGE node — delegates to applyStageToContact
    */
   private async executeMarkStage(
     node: WorkflowNode,
@@ -2554,34 +2694,12 @@ functions, etc.)
     const config = node.config as any;
     const stageName = config.stageName || 'Sem Etapa';
 
-    // Get contact info from context if available
-    const finalSessionId = sessionId || context.variables._sessionId;
-    const finalContactPhone = contactPhone || context.variables._contactPhone;
-    const tenantId = context.variables._tenantId;
-
-    if (finalSessionId && finalContactPhone && tenantId) {
-      console.log(`[MARK_STAGE] Marking stage "${stageName}" for ${finalContactPhone}`);
-
-      // Get current tags
-      const currentTags = await this.contactTagsService.getTags(tenantId, finalSessionId, finalContactPhone);
-
-      // Filter out existing stage tags and add the new one
-      const otherTags = currentTags.filter(t => !t.startsWith('stage:'));
-      const newTags = [...otherTags, `stage:${stageName}`];
-
-      // Persist
-      await this.contactTagsService.setTags(tenantId, finalSessionId, finalContactPhone, newTags);
-
-      // Update current context immediately
-      context.variables.etapa = stageName;
-      context.variables.contactStage = stageName; // Alias for English users
-    }
+    console.log(`[MARK_STAGE] Marking stage "${stageName}" for ${contactPhone || context.variables._contactPhone}`);
+    await this.applyStageToContact(stageName, context, sessionId, contactPhone);
 
     const nextEdge = edges.find((e) => e.source === node.id);
-    const nextNodeId = nextEdge ? nextEdge.target : null;
-
     return {
-      nextNodeId,
+      nextNodeId: nextEdge ? nextEdge.target : null,
       shouldWait: false,
     };
   }

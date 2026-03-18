@@ -296,6 +296,15 @@ export class ExecutionEngineService implements OnModuleInit {
       baseContext.variables._sessionId = sessionId;
       baseContext.variables._contactPhone = contactPhone;
 
+      // Populate contact name from WhatsApp pushName (attached to payload by session manager)
+      const contactNameFromPayload =
+        (triggerPayload as any)?.contactName ||
+        (triggerPayload as any)?.pushName;
+      if (contactNameFromPayload) {
+        baseContext.variables.contactName = contactNameFromPayload;
+        baseContext.variables.pushName    = contactNameFromPayload;
+      }
+
       // Extract current stage from tags if present
       const stageTag = contactTags.find(t => t.startsWith('stage:'));
       if (stageTag) {
@@ -559,6 +568,10 @@ export class ExecutionEngineService implements OnModuleInit {
           const fallbackEdge = workflow.edges.find((e) => e.source === currentNode.id && !e.condition);
           if (fallbackEdge) {
             execution.currentNodeId = fallbackEdge.target;
+          } else {
+            // No outgoing edge from WAIT_REPLY — flow ends here
+            console.log(`[RESUME] WAIT_REPLY node ${currentNode.id} has no outgoing edge, completing execution ${execution.id}`);
+            execution.currentNodeId = null;
           }
         }
       }
@@ -673,6 +686,7 @@ export class ExecutionEngineService implements OnModuleInit {
 
       // Update status to RUNNING
       execution.status = ExecutionStatus.RUNNING;
+      console.log(`[RESUME] Resuming execution ${execution.id} → nextNodeId: ${execution.currentNodeId ?? 'null (will complete)'}`);
       await this.executionService.updateExecution(execution.id, {
         status: ExecutionStatus.RUNNING,
         currentNodeId: execution.currentNodeId,
@@ -707,6 +721,7 @@ export class ExecutionEngineService implements OnModuleInit {
   ): Promise<void> {
     let iterationCount = 0;
     const MAX_ITERATIONS = 100; // Safety limit to prevent infinite loops (reduced from 10000)
+    console.log(`[ENGINE] continueExecution start — exec ${execution.id}, currentNodeId: ${execution.currentNodeId}, status: ${execution.status}`);
 
     while (execution.status === ExecutionStatus.RUNNING && execution.currentNodeId) {
       iterationCount++;
@@ -1248,9 +1263,17 @@ export class ExecutionEngineService implements OnModuleInit {
 
       // If no next node, complete
       if (!result.nextNodeId) {
+        console.log(`[ENGINE] No next node after ${currentNode.type} (${currentNode.id}), completing execution ${execution.id}`);
         await this.completeExecution(execution);
         return;
       }
+    }
+
+    // Safety net: if the loop exited because currentNodeId became null (e.g. WAIT_REPLY with no edge)
+    // but completeExecution was never called, complete it now.
+    if (execution.status === ExecutionStatus.RUNNING && !execution.currentNodeId) {
+      console.log(`[ENGINE] Loop exited with null currentNodeId for execution ${execution.id}, completing`);
+      await this.completeExecution(execution);
     }
   }
 
@@ -1261,6 +1284,15 @@ export class ExecutionEngineService implements OnModuleInit {
     execution: WorkflowExecution,
     reason?: string,
   ): Promise<void> {
+    // Idempotency guard: skip if already completed
+    if (execution.status === ExecutionStatus.COMPLETED) {
+      console.log(`[ENGINE] completeExecution called on already-completed execution ${execution.id}, skipping`);
+      return;
+    }
+    execution.status = ExecutionStatus.COMPLETED;
+
+    console.log(`[ENGINE] Completing execution ${execution.id} for ${execution.contactPhone}${reason ? ` (${reason})` : ''}`);
+
     // Clean up any active timeouts
     this.cleanupExecutionTimeouts(execution.id);
 

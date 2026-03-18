@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   Search,
   Check,
@@ -10,6 +10,8 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { WorkflowNode, WorkflowNodeType } from '@n9n/shared'
+import { useTextFormatter } from '@/hooks/useTextFormatter'
+import { FormattingToolbar } from '@/components/ui/FormattingToolbar'
 import { apiClient } from '@/lib/api-client'
 import Editor from '@monaco-editor/react'
 import MediaUploadInput, { MediaValue } from '@/components/MediaUploadInput'
@@ -740,222 +742,301 @@ function GrupoWaitConfig({ config, setConfig }: any) {
   );
 }
 
-function ConditionConfig({ config, setConfig }: any) {
-  // Parse existing expression or use defaults
-  const parseExpression = (expr: string) => {
-    if (!expr) return { value1: '', operator: '==', value2: '' }
+function PixRecognitionConfig({ config, setConfig }: any) {
+  const saveAs     = config.saveResponseAs || 'pixResult'
+  const valueRules: any[] = config.valueRules || []
 
-    // Check for array operators first
-    if (expr.includes('.includes(') && !expr.includes('.toLowerCase()')) {
-      // Array contains: contactTags.includes("vendas")
-      const match = expr.match(/(.+?)\.includes\("([^"]+)"\)/)
-      if (match) {
-        return { value1: match[1].replace(/^!/, ''), operator: expr.startsWith('!') ? '.array_not_contains(' : '.array_contains(', value2: match[2] }
-      }
-    }
-
-    if (expr.includes('.length === 0')) {
-      const value1 = expr.replace('.length === 0', '').trim()
-      return { value1, operator: '.array_is_empty', value2: '' }
-    }
-
-    if (expr.includes('.length > 0')) {
-      const value1 = expr.replace('.length > 0', '').trim()
-      return { value1, operator: '.array_is_not_empty', value2: '' }
-    }
-
-    // Check for array contains any/all (multiple OR/AND conditions)
-    if (expr.includes(' || ') && expr.includes('.includes(')) {
-      const parts = expr.split(' || ')
-      const firstMatch = parts[0].match(/(.+?)\.includes\("([^"]+)"\)/)
-      if (firstMatch) {
-        const value1 = firstMatch[1]
-        const values = parts.map(p => {
-          const m = p.match(/\.includes\("([^"]+)"\)/)
-          return m ? m[1] : ''
-        }).filter(Boolean)
-        return { value1, operator: '.array_contains_any(', value2: values.join(', ') }
-      }
-    }
-
-    if (expr.includes(' && ') && expr.includes('.includes(')) {
-      const parts = expr.split(' && ')
-      const firstMatch = parts[0].match(/(.+?)\.includes\("([^"]+)"\)/)
-      if (firstMatch) {
-        const value1 = firstMatch[1]
-        const values = parts.map(p => {
-          const m = p.match(/\.includes\("([^"]+)"\)/)
-          return m ? m[1] : ''
-        }).filter(Boolean)
-        return { value1, operator: '.array_contains_all(', value2: values.join(', ') }
-      }
-    }
-
-    // Try to parse expressions like "variables.opcao == 2"
-    const operators = ['===', '!==', '==', '!=', '>=', '<=', '>', '<', '.includes(', '.startsWith(', '.endsWith(']
-    for (const op of operators) {
-      if (expr.includes(op)) {
-        const parts = expr.split(op)
-        if (parts.length >= 2) {
-          // Remove .toLowerCase() from parsed values to avoid duplication
-          let value1 = parts[0].trim().replace(/\.toLowerCase\(\)/g, '')
-          // For value2, remove everything after the closing quote/parenthesis
-          let value2Raw = parts[1].trim()
-          // Extract the actual value between quotes
-          const match = value2Raw.match(/"([^"]*)"/)
-          let value2 = match ? match[1] : value2Raw.replace(/[()'"]/g, '').replace(/\.toLowerCase\(\)/g, '')
-
-          return {
-            value1,
-            operator: op,
-            value2
-          }
-        }
-      }
-    }
-
-    return { value1: expr, operator: '==', value2: '' }
+  const addRule = () => {
+    const id = `rule-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    setConfig((prev: any) => ({
+      ...prev,
+      valueRules: [...(prev.valueRules || []), { id, label: '', value: '', tolerance: 0 }],
+    }))
   }
 
-  // Use state to manage condition parts independently
-  const [conditionParts, setConditionParts] = useState(() => parseExpression(config.expression || ''))
+  const removeRule = (i: number) => {
+    setConfig((prev: any) => {
+      const next = [...(prev.valueRules || [])]
+      next.splice(i, 1)
+      return { ...prev, valueRules: next }
+    })
+  }
 
-  // Update parts when config.expression changes externally
-  useEffect(() => {
-    setConditionParts(parseExpression(config.expression || ''))
-  }, [config.expression])
-
-  const updateCondition = (field: string, value: string) => {
-    const parts = { ...conditionParts, [field]: value }
-    setConditionParts(parts)
-
-    let expression = ''
-
-    // Array operators
-    if (parts.operator === '.array_contains(') {
-      expression = `${parts.value1}.includes("${parts.value2}")`
-    } else if (parts.operator === '.array_not_contains(') {
-      expression = `!${parts.value1}.includes("${parts.value2}")`
-    } else if (parts.operator === '.array_contains_any(') {
-      const values = parts.value2.split(',').map(v => v.trim())
-      expression = values.map(v => `${parts.value1}.includes("${v}")`).join(' || ')
-    } else if (parts.operator === '.array_contains_all(') {
-      const values = parts.value2.split(',').map(v => v.trim())
-      expression = values.map(v => `${parts.value1}.includes("${v}")`).join(' && ')
-    } else if (parts.operator === '.array_is_empty') {
-      expression = `${parts.value1}.length === 0`
-    } else if (parts.operator === '.array_is_not_empty') {
-      expression = `${parts.value1}.length > 0`
-    } else if (parts.operator.includes('(')) {
-      // For string methods like includes, startsWith, endsWith - use lowercase for case-insensitive comparison
-      expression = `${parts.value1}.toLowerCase()${parts.operator}"${parts.value2}".toLowerCase())`
-    } else {
-      expression = `${parts.value1} ${parts.operator} ${parts.value2}`
-    }
-
-    setConfig({ ...config, expression })
+  const updateRule = (i: number, field: string, val: any) => {
+    setConfig((prev: any) => {
+      const next = [...(prev.valueRules || [])]
+      next[i] = { ...next[i], [field]: val }
+      return { ...prev, valueRules: next }
+    })
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+
+      {/* URL da imagem */}
+      <div>
+        <label className="block text-xs font-medium mb-1.5 text-gray-400">URL da Imagem (ou variável)</label>
+        <input
+          type="text"
+          value={config.imageUrl || ''}
+          onChange={e => setConfig((prev: any) => ({ ...prev, imageUrl: e.target.value }))}
+          placeholder="{{triggerMessage.media.url}}"
+          className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+        />
+        <p className="text-[10px] text-gray-500 mt-1">Deixe vazio para usar a mídia da última mensagem recebida.</p>
+      </div>
+
+      {/* Salvar como */}
+      <div>
+        <label className="block text-xs font-medium mb-1.5 text-gray-400">Salvar resultado como</label>
+        <input
+          type="text"
+          value={config.saveResponseAs || 'pixResult'}
+          onChange={e => setConfig((prev: any) => ({ ...prev, saveResponseAs: e.target.value }))}
+          placeholder="pixResult"
+          className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+        />
+      </div>
+
+      {/* Valores aceitos */}
       <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
-        <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-          <p className="text-xs text-blue-300">
-            💡 <strong>Dica:</strong> Para verificar em qual etapa o lead está, use o campo <strong>etapa</strong> no Valor 1.
-          </p>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-white">💰 Valores Aceitos</h3>
+          <button
+            type="button"
+            onClick={addRule}
+            className="text-xs text-green-400 hover:text-green-300 border border-green-400/30 rounded px-2 py-1 transition-colors"
+          >
+            + Adicionar valor
+          </button>
         </div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-200">Condições</h3>
-          <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded font-mono">
-            {config.expression || 'nenhuma expressão'}
-          </span>
-        </div>
 
-        <div className="space-y-3">
-          {/* Value 1 */}
-          <div>
-            <label className="block text-xs font-medium mb-1.5 text-gray-400">
-              Value 1
-            </label>
-            <input
-              type="text"
-              value={conditionParts.value1}
-              onChange={(e) => updateCondition('value1', e.target.value)}
-              placeholder={conditionParts.operator.startsWith('.array_') ? "contactTags" : "variables.opcao"}
-              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
-            />
-          </div>
-
-          {/* Operator */}
-          <div>
-            <label className="block text-xs font-medium mb-1.5 text-gray-400">
-              Operator
-            </label>
-            <select
-              value={conditionParts.operator}
-              onChange={(e) => updateCondition('operator', e.target.value)}
-              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white"
-            >
-              <optgroup label="Comparison">
-                <option value="==">is equal to (==)</option>
-                <option value="===">is equal to (===)</option>
-                <option value="!=">is not equal to (!=)</option>
-                <option value="!==">is not equal to (!==)</option>
-                <option value=">">is greater than (&gt;)</option>
-                <option value=">=">is greater or equal (&gt;=)</option>
-                <option value="<">is less than (&lt;)</option>
-                <option value="<=">is less or equal (&lt;=)</option>
-              </optgroup>
-              <optgroup label="String">
-                <option value=".includes(">contains (.includes)</option>
-                <option value=".startsWith(">starts with (.startsWith)</option>
-                <option value=".endsWith(">ends with (.endsWith)</option>
-              </optgroup>
-              <optgroup label="Array">
-                <option value=".array_contains(">array contains</option>
-                <option value=".array_not_contains(">array not contains</option>
-                <option value=".array_contains_any(">array contains any</option>
-                <option value=".array_contains_all(">array contains all</option>
-                <option value=".array_is_empty">array is empty</option>
-                <option value=".array_is_not_empty">array is not empty</option>
-              </optgroup>
-            </select>
-          </div>
-
-          {/* Value 2 */}
-          {!conditionParts.operator.includes('_is_empty') && !conditionParts.operator.includes('_is_not_empty') && (
-            <div>
-              <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                Value 2
-              </label>
+        <div className="space-y-2">
+          {valueRules.map((rule: any, i: number) => (
+            <div key={rule.id} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-2.5">
               <input
-                type="text"
-                value={conditionParts.value2}
-                onChange={(e) => updateCondition('value2', e.target.value)}
-                placeholder={
-                  conditionParts.operator.includes('array_contains_any') || conditionParts.operator.includes('array_contains_all')
-                    ? "vendas, vip, premium (separe por vírgula)"
-                    : conditionParts.operator.startsWith('.array_')
-                      ? "vendas"
-                      : conditionParts.operator.includes('(')
-                        ? "sim, s, ok (separe por vírgula)"
-                        : "2"
-                }
-                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+                value={rule.label}
+                onChange={e => updateRule(i, 'label', e.target.value)}
+                placeholder="Ex: Starter"
+                className="w-24 bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-primary"
               />
-              {(conditionParts.operator.includes('array_contains_any') || conditionParts.operator.includes('array_contains_all')) && (
-                <p className="text-[10px] text-gray-500 mt-1">Separate multiple values with commas</p>
-              )}
+              <span className="text-gray-500 text-xs shrink-0">R$</span>
+              <input
+                value={rule.value}
+                onChange={e => updateRule(i, 'value', e.target.value)}
+                placeholder="19,90"
+                className="w-20 bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-primary"
+              />
+              <span className="text-gray-500 text-xs shrink-0">± R$</span>
+              <input
+                type="number"
+                value={rule.tolerance ?? 0}
+                onChange={e => updateRule(i, 'tolerance', Number(e.target.value))}
+                min={0}
+                placeholder="0"
+                className="w-14 bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-primary"
+              />
+              <span className="text-xs text-green-400 ml-auto shrink-0">→ &quot;{rule.label || '?'}&quot;</span>
+              <button type="button" onClick={() => removeRule(i)} className="text-red-400 hover:text-red-300 text-xs shrink-0">✕</button>
             </div>
-          )}
+          ))}
+
+          <div className="flex items-center gap-2 px-3 py-2 border border-dashed border-white/10 rounded-lg">
+            <span className="text-xs text-gray-500">Nenhum valor bateu → saída <span className="text-red-400 font-mono">sem_match</span></span>
+          </div>
         </div>
       </div>
 
-      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-        <p className="text-[11px] text-blue-300 leading-relaxed">
-          💡 <strong>Tip:</strong> Use variables like <code className="bg-blue-500/20 px-1 rounded">variables.key</code> or <code className="bg-blue-500/20 px-1 rounded">contactTags</code> for dynamic evaluations.
-        </p>
+      {/* Validar nome do recebedor */}
+      <div className="border border-white/10 rounded-lg p-3">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.validateReceiver ?? false}
+            onChange={e => setConfig((prev: any) => ({ ...prev, validateReceiver: e.target.checked }))}
+            className="rounded"
+          />
+          <span className="text-sm text-white">Validar nome do recebedor</span>
+        </label>
+        {config.validateReceiver && (
+          <div className="mt-2">
+            <input
+              value={config.expectedReceiverName ?? ''}
+              onChange={e => setConfig((prev: any) => ({ ...prev, expectedReceiverName: e.target.value }))}
+              placeholder="Ex: Gabriel Jimbo"
+              className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-gray-200 mt-1 focus:outline-none focus:border-primary"
+            />
+            <p className="text-[10px] text-gray-500 mt-1">Comparação parcial — &quot;Gabriel&quot; bate com &quot;Gabriel Jimbo&quot;</p>
+          </div>
+        )}
       </div>
+
+      {/* Validar data */}
+      <div className="border border-white/10 rounded-lg p-3">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.validateDate !== false}
+            onChange={e => setConfig((prev: any) => ({ ...prev, validateDate: e.target.checked }))}
+            className="rounded"
+          />
+          <span className="text-sm text-white">Validar data do comprovante</span>
+        </label>
+        {config.validateDate !== false && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-gray-400">Aceitar até</span>
+            <input
+              type="number"
+              value={config.dateToleranceDays ?? 0}
+              onChange={e => setConfig((prev: any) => ({ ...prev, dateToleranceDays: Number(e.target.value) }))}
+              min={0}
+              max={7}
+              className="w-16 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-primary"
+            />
+            <span className="text-xs text-gray-400">dia(s) atrás (0 = somente hoje)</span>
+          </div>
+        )}
+      </div>
+
+      {/* Variáveis disponíveis */}
+      <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-xs text-gray-400">
+        <p className="font-medium text-gray-300 mb-2">📋 Variáveis disponíveis após execução:</p>
+        <code className="block text-gray-400">{`{{${saveAs}.value}}`} — valor extraído</code>
+        <code className="block text-gray-400">{`{{${saveAs}.date}}`} — data do comprovante</code>
+        <code className="block text-gray-400">{`{{${saveAs}.receiverName}}`} — nome do recebedor</code>
+        <code className="block text-gray-400">{`{{${saveAs}.transactionId}}`} — ID da transação</code>
+        {valueRules.length > 0 && <>
+          <code className="block text-green-400 mt-1">{`{{${saveAs}_match}}`} — qual regra foi paga (ex: &quot;Starter&quot;)</code>
+          <code className="block text-red-400">{`{{${saveAs}_error}}`} — motivo de rejeição</code>
+        </>}
+      </div>
+
+    </div>
+  )
+}
+
+const CONDITION_OPERATORS = [
+  { value: 'equals',       label: 'é igual a',      needsValue: true  },
+  { value: 'not_equals',   label: 'é diferente de', needsValue: true  },
+  { value: 'contains',     label: 'contém',          needsValue: true  },
+  { value: 'not_contains', label: 'não contém',      needsValue: true  },
+  { value: 'starts_with',  label: 'começa com',      needsValue: true  },
+  { value: 'ends_with',    label: 'termina com',     needsValue: true  },
+  { value: 'greater_than', label: 'é maior que',     needsValue: true  },
+  { value: 'less_than',    label: 'é menor que',     needsValue: true  },
+  { value: 'is_empty',     label: 'está vazio',      needsValue: false },
+  { value: 'is_not_empty', label: 'não está vazio',  needsValue: false },
+]
+
+const STAGE_PRESETS = [
+  'Quente', 'Frio', 'Pronto pra comprar', 'Interesse',
+  'Convertido', 'Perdido', 'Em dúvida', 'Aguardando retorno',
+]
+
+function ConditionConfig({ config, setConfig }: any) {
+  const isLegacy = config.expression && config.variable === undefined
+
+  const variable = config.variable ?? ''
+  const operator = config.operator ?? 'contains'
+  const value    = config.value    ?? ''
+
+  const currentOp  = CONDITION_OPERATORS.find(o => o.value === operator) ?? CONDITION_OPERATORS[2]
+  const needsValue = currentOp.needsValue
+
+  const update = (field: string, val: string | undefined) => {
+    setConfig((prev: any) => ({ ...prev, [field]: val }))
+  }
+
+  return (
+    <div className="space-y-4">
+
+      {/* Legacy expression notice */}
+      {isLegacy && (
+        <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+          <p className="text-xs text-yellow-300 font-medium mb-1">⚠️ Expressão legada — configure os campos abaixo para migrar ao novo formato</p>
+          <p className="text-[10px] text-gray-500 font-mono break-all">{config.expression}</p>
+        </div>
+      )}
+
+      {/* Variável */}
+      <div>
+        <label className="block text-xs font-medium mb-1.5 text-gray-400">Variável</label>
+        <input
+          type="text"
+          value={variable}
+          onChange={e => update('variable', e.target.value)}
+          placeholder="respostaHook  ou  {{variables.total}}"
+          className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500"
+        />
+        <p className="text-[10px] text-gray-500 mt-1">Nome da variável ou {`{{variavel}}`} completo</p>
+      </div>
+
+      {/* Operador */}
+      <div>
+        <label className="block text-xs font-medium mb-1.5 text-gray-400">Condição</label>
+        <select
+          value={operator}
+          onChange={e => update('operator', e.target.value)}
+          className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white"
+        >
+          {CONDITION_OPERATORS.map(op => (
+            <option key={op.value} value={op.value}>{op.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Valor */}
+      {needsValue && (
+        <div>
+          <label className="block text-xs font-medium mb-1.5 text-gray-400">Valor</label>
+          <input
+            type="text"
+            value={value}
+            onChange={e => update('value', e.target.value)}
+            placeholder="sim"
+            className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500"
+          />
+        </div>
+      )}
+
+      {/* Preview em linguagem natural */}
+      <div className="bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-gray-400">
+        🔍 Se{' '}
+        <span className="text-white font-medium">{variable || '...'}</span>{' '}
+        <span className="text-green-400">{currentOp.label}</span>
+        {needsValue && (
+          <>{' '}<span className="text-yellow-400">&quot;{value || '...'}&quot;</span></>
+        )}
+      </div>
+
+      {/* Branch TRUE — marcar etapa */}
+      <div className="border border-green-500/20 rounded-lg p-3 mt-2">
+        <p className="text-xs font-medium text-green-400 mb-2">✅ Quando VERDADEIRO</p>
+        <label className="block text-[10px] text-gray-500 mb-1">Marcar etapa (opcional)</label>
+        <select
+          value={config.trueStageName ?? ''}
+          onChange={e => update('trueStageName', e.target.value || undefined)}
+          className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-primary"
+        >
+          <option value="">— Não marcar etapa —</option>
+          {STAGE_PRESETS.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {/* Branch FALSE — marcar etapa */}
+      <div className="border border-red-500/20 rounded-lg p-3">
+        <p className="text-xs font-medium text-red-400 mb-2">❌ Quando FALSO</p>
+        <label className="block text-[10px] text-gray-500 mb-1">Marcar etapa (opcional)</label>
+        <select
+          value={config.falseStageName ?? ''}
+          onChange={e => update('falseStageName', e.target.value || undefined)}
+          className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-primary"
+        >
+          <option value="">— Não marcar etapa —</option>
+          {STAGE_PRESETS.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
     </div>
   )
 }
@@ -3922,6 +4003,16 @@ export default function NodeConfigModal({
   const [codeVarInput, setCodeVarInput] = useState('')
   const messageTextareaRef = useRef<HTMLTextAreaElement>(null)
 
+  const handleMessageChange = useCallback((newValue: string) => {
+    setConfig((prev: any) => ({ ...prev, message: newValue }))
+  }, [])
+
+  const { applyFormat } = useTextFormatter(
+    messageTextareaRef,
+    config.message || '',
+    handleMessageChange,
+  )
+
   // Detect if the node directly before this one is a CODE node
   const previousNodeIsCode = useMemo(() => {
     if (!node || !allEdges.length || !allNodes.length) return false
@@ -4227,14 +4318,22 @@ export default function NodeConfigModal({
               <label className="block text-sm font-medium mb-2 text-gray-200">
                 Message
               </label>
-              <textarea
-                ref={messageTextareaRef}
-                value={config.message || ''}
-                onChange={(e) => setConfig({ ...config, message: e.target.value })}
-                placeholder="Type your message here..."
-                rows={8}
-                className="w-full px-4 py-3 bg-[#151515] border border-gray-700 rounded focus:outline-none focus:border-primary resize-none text-white placeholder-gray-500 font-mono text-sm"
-              />
+              <div className="rounded-lg border border-white/10 overflow-hidden focus-within:border-green-500/50 transition-colors bg-[#151515]">
+                <FormattingToolbar onFormat={applyFormat} />
+                <textarea
+                  ref={messageTextareaRef}
+                  value={config.message || ''}
+                  onChange={(e) => handleMessageChange(e.target.value)}
+                  placeholder={`Type your message here...\n\nUse a toolbar acima para formatar:\n*negrito*  _itálico_  ~riscado~  \`\`\`mono\`\`\``}
+                  rows={6}
+                  className="w-full bg-transparent px-3 py-2.5 text-sm text-white placeholder-gray-500 resize-none outline-none font-mono"
+                />
+                <div className="flex justify-end px-3 py-1 border-t border-white/5">
+                  <span className="text-xs text-gray-600">
+                    {(config.message || '').length} caracteres
+                  </span>
+                </div>
+              </div>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className="text-xs text-gray-500">
                   Use <code className="px-1.5 py-0.5 bg-gray-800 rounded text-primary">{`{{variables.name}}`}</code> to insert variables
@@ -7070,82 +7169,7 @@ return produtos;`}
         )
 
       case 'PIX_RECOGNITION':
-        return (
-          <div className="space-y-6">
-            <div>
-              <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                URL da Imagem (ou variável)
-              </label>
-              <input
-                type="text"
-                value={config.imageUrl || ''}
-                onChange={(e) => setConfig({ ...config, imageUrl: e.target.value })}
-                placeholder="{{triggerMessage.media.url}}"
-                className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Deixe vazio para usar a mídia da última mensagem recebida automaticamente.
-              </p>
-            </div>
-
-            <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3">Validação de Valor</h3>
-
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="validateAmount"
-                    checked={config.validateAmount || false}
-                    onChange={(e) => setConfig({ ...config, validateAmount: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-700 bg-[#1a1a1a] text-primary focus:ring-primary"
-                  />
-                  <label htmlFor="validateAmount" className="text-xs text-gray-300">
-                    Validar se o valor pago está correto
-                  </label>
-                </div>
-
-                {config.validateAmount && (
-                  <div>
-                    <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                      Valor Esperado (R$)
-                    </label>
-                    <input
-                      type="text"
-                      value={config.expectedAmount || ''}
-                      onChange={(e) => setConfig({ ...config, expectedAmount: e.target.value })}
-                      placeholder="150.00 ou {{variables.total}}"
-                      className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3">Opções de Saída</h3>
-              <div>
-                <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                  Salvar resultado como
-                </label>
-                <input
-                  type="text"
-                  value={config.saveResponseAs || 'pixResult'}
-                  onChange={(e) => setConfig({ ...config, saveResponseAs: e.target.value })}
-                  placeholder="pixResult"
-                  className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-              <p className="text-xs text-blue-300 leading-relaxed">
-                💡 <strong>Como funciona:</strong> Este node processa a imagem usando OCR local para extrair Valor, Data e ID da Transação.
-                Ele funciona melhor com comprovantes nítidos do Nubank, Itaú, Banco do Brasil e outros bancos populares.
-              </p>
-            </div>
-          </div>
-        )
+        return <PixRecognitionConfig config={config} setConfig={setConfig} />
 
       case 'EDIT_FIELDS':
         return (

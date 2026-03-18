@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { apiClient } from '@/lib/api-client'
@@ -324,7 +324,7 @@ function WorkflowPageContent() {
     }
   }
 
-  const handleNodeDoubleClick = (node: WorkflowNode) => {
+  const handleNodeDoubleClick = useCallback((node: WorkflowNode) => {
     console.log('[DEBUG] Node double clicked:', node.id)
     console.log('[DEBUG] Current execution ID:', currentExecutionId)
 
@@ -337,7 +337,7 @@ function WorkflowPageContent() {
       console.log('[DEBUG] Opening config modal')
       setSelectedNode(node)
     }
-  }
+  }, [currentExecutionId])
 
   const handleNodeConfigSave = async (nodeId: string, config: any) => {
     try {
@@ -368,12 +368,12 @@ function WorkflowPageContent() {
     }
   }
 
-  const handleManualTrigger = async (nodeId: string) => {
+  const handleManualTrigger = useCallback(async (nodeId: string) => {
     try {
       console.log('[MANUAL TRIGGER] Starting workflow manually from node:', nodeId)
 
       // Find the trigger node to get its config
-      const triggerNode = workflow.nodes.find((n: WorkflowNode) => n.id === nodeId)
+      const triggerNode = workflow?.nodes?.find((n: WorkflowNode) => n.id === nodeId)
       if (!triggerNode) {
         alert('Node not found')
         return
@@ -395,7 +395,7 @@ function WorkflowPageContent() {
       console.error('[MANUAL TRIGGER] Error starting workflow:', error)
       alert(`Erro ao executar workflow: ${error.message || 'Unknown error'}`)
     }
-  }
+  }, [workflow, workflowId, currentExecutionId])
 
   const handleAddNode = async (type: WorkflowNodeType, position?: { x: number; y: number }) => {
     console.log('[handleAddNode] Received type:', type);
@@ -538,11 +538,11 @@ function WorkflowPageContent() {
     setFailedNodes(new Set())
   }
 
-  const handleDuplicateNode = async (nodeId: string) => {
-    const currentNodes = currentNodesRef.current.length > 0 ? currentNodesRef.current : workflow.nodes
-    const currentEdges = currentEdgesRef.current.length > 0 ? currentEdgesRef.current : workflow.edges
+  const handleDuplicateNode = useCallback(async (nodeId: string) => {
+    const currentNodes = currentNodesRef.current.length > 0 ? currentNodesRef.current : workflow?.nodes
+    const currentEdges = currentEdgesRef.current.length > 0 ? currentEdgesRef.current : workflow?.edges
 
-    const sourceNode = currentNodes.find((n: WorkflowNode) => n.id === nodeId)
+    const sourceNode = currentNodes?.find((n: WorkflowNode) => n.id === nodeId)
     if (!sourceNode) return
 
     const newNode: WorkflowNode = {
@@ -555,17 +555,17 @@ function WorkflowPageContent() {
       config: { ...sourceNode.config },
     }
 
-    const updatedNodes = [...currentNodes, newNode]
+    const updatedNodes = [...(currentNodes || []), newNode]
 
     try {
       setSaveStatus('saving')
       await apiClient.updateWorkflow(
         workflowId,
-        { nodes: updatedNodes, edges: currentEdges },
+        { nodes: updatedNodes, edges: currentEdges || [] },
         tenantId || undefined
       )
       currentNodesRef.current = updatedNodes
-      setWorkflow({ ...workflow, nodes: updatedNodes, edges: currentEdges })
+      setWorkflow((prev: any) => ({ ...prev, nodes: updatedNodes, edges: currentEdges || [] }))
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 2000)
     } catch (error: any) {
@@ -573,7 +573,7 @@ function WorkflowPageContent() {
       setSaveStatus('error')
       setTimeout(() => setSaveStatus('idle'), 3000)
     }
-  }
+  }, [workflowId, tenantId])
 
   const toggleActive = async () => {
     try {

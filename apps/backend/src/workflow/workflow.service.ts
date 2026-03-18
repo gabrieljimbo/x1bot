@@ -52,20 +52,39 @@ export class WorkflowService {
   }
 
   /**
-   * Get all workflows for tenant
+   * Get all workflows for tenant (metadata only — nodes/edges excluded for performance)
    */
   async getWorkflows(tenantId: string): Promise<Workflow[]> {
     const workflows = await this.prisma.workflow.findMany({
-      where: { 
+      where: {
         tenantId,
         NOT: {
           id: { startsWith: 'shadow-' }
         }
       },
+      select: {
+        id: true,
+        tenantId: true,
+        name: true,
+        description: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
 
-    return workflows.map(this.mapToWorkflow);
+    return workflows.map((w) => ({
+      id: w.id,
+      tenantId: w.tenantId,
+      name: w.name,
+      description: w.description ?? undefined,
+      nodes: [],
+      edges: [],
+      isActive: w.isActive,
+      createdAt: w.createdAt,
+      updatedAt: w.updatedAt,
+    }));
   }
 
   /**

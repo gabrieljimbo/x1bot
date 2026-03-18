@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, useRef } from 'react'
+import { memo, useCallback, useEffect, useState, useRef } from 'react'
 import ReactFlow, {
   Node,
   Edge,
@@ -35,7 +35,7 @@ const EMPTY_SET = new Set<string>()
 interface WorkflowCanvasProps {
   initialNodes: WorkflowNode[]
   initialEdges: WorkflowEdge[]
-  onChange?: (nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
+  onChange?: (nodes: WorkflowNode[], edges: WorkflowEdge[]) => void | Promise<void>
   readonly?: boolean
   currentNodeId?: string | null
   executionStatus?: 'idle' | 'running' | 'waiting' | 'completed' | 'failed'
@@ -49,7 +49,7 @@ interface WorkflowCanvasProps {
   failedEdges?: Set<string>
 }
 
-export default function WorkflowCanvas({
+function WorkflowCanvas({
   initialNodes,
   initialEdges,
   onChange,
@@ -72,6 +72,7 @@ export default function WorkflowCanvas({
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
   const [zoom, setZoom] = useState(100)
   const [menu, setMenu] = useState<{ id: string; top?: number; left?: number; right?: number; bottom?: number; type: 'node' | 'pane'; data?: any } | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
 
   // 2. REF HOOKS
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
@@ -80,8 +81,30 @@ export default function WorkflowCanvas({
   const lastInitialNodesRef = useRef<WorkflowNode[]>(initialNodes)
   const lastInitialEdgesRef = useRef<WorkflowEdge[]>(initialEdges)
   const clipboard = useRef<{ nodes: Node[], edges: Edge[] } | null>(null)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Always-current refs — updated every render so the debounced save reads fresh state
+  const latestNodesRef = useRef(nodes)
+  latestNodesRef.current = nodes
+  const latestEdgesRef = useRef(edges)
+  latestEdgesRef.current = edges
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+  const onManualTriggerRef = useRef(onManualTrigger)
+  onManualTriggerRef.current = onManualTrigger
+  const onDuplicateNodeRef = useRef(onDuplicateNode)
+  onDuplicateNodeRef.current = onDuplicateNode
 
   // 3. CALLBACK HOOKS
+
+  // Stable wrappers — never change reference; always forward to latest prop via ref
+  const stableOnManualTrigger = useCallback((nodeId: string) => {
+    onManualTriggerRef.current?.(nodeId)
+  }, [])
+
+  const stableOnDuplicateNode = useCallback((nodeId: string) => {
+    onDuplicateNodeRef.current?.(nodeId)
+  }, [])
 
   const onRemoveNode = useCallback((nodeId: string) => {
     if (readonly) return
@@ -89,7 +112,7 @@ export default function WorkflowCanvas({
       const updatedNodes = nds.filter((n) => n.id !== nodeId)
       setEdges((eds) => {
         const updatedEdges = eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
-        if (onChange) {
+        if (onChangeRef.current) {
           const workflowNodes: WorkflowNode[] = updatedNodes.map((n) => ({
             id: n.id,
             type: n.data.type,
@@ -103,13 +126,13 @@ export default function WorkflowCanvas({
             label: typeof e.label === 'string' ? e.label : undefined,
             condition: e.sourceHandle || undefined,
           }))
-          onChange(workflowNodes, workflowEdges)
+          onChangeRef.current(workflowNodes, workflowEdges)
         }
         return updatedEdges
       })
       return updatedNodes
     })
-  }, [readonly, onChange, setNodes, setEdges])
+  }, [readonly, setNodes, setEdges])
 
   const buildFlowNodes = useCallback((workflowNodes: WorkflowNode[]): Node[] => {
     return workflowNodes.map((node) => ({
@@ -123,12 +146,12 @@ export default function WorkflowCanvas({
         executionStatus,
         hasExecuted: executedNodes.has(node.id),
         executionSuccess: executedNodes.has(node.id) && !failedNodes.has(node.id),
-        onManualTrigger,
-        onDuplicateNode,
+        onManualTrigger: stableOnManualTrigger,
+        onDuplicateNode: stableOnDuplicateNode,
         onRemoveNode,
       },
     }))
-  }, [currentNodeId, executionStatus, executedNodes, failedNodes, onManualTrigger, onDuplicateNode, onRemoveNode])
+  }, [currentNodeId, executionStatus, executedNodes, failedNodes, stableOnManualTrigger, stableOnDuplicateNode, onRemoveNode])
 
   const buildFlowEdges = useCallback((workflowEdges: WorkflowEdge[]): Edge[] => {
     return workflowEdges.map((edge) => {
@@ -197,7 +220,7 @@ export default function WorkflowCanvas({
           const updatedEdges = currentEdges.filter(e =>
             !nodeIdsToDelete.includes(e.source) && !nodeIdsToDelete.includes(e.target)
           )
-          if (onChange) {
+          if (onChangeRef.current) {
             const workflowNodes: WorkflowNode[] = updatedNodes.map((node) => ({
               id: node.id,
               type: node.data.type,
@@ -211,7 +234,7 @@ export default function WorkflowCanvas({
               label: typeof e.label === 'string' ? e.label : undefined,
               condition: e.sourceHandle || undefined,
             }))
-            onChange(workflowNodes, workflowEdges)
+            onChangeRef.current(workflowNodes, workflowEdges)
           }
           return updatedEdges
         })
@@ -219,7 +242,7 @@ export default function WorkflowCanvas({
       })
       setSelectedNodes([])
     }
-  }, [readonly, selectedNodes, onChange, setNodes, setEdges])
+  }, [readonly, selectedNodes, setNodes, setEdges])
 
   const handlePaste = useCallback(() => {
     if (!clipboard.current || readonly) return
@@ -238,8 +261,8 @@ export default function WorkflowCanvas({
         selected: true,
         data: {
           ...node.data,
-          onManualTrigger,
-          onDuplicateNode,
+          onManualTrigger: stableOnManualTrigger,
+          onDuplicateNode: stableOnDuplicateNode,
           onRemoveNode,
         },
       }
@@ -259,7 +282,7 @@ export default function WorkflowCanvas({
       const allNodes = [...nds.map(n => ({ ...n, selected: false })), ...newNodes]
       setEdges((eds) => {
         const allEdges = [...eds.map(e => ({ ...e, selected: false })), ...newEdges]
-        if (onChange) {
+        if (onChangeRef.current) {
           const workflowNodes: WorkflowNode[] = allNodes.map((node) => ({
             id: node.id,
             type: node.data.type,
@@ -273,61 +296,60 @@ export default function WorkflowCanvas({
             label: typeof e.label === 'string' ? e.label : undefined,
             condition: e.sourceHandle || undefined,
           }))
-          onChange(workflowNodes, workflowEdges)
+          onChangeRef.current(workflowNodes, workflowEdges)
         }
         return allEdges
       })
       return allNodes
     })
-  }, [readonly, onChange, onManualTrigger, onDuplicateNode, onRemoveNode, setNodes, setEdges])
+  }, [readonly, stableOnManualTrigger, stableOnDuplicateNode, onRemoveNode, setNodes, setEdges])
+
+  const scheduleSave = useCallback(() => {
+    if (!onChangeRef.current || readonly) return
+    setSaveStatus('unsaved')
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    saveTimeoutRef.current = setTimeout(async () => {
+      setSaveStatus('saving')
+      const workflowNodes: WorkflowNode[] = latestNodesRef.current.map((node) => ({
+        id: node.id, type: node.data.type, config: node.data.config, position: node.position,
+      }))
+      const workflowEdges: WorkflowEdge[] = latestEdgesRef.current.map((e) => ({
+        id: e.id, source: e.source, target: e.target,
+        label: typeof e.label === 'string' ? e.label : undefined,
+        condition: e.sourceHandle || undefined,
+      }))
+      try {
+        const result = onChangeRef.current?.(workflowNodes, workflowEdges)
+        if (result && typeof (result as any).then === 'function') {
+          await (result as Promise<void>)
+        }
+        setSaveStatus('saved')
+      } catch (err) {
+        console.error('[AUTOSAVE] Erro:', err)
+        setSaveStatus('unsaved')
+      }
+    }, 1000)
+  }, [readonly])
 
   const handleNodesChange = useCallback((changes: any) => {
     onNodesChange(changes)
-    if (onChange && !readonly) {
+    if (onChangeRef.current && !readonly) {
       const hasSignificantChange = changes.some((c: any) => (c.type === 'position' && c.dragging === false) || c.type === 'remove')
       if (hasSignificantChange) {
-        setTimeout(() => {
-          setNodes((currentNodes) => {
-            const workflowNodes: WorkflowNode[] = currentNodes.map((node) => ({
-              id: node.id, type: node.data.type, config: node.data.config, position: node.position,
-            }))
-            setEdges((currentEdges) => {
-              const workflowEdges: WorkflowEdge[] = currentEdges.map((e) => ({
-                id: e.id, source: e.source, target: e.target, label: typeof e.label === 'string' ? e.label : undefined, condition: e.sourceHandle || undefined,
-              }))
-              onChange(workflowNodes, workflowEdges)
-              return currentEdges
-            })
-            return currentNodes
-          })
-        }, 0)
+        scheduleSave()
       }
     }
-  }, [onChange, readonly, onNodesChange, setNodes, setEdges])
+  }, [readonly, onNodesChange, scheduleSave])
 
   const handleEdgesChange = useCallback((changes: any) => {
     onEdgesChange(changes)
-    if (onChange && !readonly) {
+    if (onChangeRef.current && !readonly) {
       const hasRemove = changes.some((c: any) => c.type === 'remove')
       if (hasRemove) {
-        setTimeout(() => {
-          setEdges((currentEdges) => {
-            setNodes((currentNodes) => {
-              const workflowNodes: WorkflowNode[] = currentNodes.map((node) => ({
-                id: node.id, type: node.data.type, config: node.data.config, position: node.position,
-              }))
-              const workflowEdges: WorkflowEdge[] = currentEdges.map((e) => ({
-                id: e.id, source: e.source, target: e.target, label: typeof e.label === 'string' ? e.label : undefined, condition: e.sourceHandle || undefined,
-              }))
-              onChange(workflowNodes, workflowEdges)
-              return currentNodes
-            })
-            return currentEdges
-          })
-        }, 0)
+        scheduleSave()
       }
     }
-  }, [onChange, readonly, onEdgesChange, setNodes, setEdges])
+  }, [readonly, onEdgesChange, scheduleSave])
 
   const handleNodeDoubleClick = useCallback((_event: React.MouseEvent, node: Node) => {
     if (onNodeDoubleClick) {
@@ -342,7 +364,7 @@ export default function WorkflowCanvas({
     const newEdge = { ...connection, id: `edge-${Date.now()}` }
     setEdges((eds) => {
       const updatedEdges = addEdge(newEdge, eds)
-      if (onChange) {
+      if (onChangeRef.current) {
         setNodes((nds) => {
           const workflowNodes: WorkflowNode[] = nds.map((node) => ({
             id: node.id, type: node.data.type, config: node.data.config, position: node.position,
@@ -350,13 +372,13 @@ export default function WorkflowCanvas({
           const workflowEdges: WorkflowEdge[] = updatedEdges.map((e) => ({
             id: e.id, source: e.source, target: e.target, label: typeof e.label === 'string' ? e.label : undefined, condition: e.sourceHandle || undefined,
           }))
-          onChange(workflowNodes, workflowEdges)
+          onChangeRef.current!(workflowNodes, workflowEdges)
           return nds
         })
       }
       return updatedEdges
     })
-  }, [readonly, onChange, setEdges, setNodes])
+  }, [readonly, setEdges, setNodes])
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault()
@@ -445,13 +467,10 @@ export default function WorkflowCanvas({
           executionStatus,
           hasExecuted: executedNodes.has(node.id),
           executionSuccess: executedNodes.has(node.id) && !failedNodes.has(node.id),
-          onManualTrigger,
-          onDuplicateNode,
-          onRemoveNode,
         },
       }))
     )
-  }, [currentNodeId, executionStatus, executedNodes, failedNodes, onManualTrigger, onDuplicateNode, onRemoveNode, setNodes])
+  }, [currentNodeId, executionStatus, executedNodes, failedNodes, setNodes])
 
   useEffect(() => {
     setEdges((eds) =>
@@ -484,6 +503,12 @@ export default function WorkflowCanvas({
       })
     )
   }, [executedEdges, failedEdges, currentNodeId, setEdges])
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -538,8 +563,18 @@ export default function WorkflowCanvas({
         minZoom={0.1}
         maxZoom={2}
         defaultEdgeOptions={{ type: 'custom', animated: true }}
+        onlyRenderVisibleElements={true}
       >
         <Background />
+        {saveStatus !== 'saved' && (
+          <div className="absolute top-3 right-3 z-50 pointer-events-none">
+            <span className={`text-xs px-2 py-1 rounded ${
+              saveStatus === 'saving' ? 'text-yellow-400 animate-pulse' : 'text-gray-400'
+            }`}>
+              {saveStatus === 'saving' ? '⟳ Salvando...' : '● Alterações pendentes'}
+            </span>
+          </div>
+        )}
         <div className="absolute bottom-4 right-4 z-50 pointer-events-auto">
           <div className="bg-[#1a1a1a]/80 backdrop-blur-md border border-white/5 rounded-xl overflow-hidden shadow-2xl p-1">
             <MiniMap
@@ -589,11 +624,11 @@ export default function WorkflowCanvas({
                   onClick={() => {
                     const newEdges = edges.filter(e => e.source !== menu.id && e.target !== menu.id)
                     setEdges(newEdges)
-                    if (onChange) {
+                    if (onChangeRef.current) {
                       setNodes((nds) => {
                         const workflowNodes: WorkflowNode[] = nds.map((node) => ({ id: node.id, type: node.data.type, config: node.data.config, position: node.position }))
                         const workflowEdges: WorkflowEdge[] = newEdges.map((e) => ({ id: e.id, source: e.source, target: e.target, label: typeof e.label === 'string' ? e.label : undefined, condition: e.sourceHandle || undefined }))
-                        onChange(workflowNodes, workflowEdges)
+                        onChangeRef.current!(workflowNodes, workflowEdges)
                         return nds
                       })
                     }
@@ -609,3 +644,5 @@ export default function WorkflowCanvas({
     </div>
   )
 }
+
+export default memo(WorkflowCanvas)
