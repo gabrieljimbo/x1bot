@@ -45,6 +45,13 @@ const PROVIDER_META: Record<string, { label: string; color: string; icon: string
         description: 'API de Notificações do Pushcut para receber alertas no celular.',
         docsHint: 'Insira qualquer valor no App ID. Apenas o Secret (API-Key) é utilizado.',
     },
+    openrouter: {
+        label: 'OpenRouter (IA)',
+        color: 'text-purple-400',
+        icon: '🧠',
+        description: 'API de Inteligência Artificial para reconhecimento de Pix e recibos.',
+        docsHint: 'Acesse: openrouter.ai → Keys. (O App ID pode ser qualquer nome).',
+    },
 }
 
 function providerMeta(provider: string) {
@@ -57,7 +64,7 @@ function providerMeta(provider: string) {
     }
 }
 
-const AVAILABLE_PROVIDERS = ['shopee', 'pushcut']
+const AVAILABLE_PROVIDERS = ['shopee', 'pushcut', 'openrouter']
 
 function ApiSettingsContent() {
     const [loading, setLoading] = useState(true)
@@ -109,13 +116,14 @@ function ApiSettingsContent() {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (editingProvider !== 'pushcut' && !formAppId.trim()) { setError('App ID é obrigatório.'); return }
+        const isAppIdOptional = editingProvider === 'pushcut' || editingProvider === 'openrouter'
+        if (!isAppIdOptional && !formAppId.trim()) { setError('App ID é obrigatório.'); return }
         if (!editingId && !formSecret.trim()) { setError('Secret é obrigatório ao criar.'); return }
 
         try {
             setSaving(true)
             setError(null)
-            const resolvedAppId = (editingProvider === 'pushcut' && !formAppId.trim()) ? 'pushcut' : formAppId.trim()
+            const resolvedAppId = (isAppIdOptional && !formAppId.trim()) ? editingProvider : formAppId.trim()
             await apiClient.upsertApiConfig(editingProvider, resolvedAppId, formSecret.trim() || '__keep__')
             await loadConfigs()
             setIsModalOpen(false)
@@ -312,12 +320,12 @@ function ApiSettingsContent() {
                             )}
 
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">App ID {editingProvider === 'pushcut' && '(Opcional/Ignorado)'}</label>
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">App ID {(editingProvider === 'pushcut' || editingProvider === 'openrouter') && '(Opcional/Ignorado)'}</label>
                                 <input
                                     type="text"
                                     value={formAppId}
                                     onChange={(e) => setFormAppId(e.target.value)}
-                                    placeholder={editingProvider === 'pushcut' ? "pushcut-api" : "Seu App ID"}
+                                    placeholder={(editingProvider === 'pushcut' || editingProvider === 'openrouter') ? "Pode deixar em branco" : "Seu App ID"}
                                     className="w-full bg-[#151515] border border-gray-800 rounded-xl px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-all font-mono"
                                 />
                             </div>

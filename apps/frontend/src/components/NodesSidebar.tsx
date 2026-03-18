@@ -186,6 +186,15 @@ export default function NodesSidebar({ onAddNode, onClose, hasTrigger = false }:
         description: 'Usa OCR para ler e validar comprovantes de PIX'
       },
       {
+        type: WorkflowNodeType.AI_OCR_PIX,
+        label: 'IA e OCR: Ler Recibo',
+        icon: '🧠',
+        color: 'from-purple-500 to-indigo-600',
+        bgColor: 'bg-[#211633]',
+        borderColor: 'border-[#a855f7]',
+        description: 'Lê comprovantes com precisão de IA (OpenRouter), extraindo valor, pagador e chaves.'
+      },
+      {
         type: 'RMKT' as WorkflowNodeType,
         label: 'Remarketing',
         icon: '🎯',

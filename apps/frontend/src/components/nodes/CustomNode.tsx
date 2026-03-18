@@ -228,6 +228,14 @@ const nodeConfig: Record<string, any> = {
     borderColor: 'border-[#3b7d63]',
     iconBg: 'bg-gradient-to-br from-emerald-400 to-emerald-500',
   },
+  'AI_OCR_PIX': {
+    label: 'IA: Ler Recibo',
+    subtitle: 'AÇÃO',
+    icon: '🧠',
+    bgColor: 'bg-[#211633]',
+    borderColor: 'border-[#a855f7]',
+    iconBg: 'bg-gradient-to-br from-purple-500 to-indigo-600',
+  },
   'RMKT': {
     label: 'Remarketing',
     subtitle: 'AÇÃO',
@@ -408,7 +416,7 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
   const isLoop = data.type === 'LOOP'
   const isButtons = data.type === 'SEND_BUTTONS'
   const isPix = data.type === 'SEND_PIX'
-  const isPixRecognition = data.type === 'PIX_RECOGNITION'
+  const isPixRecognition = data.type === 'PIX_RECOGNITION' || data.type === 'AI_OCR_PIX'
 
   // Get switch/randomizer rules for dynamic handles
   const switchRules = isSwitch && data.config.rules ? data.config.rules : []
@@ -575,14 +583,14 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
         return `🔁 Iterar: ${source.length > 20 ? source.substring(0, 20) + '...' : source}`
       }
     }
-    if (type === 'PIX_RECOGNITION') {
+    if (type === 'PIX_RECOGNITION' || type === 'AI_OCR_PIX') {
       const rules: any[] = config.valueRules || []
       if (rules.length > 0) {
-        return `💸 ${rules.map((r: any) => `R$${r.value || '?'}`).join(' / ')}`
+        return `${type === 'AI_OCR_PIX' ? '🧠' : '💸'} ${rules.map((r: any) => `R$${r.value || '?'}`).join(' / ')}`
       }
       const validate = config.validateAmount
       const amount = config.expectedAmount
-      return validate ? `💸 Validar R$ ${amount || '?'}` : '💸 Ler comprovante PIX'
+      return validate ? `${type === 'AI_OCR_PIX' ? '🧠' : '💸'} Validar R$ ${amount || '?'}` : `${type === 'AI_OCR_PIX' ? '🧠 IA: OCR de Comprovante' : '💸 Ler comprovante PIX'}`
     }
     if (type === 'RMKT') {
       const amount = config.amount || 0

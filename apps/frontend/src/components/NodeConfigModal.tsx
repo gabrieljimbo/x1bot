@@ -915,6 +915,136 @@ function PixRecognitionConfig({ config, setConfig }: any) {
   )
 }
 
+function AiOcrPixConfig({ config, setConfig }: any) {
+  const saveAs = config.saveResponseAs || 'pixResult'
+  const valueRules: any[] = config.valueRules || []
+
+  const addRule = () => {
+    const id = `rule-` + Date.now() + `-` + Math.random().toString(36).slice(2, 7)
+    setConfig((prev: any) => ({
+      ...prev,
+      valueRules: [...(prev.valueRules || []), { id, label: '', value: '', tolerance: 0 }],
+    }))
+  }
+
+  const removeRule = (i: number) => {
+    setConfig((prev: any) => {
+      const next = [...(prev.valueRules || [])]
+      next.splice(i, 1)
+      return { ...prev, valueRules: next }
+    })
+  }
+
+  const updateRule = (i: number, field: string, val: any) => {
+    setConfig((prev: any) => {
+      const next = [...(prev.valueRules || [])]
+      next[i] = { ...next[i], [field]: val }
+      return { ...prev, valueRules: next }
+    })
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Aviso */}
+      <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
+        <p className="text-xs text-indigo-300 mb-1">🧠 OCR Avançado via IA</p>
+        <p className="text-[10px] text-gray-400">
+          Este node usa o modelo de inteligência artificial configurado nas APIs Externas do Workspace para analisar recibos e comprovantes em imagem.
+        </p>
+      </div>
+
+      {/* URL da imagem */}
+      <div>
+        <label className="block text-xs font-medium mb-1.5 text-gray-400">URL da Imagem (ou variável)</label>
+        <input
+          type="text"
+          value={config.imageUrl || ''}
+          onChange={e => setConfig((prev: any) => ({ ...prev, imageUrl: e.target.value }))}
+          placeholder="{{triggerMessage.media.url}}"
+          className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+        />
+        <p className="text-[10px] text-gray-500 mt-1">Deixe vazio para usar a mídia da mensagem que ativou este fluxo.</p>
+      </div>
+
+      {/* Modelo a utilizar */}
+      <div>
+        <label className="block text-xs font-medium mb-1.5 text-gray-400">Modelo (Model ID do OpenRouter)</label>
+        <input
+          type="text"
+          value={config.model || 'openai/gpt-4o-mini'}
+          onChange={e => setConfig((prev: any) => ({ ...prev, model: e.target.value }))}
+          placeholder="openai/gpt-4o-mini"
+          className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+        />
+        <p className="text-[10px] text-gray-500 mt-1">Recomendados: openai/gpt-4o-mini, anthropic/claude-3-haiku, google/gemini-2.5-flash</p>
+      </div>
+
+      {/* Salvar como */}
+      <div>
+        <label className="block text-xs font-medium mb-1.5 text-gray-400">Salvar resultado como (Variável)</label>
+        <input
+          type="text"
+          value={config.saveResponseAs || 'pixResult'}
+          onChange={e => setConfig((prev: any) => ({ ...prev, saveResponseAs: e.target.value }))}
+          placeholder="pixResult"
+          className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+        />
+      </div>
+
+      {/* Valores aceitos */}
+      <div className="bg-[#151515] border border-gray-700 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-white">💰 Valores Esperados (Match)</h3>
+          <button type="button" onClick={addRule} className="text-xs text-indigo-400 hover:text-indigo-300 border border-indigo-400/30 rounded px-2 py-1 transition-colors">
+            + Adicionar valor
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {valueRules.map((rule: any, i: number) => (
+            <div key={rule.id} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-2.5 flex-wrap md:flex-nowrap">
+              <input value={rule.label} onChange={e => updateRule(i, 'label', e.target.value)} placeholder="Ex: Starter" className="w-24 bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-primary" />
+              <span className="text-gray-500 text-xs shrink-0">R$</span>
+              <input value={rule.value} onChange={e => updateRule(i, 'value', e.target.value)} placeholder="19,90" className="w-20 bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-primary" />
+              <span className="text-gray-500 text-xs shrink-0">± R$</span>
+              <input type="number" value={rule.tolerance ?? 0} onChange={e => updateRule(i, 'tolerance', Number(e.target.value))} min={0} placeholder="0" className="w-14 bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-primary" />
+              <span className="text-xs text-indigo-400 ml-auto shrink-0">→ "{rule.label || '?'}"</span>
+              <button type="button" onClick={() => removeRule(i)} className="text-red-400 hover:text-red-300 text-xs shrink-0">✕</button>
+            </div>
+          ))}
+          <div className="flex items-center gap-2 px-3 py-2 border border-dashed border-white/10 rounded-lg">
+            <span className="text-xs text-gray-500">Se match com regra válida → a respectiva saída é executada. Caso contrário, _valid: false.</span>
+          </div>
+        </div>
+      </div>
+      
+      {/* Validar nome do recebedor */}
+      <div className="border border-white/10 rounded-lg p-3">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.validateReceiver ?? false}
+            onChange={e => setConfig((prev: any) => ({ ...prev, validateReceiver: e.target.checked }))}
+            className="rounded"
+          />
+          <span className="text-sm text-gray-200">Validar nome do recebedor/beneficiário</span>
+        </label>
+        {config.validateReceiver && (
+          <div className="mt-3 bg-black/20 p-2 rounded">
+            <input
+              value={config.expectedReceiverName ?? ''}
+              onChange={e => setConfig((prev: any) => ({ ...prev, expectedReceiverName: e.target.value }))}
+              placeholder="Ex: Gabriel Jimbo ou Nexus ou Ltda"
+              className="w-full bg-[#1a1a1a] border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-primary"
+            />
+            <p className="text-[10px] text-gray-500 mt-1">Comparação flexível com OCR de IA.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const CONDITION_OPERATORS = [
   { value: 'equals',       label: 'é igual a',      needsValue: true  },
   { value: 'not_equals',   label: 'é diferente de', needsValue: true  },
@@ -7170,6 +7300,9 @@ return produtos;`}
 
       case 'PIX_RECOGNITION':
         return <PixRecognitionConfig config={config} setConfig={setConfig} />
+
+      case WorkflowNodeType.AI_OCR_PIX:
+        return <AiOcrPixConfig config={config} setConfig={setConfig} />
 
       case 'EDIT_FIELDS':
         return (
