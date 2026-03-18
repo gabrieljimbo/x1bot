@@ -957,17 +957,22 @@ export class NodeExecutorService {
   ): boolean {
     const resolved = this.resolveConditionVariable(variable, context);
     const actual   = String(resolved ?? '').toLowerCase().trim();
-    const expected = String(value ?? '').toLowerCase().trim();
+    const expectedRaw = String(value ?? '').toLowerCase().trim();
+
+    // Support comma-separated values for multiple match (OR logic)
+    const expectedValues = expectedRaw.includes(',')
+      ? expectedRaw.split(',').map(v => v.trim()).filter(v => v !== '')
+      : [expectedRaw];
 
     switch (operator) {
-      case 'equals':       return actual === expected;
-      case 'not_equals':   return actual !== expected;
-      case 'contains':     return actual.includes(expected);
-      case 'not_contains': return !actual.includes(expected);
-      case 'starts_with':  return actual.startsWith(expected);
-      case 'ends_with':    return actual.endsWith(expected);
-      case 'greater_than': return parseFloat(actual) > parseFloat(expected);
-      case 'less_than':    return parseFloat(actual) < parseFloat(expected);
+      case 'equals':       return expectedValues.some(v => actual === v);
+      case 'not_equals':   return expectedValues.every(v => actual !== v);
+      case 'contains':     return expectedValues.some(v => actual.includes(v));
+      case 'not_contains': return expectedValues.every(v => !actual.includes(v));
+      case 'starts_with':  return expectedValues.some(v => actual.startsWith(v));
+      case 'ends_with':    return expectedValues.some(v => actual.endsWith(v));
+      case 'greater_than': return parseFloat(actual) > parseFloat(expectedValues[0]);
+      case 'less_than':    return parseFloat(actual) < parseFloat(expectedValues[0]);
       case 'is_empty':     return actual === '' || actual === 'undefined' || actual === 'null';
       case 'is_not_empty': return actual !== '' && actual !== 'undefined' && actual !== 'null';
       default:

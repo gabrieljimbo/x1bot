@@ -526,56 +526,62 @@ export class WhatsappMessageHandler {
         // continue; // Commented out to allow matching across sessions for the same tenant
       }
 
-      // Match message against trigger pattern
-      // For media messages, we match against caption if available, otherwise accept all media
-      let matches = false;
-      const textToMatch = messageText.trim().toLowerCase();
-
-      // If no pattern is configured, accept all messages (text and media)
-      if (!config.pattern || config.pattern.trim() === '') {
-        console.log('[TRIGGER] No pattern configured, accepting all messages');
-        matches = true;
-      } else {
-        // Support multiple patterns separated by comma
-        const patterns = config.pattern.split(',').map((p: string) => p.trim());
+        // Match message against trigger pattern
+        // For media messages, we match against caption if available, otherwise accept all media
+        let matches = false;
+        const textToMatch = messageText.trim().toLowerCase();
         const matchType = config.matchType || 'exact';
 
-        for (let p of patterns) {
-          if (!p) continue;
+        // 1. Try matching the ENTIRE pattern field as a single string (handles cases with commas)
+        const fullPattern = config.pattern.trim().toLowerCase();
+        if (matchType === 'exact' && textToMatch === fullPattern) {
+          matches = true;
+        } else if (matchType === 'starts_with' && textToMatch.startsWith(fullPattern)) {
+          matches = true;
+        } else if (matchType === 'contains' && textToMatch.includes(fullPattern)) {
+          matches = true;
+        }
 
-          // Auto-Regex detection: if pattern is /regex/, treat as regex regardless of matchType
-          const isAutoRegex = p.startsWith('/') && p.endsWith('/') && p.length > 2;
-          const currentMatchType = isAutoRegex ? 'regex' : matchType;
-          let patternToUse = isAutoRegex ? p.substring(1, p.length - 1) : p;
+        // 2. Fallback: Support multiple patterns separated by comma
+        if (!matches) {
+          const patterns = config.pattern.split(',').map((p: string) => p.trim());
 
-          if (currentMatchType === 'exact') {
-            if (textToMatch === patternToUse.toLowerCase()) {
-              matches = true;
-              break;
-            }
-          } else if (currentMatchType === 'starts_with') {
-            if (textToMatch.startsWith(patternToUse.toLowerCase())) {
-              matches = true;
-              break;
-            }
-          } else if (currentMatchType === 'contains') {
-            if (textToMatch.includes(patternToUse.toLowerCase())) {
-              matches = true;
-              break;
-            }
-          } else if (currentMatchType === 'regex') {
-            try {
-              const regex = new RegExp(patternToUse, 'i');
-              if (regex.test(messageText)) {
+          for (let p of patterns) {
+            if (!p) continue;
+
+            // Auto-Regex detection: if pattern is /regex/, treat as regex regardless of matchType
+            const isAutoRegex = p.startsWith('/') && p.endsWith('/') && p.length > 2;
+            const currentMatchType = isAutoRegex ? 'regex' : matchType;
+            let patternToUse = isAutoRegex ? p.substring(1, p.length - 1) : p;
+
+            if (currentMatchType === 'exact') {
+              if (textToMatch === patternToUse.toLowerCase()) {
                 matches = true;
                 break;
               }
-            } catch (error) {
-              console.error(`[TRIGGER] Invalid regex: ${patternToUse}`, error);
+            } else if (currentMatchType === 'starts_with') {
+              if (textToMatch.startsWith(patternToUse.toLowerCase())) {
+                matches = true;
+                break;
+              }
+            } else if (currentMatchType === 'contains') {
+              if (textToMatch.includes(patternToUse.toLowerCase())) {
+                matches = true;
+                break;
+              }
+            } else if (currentMatchType === 'regex') {
+              try {
+                const regex = new RegExp(patternToUse, 'i');
+                if (regex.test(messageText)) {
+                  matches = true;
+                  break;
+                }
+              } catch (error) {
+                console.error(`[TRIGGER] Invalid regex: ${patternToUse}`, error);
+              }
             }
           }
         }
-      }
 
       // For media messages without caption, accept if pattern matches empty string or accept all
       if (payload.type === 'media' && !messageText && (!config.pattern || config.pattern.trim() === '')) {
