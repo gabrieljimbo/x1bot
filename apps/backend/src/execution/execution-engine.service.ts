@@ -305,15 +305,22 @@ export class ExecutionEngineService implements OnModuleInit {
         baseContext.variables.pushName    = contactNameFromPayload;
       }
 
-      // Extract current stage from tags if present
+      // Load isolated contact stage (new field)
+      // @ts-ignore - DB is updated and method exists
+      const dbStage = await this.contactTagsService.getStage(tenantId, sessionId, contactPhone);
+
+      // Extract current stage from tags (for backward compatibility during transition)
       const stageTag = contactTags.find(t => t.startsWith('stage:'));
-      if (stageTag) {
-        const stageName = stageTag.replace('stage:', '');
-        baseContext.variables.etapa = stageName;
-        baseContext.variables.contactStage = stageName;
-      } else {
-        baseContext.variables.etapa = '';
-        baseContext.variables.contactStage = '';
+      const tagStage = stageTag ? stageTag.replace('stage:', '') : null;
+      
+      // Prioritize the new DB field over the old tag
+      const currentStage = dbStage || tagStage || '';
+      
+      baseContext.variables.etapa = currentStage;
+      baseContext.variables.contactStage = currentStage;
+      
+      if (currentStage) {
+        console.log(`[EXECUTION] Loaded contact stage: "${currentStage}"`);
       }
 
       // Verify session existence before creating execution to prevent FK violation

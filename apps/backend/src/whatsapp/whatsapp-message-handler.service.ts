@@ -531,53 +531,71 @@ export class WhatsappMessageHandler {
         let matches = false;
         const textToMatch = messageText.trim().toLowerCase();
         const matchType = config.matchType || 'exact';
+        const pattern = (config.pattern || '').trim();
 
-        // 1. Try matching the ENTIRE pattern field as a single string (handles cases with commas)
-        const fullPattern = config.pattern.trim().toLowerCase();
-        if (matchType === 'exact' && textToMatch === fullPattern) {
+        // 0. Protection against empty patterns being used as catch-alls accidentally
+        if (!pattern) {
+          // If no pattern is configured, only accept if media message without text or if we intentionally want catch-all
+          // Actually, many users use empty pattern as "all messages".
+          // We'll keep it but only if NOT explicitly disabled or if we're a specific trigger type.
           matches = true;
-        } else if (matchType === 'starts_with' && textToMatch.startsWith(fullPattern)) {
-          matches = true;
-        } else if (matchType === 'contains' && textToMatch.includes(fullPattern)) {
-          matches = true;
-        }
+        } else {
+          const fullPattern = pattern.toLowerCase();
 
-        // 2. Fallback: Support multiple patterns separated by comma
-        if (!matches) {
-          const patterns = config.pattern.split(',').map((p: string) => p.trim());
+          // 1. Try matching the ENTIRE pattern field as a single string (handles cases with commas)
+          if (matchType === 'exact') {
+            if (textToMatch === fullPattern) matches = true;
+          } else if (matchType === 'starts_with') {
+            if (textToMatch.startsWith(fullPattern)) matches = true;
+          } else if (matchType === 'contains') {
+            if (textToMatch.includes(fullPattern) && fullPattern !== '') matches = true;
+          }
 
-          for (let p of patterns) {
-            if (!p) continue;
+          // 2. Fallback: Support multiple patterns ONLY for KEYWORD triggers or short comma-lists
+          // We DON'T split by comma if it's a TRIGGER_MESSAGE/WHATSAPP and contains spaces, 
+          // because it's usually a phrase like "Oi, quero saber mais".
+          if (!matches) {
+            const isKeywordTrigger = triggerNode.type === WorkflowNodeType.TRIGGER_KEYWORD;
+            const hasSpaces = pattern.includes(' ');
+            
+            // Heuristic: Split if it's a keyword trigger OR if it's a simple comma-list without sentences
+            if (isKeywordTrigger || !hasSpaces) {
+              const patterns = pattern.split(',').map((p: string) => p.trim());
 
-            // Auto-Regex detection: if pattern is /regex/, treat as regex regardless of matchType
-            const isAutoRegex = p.startsWith('/') && p.endsWith('/') && p.length > 2;
-            const currentMatchType = isAutoRegex ? 'regex' : matchType;
-            let patternToUse = isAutoRegex ? p.substring(1, p.length - 1) : p;
+              for (let p of patterns) {
+                if (!p) continue;
 
-            if (currentMatchType === 'exact') {
-              if (textToMatch === patternToUse.toLowerCase()) {
-                matches = true;
-                break;
-              }
-            } else if (currentMatchType === 'starts_with') {
-              if (textToMatch.startsWith(patternToUse.toLowerCase())) {
-                matches = true;
-                break;
-              }
-            } else if (currentMatchType === 'contains') {
-              if (textToMatch.includes(patternToUse.toLowerCase())) {
-                matches = true;
-                break;
-              }
-            } else if (currentMatchType === 'regex') {
-              try {
-                const regex = new RegExp(patternToUse, 'i');
-                if (regex.test(messageText)) {
-                  matches = true;
-                  break;
+                // Auto-Regex detection: if pattern is /regex/, treat as regex regardless of matchType
+                const isAutoRegex = p.startsWith('/') && p.endsWith('/') && p.length > 2;
+                const currentMatchType = isAutoRegex ? 'regex' : matchType;
+                let patternToUse = isAutoRegex ? p.substring(1, p.length - 1) : p;
+
+                if (currentMatchType === 'exact') {
+                  if (textToMatch === patternToUse.toLowerCase()) {
+                    matches = true;
+                    break;
+                  }
+                } else if (currentMatchType === 'starts_with') {
+                  if (textToMatch.startsWith(patternToUse.toLowerCase())) {
+                    matches = true;
+                    break;
+                  }
+                } else if (currentMatchType === 'contains') {
+                  if (p !== '' && textToMatch.includes(patternToUse.toLowerCase())) {
+                    matches = true;
+                    break;
+                  }
+                } else if (currentMatchType === 'regex') {
+                  try {
+                    const regex = new RegExp(patternToUse, 'i');
+                    if (regex.test(messageText)) {
+                      matches = true;
+                      break;
+                    }
+                  } catch (error) {
+                    console.error(`[TRIGGER] Invalid regex: ${patternToUse}`, error);
+                  }
                 }
-              } catch (error) {
-                console.error(`[TRIGGER] Invalid regex: ${patternToUse}`, error);
               }
             }
           }

@@ -42,6 +42,7 @@ export enum WorkflowNodeType {
   PROMO_SHOPEE = 'PROMO_SHOPEE',
   NOTIFICACAO = 'NOTIFICACAO',
   SEND_PWA_NOTIFICATION = 'SEND_PWA_NOTIFICATION',
+  AI_OCR_PIX = 'AI_OCR_PIX',
   END = 'END',
 }
 
@@ -398,6 +399,18 @@ export interface PixRecognitionConfig {
   expectedReceiverName?: string; // supports {{variables.name}} syntax
   acceptedValues?: string; // comma-separated values, e.g. "19.90, 29.90"
   saveResponseAs?: string; // default 'pixResult'
+}
+
+export interface AiOcrPixConfig {
+  imageUrl?: string;
+  expectedReceiverName?: string;
+  valueRules?: { id: string; label: string; value: number; tolerance?: number }[];
+  saveResponseAs?: string;
+  model?: string; // e.g., 'google/gemini-2.0-flash-exp:free' or 'openai/gpt-4o-mini'
+  apiKey?: string; // OpenRouter API Key
+  useFallback?: boolean;
+  fallbackModel?: string;
+  fallbackApiKey?: string;
 }
 
 export interface RmktConfig {

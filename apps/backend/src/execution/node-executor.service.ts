@@ -41,6 +41,7 @@ import {
   ExecutionStatus,
   NotificacaoConfig,
   SendPwaNotificationConfig,
+  AiOcrPixConfig,
 } from '@n9n/shared';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -58,6 +59,7 @@ import { WhatsappSessionManager } from '../whatsapp/whatsapp-session-manager.ser
 import { MlOffersService } from './ml-offers.service';
 import { ApiConfigsService } from '../api-configs/api-configs.service';
 import { StorageService } from '../storage/storage.service';
+import { AiOcrService } from './ai-ocr.service';
 
 export interface NodeExecutionResult {
   nextNodeId: string | null;
@@ -105,6 +107,7 @@ export class NodeExecutorService {
     private apiConfigsService: ApiConfigsService,
     private storageService: StorageService,
     private eventEmitter: EventEmitter2,
+    private aiOcrService: AiOcrService,
   ) { }
 
   /**
@@ -356,6 +359,9 @@ export class NodeExecutorService {
 
       case WorkflowNodeType.PROMO_ML_API:
         return this.executePromoMLApi(node, context, edges, sessionId, contactPhone);
+
+      case WorkflowNodeType.AI_OCR_PIX:
+        return await this.executeAiOcrPix(node, context, edges);
 
       case WorkflowNodeType.GRUPO_MEDIA:
         return this.executeGrupoMedia(node, context, edges, sessionId, contactPhone);
@@ -2454,7 +2460,7 @@ export class NodeExecutorService {
       }
 
       // ── Receiver name validation ───────────────────────────────────────
-      if (valid && (config.validateReceiver ? config.expectedReceiverName : config.expectedReceiverName)) {
+      if (valid && config.validateReceiver && config.expectedReceiverName) {
         const expected = this.contextService.interpolate(config.expectedReceiverName, context).toLowerCase().trim();
         const found    = (pixData.receiverName || '').toLowerCase().trim();
         if (found && expected && !found.includes(expected) && !expected.includes(found)) {
@@ -2537,6 +2543,137 @@ export class NodeExecutorService {
         data: { rawText: '' },
         timestamp: new Date().toISOString(),
       };
+      this.contextService.setVariable(context, saveAs, result);
+      this.contextService.setOutput(context, { [saveAs]: result });
+
+      if (hasValueRules) return routeToHandle('no_match', result);
+      const nextEdge = edges.find((e: any) => e.source === node.id);
+      return { nextNodeId: nextEdge?.target ?? null, shouldWait: false, output: { [saveAs]: result } };
+    }
+  }
+
+  /**
+   * Execute AI_OCR_PIX node (Using LLM via OpenRouter)
+   */
+  private async executeAiOcrPix(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    edges: any[],
+  ): Promise<NodeExecutionResult> {
+    const config = node.config as AiOcrPixConfig;
+    const imageUrl = this.contextService.interpolate(config.imageUrl || '{{triggerMessage.media.url}}', context);
+    const saveAs   = config.saveResponseAs || 'aiPixResult';
+    const valueRules = config.valueRules || [];
+    const hasValueRules = valueRules.length > 0;
+
+    // Helper: route by handle id (same pattern as CONDITION/PIX_RECOGNITION)
+    const routeToHandle = (handle: string, result: any): NodeExecutionResult => {
+      const nextEdge = edges.find((e: any) =>
+        e.source === node.id && (e.condition === handle || e.label === handle),
+      ) ?? (handle === 'no_match' ? edges.find((e: any) => e.source === node.id) : undefined);
+      return { nextNodeId: nextEdge?.target ?? null, shouldWait: false, output: { [saveAs]: result } };
+    };
+
+    try {
+      if (!imageUrl || imageUrl.includes('{{')) {
+        throw new Error('No valid image/PDF URL provided for AI recognition');
+      }
+
+      console.log(`[AI_OCR_PIX] Calling AI for: ${imageUrl}`);
+      
+      let pixData: any;
+      let usedFallback = false;
+
+      try {
+        pixData = await this.aiOcrService.analyzeReceipt(imageUrl, {
+          model: config.model,
+          apiKey: config.apiKey
+        });
+      } catch (err) {
+        if (config.useFallback && config.fallbackModel) {
+          console.warn(`[AI_OCR_PIX] Primary AI failed, trying fallback: ${err.message}`);
+          usedFallback = true;
+          pixData = await this.aiOcrService.analyzeReceipt(imageUrl, {
+            model: config.fallbackModel,
+            apiKey: config.fallbackApiKey
+          });
+        } else {
+          throw err;
+        }
+      }
+
+      // If recognized as non-payment, we still might want to try fallback IF it was just uncertain
+      if (config.useFallback && config.fallbackModel && !pixData.is_payment && !usedFallback) {
+         console.log(`[AI_OCR_PIX] Primary model said "no payment", testing with fallback model...`);
+         const fallbackData = await this.aiOcrService.analyzeReceipt(imageUrl, {
+           model: config.fallbackModel,
+           apiKey: config.fallbackApiKey
+         });
+         if (fallbackData.is_payment) {
+           pixData = fallbackData;
+           usedFallback = true;
+         }
+      }
+
+      let valid = !!pixData.is_payment;
+      let reason: string | null = valid ? null : 'Arquivo não identificado como comprovante válido pela IA.';
+
+      // 1. Receiver validation
+      if (valid && config.expectedReceiverName) {
+        const expected = this.contextService.interpolate(config.expectedReceiverName, context).toLowerCase().trim();
+        const found = (pixData.receiver_name || '').toLowerCase().trim();
+        if (found && expected && !found.includes(expected) && !expected.includes(found)) {
+          valid = false;
+          reason = `Recebedor inválido (IA): detectado "${pixData.receiver_name}", esperado "${config.expectedReceiverName}"`;
+        }
+      }
+
+      const result = {
+        valid,
+        reason,
+        data: pixData,
+        usedFallback,
+        timestamp: new Date().toISOString()
+      };
+
+      this.contextService.setVariable(context, saveAs, result);
+      this.contextService.setOutput(context, { [saveAs]: result });
+
+      // 2. Value-based routing
+      if (hasValueRules) {
+        if (!valid) {
+          console.log(`[AI_OCR_PIX] → no_match (not valid: ${reason})`);
+          return routeToHandle('no_match', result);
+        }
+
+        const amountValue = pixData.amount || 0;
+        for (const rule of valueRules) {
+          const expected = Number(rule.value);
+          const tolerance = rule.tolerance ?? 0;
+          if (Math.abs(amountValue - expected) <= tolerance) {
+             context.variables[`${saveAs}_match`] = rule.label;
+             console.log(`[AI_OCR_PIX] → Rule matched: ${rule.label} (${amountValue} ~= ${expected})`);
+             return routeToHandle(rule.id, result);
+          }
+        }
+        
+        context.variables[`${saveAs}_error`] = 'value_mismatch';
+        console.log(`[AI_OCR_PIX] → no_match (no value rule matched for ${amountValue})`);
+        return routeToHandle('no_match', result);
+      }
+
+      const nextEdge = edges.find((e: any) => e.source === node.id);
+      return { nextNodeId: nextEdge?.target ?? null, shouldWait: false, output: { [saveAs]: result } };
+
+    } catch (error: any) {
+      console.error('[AI_OCR_PIX] Error:', error.message);
+      const result = {
+        valid: false,
+        reason: `Erro no processamento IA: ${error.message}`,
+        data: { },
+        timestamp: new Date().toISOString(),
+      };
+      
       this.contextService.setVariable(context, saveAs, result);
       this.contextService.setOutput(context, { [saveAs]: result });
 
