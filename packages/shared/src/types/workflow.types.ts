@@ -412,6 +412,7 @@ export interface AiOcrPixConfig {
   useFallback?: boolean;
   fallbackModel?: string;
   fallbackApiKey?: string;
+  useInvalidOutput?: boolean;
 }
 
 export interface RmktConfig {

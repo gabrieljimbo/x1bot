@@ -2645,8 +2645,9 @@ export class NodeExecutorService {
       // 2. Value-based routing
       if (hasValueRules) {
         if (!valid) {
-          console.log(`[AI_OCR_PIX] → no_match (not valid: ${reason})`);
-          return routeToHandle('no_match', result);
+          const invalidHandle = config.useInvalidOutput ? 'invalid' : 'no_match';
+          console.log(`[AI_OCR_PIX] → ${invalidHandle} (not valid: ${reason})`);
+          return routeToHandle(invalidHandle, result);
         }
 
         const amountValue = pixData.amount || 0;

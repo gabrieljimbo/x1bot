@@ -1082,43 +1082,68 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
             </>
           ) : isPixRecognition && pixValueRules.length > 0 ? (
             <>
-              {pixValueRules.map((rule: any, index: number) => {
-                const total    = pixValueRules.length + 1 // +1 for no_match
-                const position = ((index + 1) / (total + 1)) * 100
+              {(() => {
+                const hasInvalid = data.config?.useInvalidOutput;
+                const extraHandles = hasInvalid ? 2 : 1; // no_match + optionally invalid
+                const total = pixValueRules.length + extraHandles;
                 return (
-                  <Handle
-                    key={rule.id}
-                    type="source"
-                    position={Position.Right}
-                    id={rule.id}
-                    style={{ top: `${position}%` }}
-                    className="!w-3 !h-3 !bg-emerald-400 !border-2 !border-emerald-600 hover:!bg-emerald-300 transition-colors"
-                  />
-                )
-              })}
-              {/* no_match handle — always last */}
-              <Handle
-                type="source"
-                position={Position.Right}
-                id="no_match"
-                style={{ top: `${((pixValueRules.length + 1) / (pixValueRules.length + 2)) * 100}%` }}
-                className="!w-3 !h-3 !bg-red-400 !border-2 !border-red-600 hover:!bg-red-300 transition-colors"
-              />
-              {/* Labels */}
-              <div className="absolute -right-2 top-0 bottom-0 flex flex-col justify-around text-[8px] font-bold py-2 translate-x-full">
-                {pixValueRules.map((rule: any) => (
-                  <div key={rule.id} className="flex items-center">
-                    <div className="bg-[#151515] px-1.5 py-0.5 rounded border border-emerald-900/50 text-emerald-400 truncate max-w-[80px] shadow-sm">
-                      {rule.label || `R$${rule.value}`}
+                  <>
+                    {pixValueRules.map((rule: any, index: number) => {
+                      const position = ((index + 1) / (total + 1)) * 100;
+                      return (
+                        <Handle
+                          key={rule.id}
+                          type="source"
+                          position={Position.Right}
+                          id={rule.id}
+                          style={{ top: `${position}%` }}
+                          className="!w-3 !h-3 !bg-emerald-400 !border-2 !border-emerald-600 hover:!bg-emerald-300 transition-colors"
+                        />
+                      );
+                    })}
+                    {/* no_match handle */}
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id="no_match"
+                      style={{ top: `${((pixValueRules.length + 1) / (total + 1)) * 100}%` }}
+                      className="!w-3 !h-3 !bg-red-400 !border-2 !border-red-600 hover:!bg-red-300 transition-colors"
+                    />
+                    {/* invalid handle — only when toggle is on */}
+                    {hasInvalid && (
+                      <Handle
+                        type="source"
+                        position={Position.Right}
+                        id="invalid"
+                        style={{ top: `${((pixValueRules.length + 2) / (total + 1)) * 100}%` }}
+                        className="!w-3 !h-3 !bg-orange-400 !border-2 !border-orange-600 hover:!bg-orange-300 transition-colors"
+                      />
+                    )}
+                    {/* Labels */}
+                    <div className="absolute -right-2 top-0 bottom-0 flex flex-col justify-around text-[8px] font-bold py-2 translate-x-full">
+                      {pixValueRules.map((rule: any) => (
+                        <div key={rule.id} className="flex items-center">
+                          <div className="bg-[#151515] px-1.5 py-0.5 rounded border border-emerald-900/50 text-emerald-400 truncate max-w-[80px] shadow-sm">
+                            {rule.label || `R$${rule.value}`}
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex items-center">
+                        <div className="bg-[#151515] px-1.5 py-0.5 rounded border border-red-900/50 text-red-400 shadow-sm">
+                          sem match
+                        </div>
+                      </div>
+                      {hasInvalid && (
+                        <div className="flex items-center">
+                          <div className="bg-[#151515] px-1.5 py-0.5 rounded border border-orange-900/50 text-orange-400 shadow-sm">
+                            inválido
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
-                <div className="flex items-center">
-                  <div className="bg-[#151515] px-1.5 py-0.5 rounded border border-red-900/50 text-red-400 shadow-sm">
-                    sem match
-                  </div>
-                </div>
-              </div>
+                  </>
+                );
+              })()}
             </>
           ) : data.type === 'WAIT_REPLY' ? (
             <div className="absolute -right-3 top-3 bottom-3 flex flex-col justify-between pointer-events-none w-28">

@@ -1071,6 +1071,74 @@ function AiOcrPixConfig({ config, setConfig }: any) {
           </div>
         )}
       </div>
+
+      {/* Fallback com segundo modelo */}
+      <div className="border border-white/10 rounded-lg p-3">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.useFallback ?? false}
+            onChange={e => setConfig((prev: any) => ({ ...prev, useFallback: e.target.checked }))}
+            className="rounded"
+          />
+          <span className="text-sm text-gray-200">🔄 Fallback com outro modelo de IA</span>
+        </label>
+        <p className="text-[10px] text-gray-500 mt-1 ml-6">Se o modelo principal falhar ou não reconhecer, tenta com um segundo modelo automaticamente.</p>
+        {config.useFallback && (
+          <div className="mt-3 space-y-2 bg-black/20 p-3 rounded">
+            <div>
+              <label className="block text-xs font-medium mb-1 text-gray-400">Modelo Fallback</label>
+              <input
+                type="text"
+                value={config.fallbackModel || ''}
+                onChange={e => setConfig((prev: any) => ({ ...prev, fallbackModel: e.target.value }))}
+                placeholder="google/gemini-2.0-flash-exp:free"
+                className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1 text-gray-400">API Key do Fallback (opcional)</label>
+              <input
+                type="password"
+                value={config.fallbackApiKey || ''}
+                onChange={e => setConfig((prev: any) => ({ ...prev, fallbackApiKey: e.target.value }))}
+                placeholder="Deixe vazio para usar a mesma key do workspace"
+                className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Saída de comprovante inválido */}
+      <div className="border border-white/10 rounded-lg p-3">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.useInvalidOutput ?? false}
+            onChange={e => setConfig((prev: any) => ({ ...prev, useInvalidOutput: e.target.checked }))}
+            className="rounded"
+          />
+          <span className="text-sm text-gray-200">🚫 Saída dedicada para comprovante inválido</span>
+        </label>
+        <p className="text-[10px] text-gray-500 mt-1 ml-6">Ativa uma saída separada (<span className="text-red-400 font-mono">invalid</span>) quando a IA determinar que a imagem não é um comprovante válido.</p>
+        {config.useInvalidOutput && (
+          <div className="mt-3 bg-black/20 p-3 rounded space-y-2">
+            <p className="text-[10px] text-gray-400">
+              Quando ativado, se a IA rejeitar o comprovante, o fluxo segue pela saída <span className="text-red-400 font-mono font-bold">invalid</span> em vez de <span className="text-yellow-400 font-mono">no_match</span>.
+            </p>
+            <div className="bg-[#0a0f18] border border-red-900/30 rounded p-2">
+              <p className="text-[10px] text-gray-300 font-medium mb-1">📋 Variáveis disponíveis na saída inválida:</p>
+              <div className="grid grid-cols-1 gap-1">
+                <code className="text-[10px] bg-black/40 px-2 py-1 rounded text-red-400 select-all">{`{{${saveAs}.reason}}`} <span className="text-gray-500">— motivo da rejeição (em texto)</span></code>
+                <code className="text-[10px] bg-black/40 px-2 py-1 rounded text-amber-400 select-all">{`{{${saveAs}.data.receiver_name}}`} <span className="text-gray-500">— nome lido do recebedor</span></code>
+                <code className="text-[10px] bg-black/40 px-2 py-1 rounded text-amber-400 select-all">{`{{${saveAs}.data.date}}`} <span className="text-gray-500">— data lida do comprovante</span></code>
+                <code className="text-[10px] bg-black/40 px-2 py-1 rounded text-amber-400 select-all">{`{{${saveAs}.data.amount}}`} <span className="text-gray-500">— valor lido</span></code>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
