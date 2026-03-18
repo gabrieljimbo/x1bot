@@ -405,7 +405,7 @@ export interface PixRecognitionConfig {
 export interface AiOcrPixConfig {
   imageUrl?: string;
   expectedReceiverName?: string;
-  valueRules?: { id: string; label: string; value: number; tolerance?: number }[];
+  valueRules?: { id: string; label: string; value: number; tolerance?: number; operator?: 'equals' | 'greater_or_equal' | 'less_than' }[];
   saveResponseAs?: string;
   model?: string; // e.g., 'google/gemini-2.0-flash-exp:free' or 'openai/gpt-4o-mini'
   apiKey?: string; // OpenRouter API Key

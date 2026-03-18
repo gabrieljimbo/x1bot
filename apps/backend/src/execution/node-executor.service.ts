@@ -2631,7 +2631,7 @@ export class NodeExecutorService {
         }
       }
 
-      const result = {
+      const result: any = {
         valid,
         reason,
         data: pixData,
@@ -2653,9 +2653,34 @@ export class NodeExecutorService {
         for (const rule of valueRules) {
           const expected = Number(rule.value);
           const tolerance = rule.tolerance ?? 0;
-          if (Math.abs(amountValue - expected) <= tolerance) {
+          const operator = rule.operator || 'equals';
+          
+          let isMatch = false;
+
+          if (operator === 'greater_or_equal') {
+            isMatch = amountValue >= expected;
+          } else if (operator === 'less_than') {
+            isMatch = amountValue < expected;
+          } else {
+            isMatch = Math.abs(amountValue - expected) <= tolerance;
+          }
+
+          if (isMatch) {
              context.variables[`${saveAs}_match`] = rule.label;
-             console.log(`[AI_OCR_PIX] → Rule matched: ${rule.label} (${amountValue} ~= ${expected})`);
+             
+             // Injeta formatadores extras BRL pro cliente
+             result.amountBRL = amountValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+             
+             if (amountValue < expected) {
+                const missing = expected - amountValue;
+                result.missingAmount = missing;
+                result.missingAmountBRL = missing.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+             } else {
+                result.missingAmount = 0;
+                result.missingAmountBRL = '0,00';
+             }
+
+             console.log(`[AI_OCR_PIX] → Rule matched: ${rule.label} (${amountValue} vs ${expected} op: ${operator})`);
              return routeToHandle(rule.id, result);
           }
         }

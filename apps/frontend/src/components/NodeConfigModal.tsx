@@ -923,7 +923,7 @@ function AiOcrPixConfig({ config, setConfig }: any) {
     const id = `rule-` + Date.now() + `-` + Math.random().toString(36).slice(2, 7)
     setConfig((prev: any) => ({
       ...prev,
-      valueRules: [...(prev.valueRules || []), { id, label: '', value: '', tolerance: 0 }],
+      valueRules: [...(prev.valueRules || []), { id, label: '', value: '', tolerance: 0, operator: 'equals' }],
     }))
   }
 
@@ -1000,20 +1000,50 @@ function AiOcrPixConfig({ config, setConfig }: any) {
           </button>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           {valueRules.map((rule: any, i: number) => (
-            <div key={rule.id} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-2.5 flex-wrap md:flex-nowrap">
-              <input value={rule.label} onChange={e => updateRule(i, 'label', e.target.value)} placeholder="Ex: Starter" className="w-24 bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-primary" />
-              <span className="text-gray-500 text-xs shrink-0">R$</span>
-              <input value={rule.value} onChange={e => updateRule(i, 'value', e.target.value)} placeholder="19,90" className="w-20 bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-primary" />
-              <span className="text-gray-500 text-xs shrink-0">± R$</span>
-              <input type="number" value={rule.tolerance ?? 0} onChange={e => updateRule(i, 'tolerance', Number(e.target.value))} min={0} placeholder="0" className="w-14 bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-primary" />
-              <span className="text-xs text-indigo-400 ml-auto shrink-0">→ "{rule.label || '?'}"</span>
-              <button type="button" onClick={() => removeRule(i)} className="text-red-400 hover:text-red-300 text-xs shrink-0">✕</button>
+            <div key={rule.id} className="flex flex-col gap-2 bg-white/5 border border-white/10 rounded-lg p-3">
+              <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
+                <input value={rule.label} onChange={e => updateRule(i, 'label', e.target.value)} placeholder="Título/Saída" className="w-28 bg-[#1a1a1a] border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-primary" />
+                
+                <select value={rule.operator || 'equals'} onChange={e => updateRule(i, 'operator', e.target.value)} className="bg-[#1a1a1a] border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-primary min-w-[120px]">
+                  <option value="equals">Igual (± Tol:)</option>
+                  <option value="greater_or_equal">Maior ou Igual (&gt;=)</option>
+                  <option value="less_than">Menor que (&lt;)</option>
+                </select>
+
+                <div className="flex items-center gap-1 bg-[#1a1a1a] border border-gray-700 rounded px-2 py-1.5">
+                  <span className="text-gray-500 text-xs">R$</span>
+                  <input value={rule.value} onChange={e => updateRule(i, 'value', e.target.value)} placeholder="19,90" className="w-16 bg-transparent text-xs text-gray-200 focus:outline-none placeholder-gray-600" />
+                </div>
+
+                {(!rule.operator || rule.operator === 'equals') && (
+                  <div className="flex items-center gap-1 bg-[#1a1a1a] border border-gray-700 rounded px-2 py-1.5">
+                    <span className="text-gray-500 text-xs">± R$</span>
+                    <input type="number" value={rule.tolerance ?? 0} onChange={e => updateRule(i, 'tolerance', Number(e.target.value))} min={0} placeholder="0" className="w-12 bg-transparent text-xs text-gray-200 focus:outline-none" />
+                  </div>
+                )}
+
+                <span className="text-xs text-indigo-400 ml-auto shrink-0 hidden md:block" title="Saída criada no node">→ "{rule.label || '?'}"</span>
+                <button type="button" onClick={() => removeRule(i)} className="text-red-400 hover:text-red-300 text-xs shrink-0 p-1 md:ml-2">✕</button>
+              </div>
             </div>
           ))}
+          
+          <div className="bg-[#0a0f18] border border-indigo-900/50 rounded-lg p-3 mt-3">
+             <div className="flex items-center gap-2 mb-2">
+                 <span className="text-xs text-indigo-300 font-medium">💡 Variáveis de Faltante Automáticas:</span>
+             </div>
+             <p className="text-[10px] text-gray-400 mb-2">
+                 Se o pagamento for aprovado mas a quantia for menor do que o esperado (pela regra que conectou), você tem acesso no próximo node às variáveis prontas:
+             </p>
+             <div className="grid grid-cols-1 gap-1">
+                 <code className="text-[10px] bg-black/40 px-2 py-1 rounded text-emerald-400 select-all">{`{{${saveAs}.amountBRL}}`} <span className="text-gray-500">— valor real transferido</span></code>
+                 <code className="text-[10px] bg-black/40 px-2 py-1 rounded text-red-400 select-all">{`{{${saveAs}.missingAmountBRL}}`} <span className="text-gray-500">— o que ficou devendo (Subtraído)</span></code>
+             </div>
+          </div>
           <div className="flex items-center gap-2 px-3 py-2 border border-dashed border-white/10 rounded-lg">
-            <span className="text-xs text-gray-500">Se match com regra válida → a respectiva saída é executada. Caso contrário, _valid: false.</span>
+            <span className="text-xs text-gray-500">Se bater com a regra → a respectiva saída executa. Senão → Sem_Match.</span>
           </div>
         </div>
       </div>

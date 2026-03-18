@@ -1,0 +1,15 @@
+
+> @n9n/backend@1.0.0 build C:\Users\gabri\X1bot\apps\backend
+> nest build
+
+[96msrc/execution/execution.service.ts[0m:[93m26[0m:[93m11[0m - [91merror[0m[90m TS2322: [0mType '{ globals: Record<string, any>; input: Record<string, any>; output: Record<string, any>; variables: Record<string, any>; tenantId?: string | undefined; workflowId?: string | undefined; executionId?: string | undefined; contactId?: string | undefined; contactPhone?: string | undefined; }' is not assignable to type 'ExecutionContext'.
+  Types of property 'tenantId' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+
+[7m26[0m     const context: ExecutionContext = {
+[7m  [0m [91m          ~~~~~~~[0m
+
+Found 1 error(s).
+
+ ELIFECYCLE  Command failed with exit code 1.

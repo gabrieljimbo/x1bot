@@ -1,0 +1,61 @@
+
+> @n9n/frontend@1.0.0 build C:\Users\gabri\X1bot\apps\frontend
+> next build
+
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Skipping linting
+   Checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/26) ...
+   Generating static pages (6/26) 
+   Generating static pages (12/26) 
+   Generating static pages (19/26) 
+ ✓ Generating static pages (26/26)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    864 B           114 kB
+├ ○ /_not-found                          875 B          88.7 kB
+├ ○ /analytics                           6.06 kB         144 kB
+├ ○ /campaigns/blacklist                 5.02 kB         143 kB
+├ ○ /campaigns/insights                  7.06 kB         145 kB
+├ ○ /campaigns/lists                     4.85 kB         143 kB
+├ ƒ /campaigns/lists/[id]                5.89 kB         144 kB
+├ ○ /campaigns/settings                  5.18 kB         143 kB
+├ ○ /campaigns/simple                    16.6 kB         154 kB
+├ ○ /campaigns/workflows                 5.84 kB         144 kB
+├ ƒ /campaigns/workflows/[id]            4.52 kB         202 kB
+├ ○ /documentacao                        10.7 kB        98.5 kB
+├ ○ /inbox                               9.67 kB         147 kB
+├ ○ /login                               1.24 kB         123 kB
+├ ○ /products                            7.07 kB         145 kB
+├ ○ /register                            489 B          88.4 kB
+├ ○ /sessions                            3.82 kB         142 kB
+├ ƒ /sessions/[id]                       4.03 kB         136 kB
+├ ƒ /sessions/[id]/groups                743 B           114 kB
+├ ○ /sessions/new                        5.3 kB          131 kB
+├ ○ /settings/apis                       6.59 kB         144 kB
+├ ○ /settings/pixel                      6.5 kB          144 kB
+├ ○ /settings/whatsapp                   5.38 kB         143 kB
+├ ○ /tags                                4.44 kB         142 kB
+├ ○ /users                               5.83 kB         144 kB
+├ ƒ /workflows/[id]                      16.4 kB         214 kB
+├ ○ /workflows/groups                    11.1 kB         149 kB
+├ ○ /workflows/new                       1.61 kB         115 kB
+├ ○ /workspaces                          3.06 kB         143 kB
+├ ƒ /workspaces/[id]                     10.8 kB         157 kB
+└ ƒ /workspaces/[id]/users               4.46 kB         117 kB
++ First Load JS shared by all            87.9 kB
+  ├ chunks/2749-0a4e69e7e172dd17.js      31.7 kB
+  ├ chunks/5b8f0dd8-3e2f144ce2002908.js  53.6 kB
+  └ other shared chunks (total)          2.5 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

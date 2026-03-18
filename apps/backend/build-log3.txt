@@ -1,0 +1,4 @@
+
+> @n9n/backend@1.0.0 build C:\Users\gabri\X1bot\apps\backend
+> nest build
+
