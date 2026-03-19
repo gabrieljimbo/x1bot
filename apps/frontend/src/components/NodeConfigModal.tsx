@@ -871,31 +871,67 @@ function PixRecognitionConfig({ config, setConfig }: any) {
         )}
       </div>
 
-      {/* Validar data */}
-      <div className="border border-white/10 rounded-lg p-3">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={config.validateDate !== false}
-            onChange={e => setConfig((prev: any) => ({ ...prev, validateDate: e.target.checked }))}
-            className="rounded"
-          />
-          <span className="text-sm text-white">Validar data do comprovante</span>
-        </label>
-        {config.validateDate !== false && (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs text-gray-400">Aceitar até</span>
+      {/* Anti-Fraude: Validação de Tempo */}
+      <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">🛡️</span>
+          <h3 className="text-sm font-semibold text-orange-200">Anti-Fraude (Tempo)</h3>
+        </div>
+        
+        <label className="flex items-center gap-3 cursor-pointer group mb-4">
+          <div className="relative">
             <input
-              type="number"
-              value={config.dateToleranceDays ?? 0}
-              onChange={e => setConfig((prev: any) => ({ ...prev, dateToleranceDays: Number(e.target.value) }))}
-              min={0}
-              max={7}
-              className="w-16 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-primary"
+              type="checkbox"
+              checked={config.validateDate !== false}
+              onChange={e => setConfig((prev: any) => ({ ...prev, validateDate: e.target.checked }))}
+              className="peer sr-only"
             />
-            <span className="text-xs text-gray-400">dia(s) atrás (0 = somente hoje)</span>
+            <div className="w-10 h-5 bg-gray-700 rounded-full peer peer-checked:bg-orange-500 transition-colors"></div>
+            <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+          </div>
+          <span className="text-xs text-gray-300 font-medium group-hover:text-white transition-colors">Ativar bloqueio de comprovante antigo</span>
+        </label>
+
+        {config.validateDate !== false && (
+          <div className="space-y-3 pl-2 border-l border-orange-500/20 ml-2">
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider font-bold mb-1.5 text-orange-400/80">
+                Idade Máxima do Recebimento (Horas)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={config.maxAgeHours ?? (config.dateToleranceDays ? config.dateToleranceDays * 24 : 24)}
+                  onChange={e => setConfig((prev: any) => ({ ...prev, maxAgeHours: Number(e.target.value) }))}
+                  min={1}
+                  className="w-24 bg-[#1a1a1a] border border-orange-500/20 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/50 transition-colors font-mono"
+                />
+                <span className="text-xs text-gray-500">horas</span>
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1.5 leading-relaxed">
+                Recomendado: <b>24</b>. Comprovantes enviados após esse prazo (baseado na data/hora do recibo) serão invalidados.
+              </p>
+            </div>
           </div>
         )}
+      </div>
+
+      {/* Opções de Fluxo e Erro */}
+      <div className="bg-[#151515] border border-gray-700 rounded-lg p-4 space-y-4">
+        <div>
+          <label className="flex items-center gap-3 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={config.useInvalidOutput ?? false}
+              onChange={e => setConfig((prev: any) => ({ ...prev, useInvalidOutput: e.target.checked }))}
+              className="w-4 h-4 rounded border-gray-700 bg-[#1a1a1a] text-primary focus:ring-primary transition-all pointer-events-none"
+            />
+            <div>
+              <span className="text-xs font-medium text-gray-200 group-hover:text-white transition-colors">Habilitar Saída de Error/Inválido</span>
+              <p className="text-[10px] text-gray-500 mt-0.5">Cria um handle &quot;invalid&quot; no node para comprovantes rejeitados.</p>
+            </div>
+          </label>
+        </div>
       </div>
 
       {/* Variáveis disponíveis */}

@@ -2438,25 +2438,36 @@ export class NodeExecutorService {
       let valid  = true;
       let reason: string | null = null;
 
-      // ── Date validation ────────────────────────────────────────────────
-      if (config.validateDate !== false) {
-        const toleranceDays = config.dateToleranceDays ?? 0;
-        // Today in America/Sao_Paulo
-        const nowSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-        nowSP.setHours(0, 0, 0, 0);
+      // ── Anti-fraud: Payment check ──────────────────────────────────────
+      if (!pixData.is_payment) {
+          valid = false;
+          reason = 'O arquivo não foi reconhecido como um comprovante de PIX válido ou legível.';
+      }
 
-        if (pixData.date) {
+      // ── Anti-fraud: Date/Time validation ──────────────────────────────
+      if (valid && config.validateDate !== false) {
+        const maxAge = config.maxAgeHours || 24;
+        const now = new Date();
+        
+        if (pixData.fullDate) {
+          const [d, m, y, h, min] = pixData.fullDate.split(/[\/\s:]/).map(Number);
+          const receiptDate = new Date(y, m - 1, d, h || 0, min || 0);
+          
+          const ageHours = Math.abs(now.getTime() - receiptDate.getTime()) / (1000 * 60 * 60);
+          if (ageHours > maxAge) {
+              valid = false;
+              reason = `Comprovante antigo (${Math.floor(ageHours)}h atrás). Limite: ${maxAge}h`;
+          }
+        } else if (pixData.date) {
           const pixDateObj = this.parsePixDateStr(pixData.date);
           if (pixDateObj) {
-            pixDateObj.setHours(0, 0, 0, 0);
-            const diffDays = Math.round((nowSP.getTime() - pixDateObj.getTime()) / 86_400_000);
-            if (diffDays < 0 || diffDays > toleranceDays) {
-              valid  = false;
-              reason = `Data inválida: ${pixData.date} (tolerância: ${toleranceDays} dia(s))`;
+            const ageHours = Math.abs(now.getTime() - pixDateObj.getTime()) / (1000 * 60 * 60);
+            if (ageHours > (maxAge + 12)) { // 12h grace if time is missing but date found
+              valid = false;
+              reason = `Data do comprovante expirada (mais de ${maxAge}h).`;
             }
           }
         }
-        // If date not found, stay lenient (same as before)
       }
 
       // ── Receiver name validation ───────────────────────────────────────
@@ -2465,17 +2476,17 @@ export class NodeExecutorService {
         const found    = (pixData.receiverName || '').toLowerCase().trim();
         if (found && expected && !found.includes(expected) && !expected.includes(found)) {
           valid  = false;
-          reason = `Recebedor inválido: encontrado "${pixData.receiverName}", esperado "${config.expectedReceiverName}"`;
+          reason = `Recebedor divergente: encontrado "${pixData.receiverName}", esperado "${config.expectedReceiverName}"`;
         }
       }
 
-      // ── Legacy single-value validation (backward compat) ──────────────
+      // ── Amount validation ──────────────────────────────────────────────
       if (valid && !hasValueRules && (config.validateAmount || config.acceptedValues)) {
         if (config.acceptedValues) {
           const accepted = config.acceptedValues.split(',').map((v: string) => parseFloat(v.trim().replace(',', '.')));
           if (!accepted.some((v: number) => Math.abs(v - pixData.amount) < 0.01)) {
             valid  = false;
-            reason = `Valor não autorizado: R$ ${pixData.amount.toFixed(2)}`;
+            reason = `Valor R$ ${pixData.amount.toFixed(2)} não está na lista de autorizados.`;
           }
         } else if (config.expectedAmount) {
           const expectedAmt = parseFloat(
@@ -2483,16 +2494,9 @@ export class NodeExecutorService {
           );
           if (!isNaN(expectedAmt) && Math.abs(pixData.amount - expectedAmt) >= 0.01) {
             valid  = false;
-            reason = `Valor divergente: R$ ${pixData.amount.toFixed(2)}, esperado R$ ${expectedAmt.toFixed(2)}`;
+            reason = `Valor R$ ${pixData.amount.toFixed(2)} diferente do esperado R$ ${expectedAmt.toFixed(2)}.`;
           }
         }
-      }
-
-      // ── Fallback PIX keyword check ─────────────────────────────────────
-      const hasPixKeywords = rawText.toLowerCase().includes('pix') || rawText.toLowerCase().includes('pagamento');
-      if (valid && !hasPixKeywords && pixData.amount <= 0 && !pixData.transactionId) {
-        valid  = false;
-        reason = 'O arquivo não parece ser um comprovante de PIX válido.';
       }
 
       const result = {
@@ -2501,10 +2505,15 @@ export class NodeExecutorService {
         timestamp: new Date().toISOString(),
       };
 
-      console.log(`[PIX_RECOGNITION] Result: valid=${valid}${reason ? ` (${reason})` : ''}`);
+      console.log(`[PIX_RECOGNITION] Valid: ${valid}${reason ? ` (Reason: ${reason})` : ''}`);
 
       this.contextService.setVariable(context, saveAs, result);
       this.contextService.setOutput(context, { [saveAs]: result });
+
+      if (!valid && config.useInvalidOutput) {
+          console.log(`[PIX_RECOGNITION] → Routing to "invalid" handle`);
+          return routeToHandle('invalid', result);
+      }
 
       // ── NEW: multi-value routing ──────────────────────────────────────
       if (hasValueRules) {

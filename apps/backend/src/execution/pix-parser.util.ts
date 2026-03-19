@@ -12,12 +12,15 @@ export class PixParser {
         const data: any = {
             amount: 0,
             date: null,
+            time: null,
+            fullDate: null,
             receiverName: null,
             receiverTaxId: null,
             transactionId: null,
             bank: bank || 'Unknown',
             pixKey: null,
-            rawText: text
+            rawText: text,
+            is_payment: false
         };
 
         // Apply specific rules based on the bank
@@ -56,14 +59,8 @@ export class PixParser {
                 this.parseGeneric(normalized, data);
         }
 
-        // Final cleanup
-        if (data.date) {
-            // Standardize date to DD/MM/YYYY
-            const dateMatch = data.date.match(/(\d{2})[\/\s](\d{2})[\/\s](\d{4})/);
-            if (dateMatch) {
-                data.date = `${dateMatch[1]}/${dateMatch[2]}/${dateMatch[3]}`;
-            }
-        }
+        // Final cleanup & normalization
+        this.cleanup(data, normalized);
 
         return data;
     }
@@ -83,9 +80,43 @@ export class PixParser {
         return null;
     }
 
+    private static cleanup(data: any, normalized: string) {
+        // Standardize date to DD/MM/YYYY
+        if (data.date) {
+            const dateMatch = data.date.match(/(\d{2})[\/\s](\d{2})[\/\s](\d{4})/);
+            if (dateMatch) {
+                data.date = `${dateMatch[1]}/${dateMatch[2]}/${dateMatch[3]}`;
+            }
+        }
+
+        // Extract time if missing (Generic search)
+        if (!data.time) {
+            data.time = this.extractRegex(normalized, /(\d{2}[:h]\d{2}(?:[:]\d{2})?)/i);
+            if (data.time) data.time = data.time.replace('h', ':');
+        }
+
+        // Build fullDate DD/MM/YYYY HH:mm
+        if (data.date) {
+            data.fullDate = data.date + (data.time ? ` ${data.time.substring(0, 5)}` : ' 00:00');
+        }
+
+        // Logic check: is it a valid payment?
+        const hasKeywords = normalized.toLowerCase().includes('pix') || normalized.toLowerCase().includes('pagamento') || normalized.toLowerCase().includes('comprovante');
+        const hasEssentialData = data.amount > 0 && (data.transactionId || data.receiverName || data.date);
+        
+        data.is_payment = hasKeywords && hasEssentialData;
+
+        // Cleanup receiver name (Tesseract noise)
+        if (data.receiverName) {
+            data.receiverName = data.receiverName.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ\s]/g, '').trim();
+            if (data.receiverName.length < 3) data.receiverName = null;
+        }
+    }
+
     private static parseNubank(text: string, data: any) {
         data.amount = this.extractRegex(text, /(?:Valor|R\$)\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i, true);
         data.date = this.extractRegex(text, /(\d{2}\s[A-Z]{3}\s\d{4}|\d{2}\/\d{2}\/\d{4})/i);
+        data.time = this.extractRegex(text, /(\d{2}:\d{2}:\d{2})/);
         data.receiverName = this.extractRegex(text, /(?:Para|Recebedor)\s*([A-Z\s]{3,50})(?:\s*[\n\r]|CPF|CNPJ|$)/i);
         data.transactionId = this.extractRegex(text, /\b(E\d{8}[A-Za-z0-9]{15,})\b/);
         data.receiverTaxId = this.extractRegex(text, /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{3}\.\d{3}\.\d{3}-\d{2})/);
@@ -94,6 +125,7 @@ export class PixParser {
     private static parseItau(text: string, data: any) {
         data.amount = this.extractRegex(text, /(?:valor)\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i, true);
         data.date = this.extractRegex(text, /(\d{2}\/\d{2}\/\d{4})/);
+        data.time = this.extractRegex(text, /(\d{2}:\d{2}:\d{2})/);
         data.receiverName = this.extractRegex(text, /(?:pago para|para)\s*([A-Z\s]{3,50})/i);
         data.transactionId = this.extractRegex(text, /(?:Id da transação|Identificador)\s*([A-Z0-9]{15,})/i);
     }
@@ -101,36 +133,42 @@ export class PixParser {
     private static parseBradesco(text: string, data: any) {
         data.amount = this.extractRegex(text, /(?:Valor)\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i, true);
         data.date = this.extractRegex(text, /(\d{2}\/\d{2}\/\d{4})/);
+        data.time = this.extractRegex(text, /(\d{2}:\d{2})/);
         data.receiverName = this.extractRegex(text, /(?:Nome do favorecido|Para)\s*([A-Z\s]{3,50})/i);
     }
 
     private static parseBB(text: string, data: any) {
         data.amount = this.extractRegex(text, /(?:Valor total)\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i, true);
         data.date = this.extractRegex(text, /(\d{2}\/\d{2}\/\d{4})/);
+        data.time = this.extractRegex(text, /(\d{2}:\d{2}:\d{2})/);
         data.receiverName = this.extractRegex(text, /(?:Recebedor|Para)\s*([A-Z\s]{3,50})/i);
     }
 
     private static parseSantander(text: string, data: any) {
         data.amount = this.extractRegex(text, /(?:valor)\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i, true);
         data.date = this.extractRegex(text, /(\d{2}\/\d{2}\/\d{4})/);
+        data.time = this.extractRegex(text, /(\d{2}:\d{2}:\d{2})/);
         data.receiverName = this.extractRegex(text, /(?:nome do recebedor|para)\s*([A-Z\s]{3,50})/i);
     }
 
     private static parseInter(text: string, data: any) {
         data.amount = this.extractRegex(text, /(?:valor pago)\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i, true);
         data.date = this.extractRegex(text, /(\d{2}\/\d{2}\/\d{4})/);
+        data.time = this.extractRegex(text, /(\d{2}:\d{2})/);
         data.receiverName = this.extractRegex(text, /(?:recebedor|para)\s*([A-Z\s]{3,50})/i);
     }
 
     private static parsePicPay(text: string, data: any) {
         data.amount = this.extractRegex(text, /(?:valor)\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i, true);
         data.date = this.extractRegex(text, /(\d{2}\/\d{2}\/\d{4})/);
+        data.time = this.extractRegex(text, /(\d{2}:\d{2}:\d{2})/);
         data.receiverName = this.extractRegex(text, /(?:quem recebeu|para)\s*([A-Z\s]{3,50})/i);
     }
 
     private static parseC6(text: string, data: any) {
         data.amount = this.extractRegex(text, /(?:valor)\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i, true);
         data.date = this.extractRegex(text, /(\d{2}\/\d{2}\/\d{4})/);
+        data.time = this.extractRegex(text, /(\d{2}:\d{2})/);
         data.receiverName = this.extractRegex(text, /(?:recebedor|para)\s*([A-Z\s]{3,50})/i);
     }
 
@@ -149,6 +187,7 @@ export class PixParser {
     private static parseGeneric(text: string, data: any) {
         data.amount = this.extractRegex(text, /(?:R\$|Valor|TOTAL)\s*:?\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i, true);
         data.date = this.extractRegex(text, /(\d{2}\/\d{2}\/\d{4})/);
+        data.time = this.extractRegex(text, /(\d{2}[:h]\d{2})/i);
         data.receiverName = this.extractRegex(text, /(?:Recebedor|Para|Destinatário)\s*:?\s*([A-Z\s]{3,50})/i);
         data.transactionId = this.extractRegex(text, /(?:ID|Transação|Autenticação)\s*:?\s*([A-Z0-9]{15,})/i);
         if (!data.transactionId) data.transactionId = this.extractRegex(text, /\b(E\d{8}[A-Za-z0-9]{15,})\b/);

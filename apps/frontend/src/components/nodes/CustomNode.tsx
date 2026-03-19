@@ -1080,7 +1080,7 @@ function CustomNode({ data, id, selected }: CustomNodeProps & { id: string }) {
                 ))}
               </div>
             </>
-          ) : isPixRecognition && pixValueRules.length > 0 ? (
+          ) : isPixRecognition ? (
             <>
               {(() => {
                 const hasInvalid = data.config?.useInvalidOutput;

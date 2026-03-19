@@ -397,8 +397,13 @@ export interface PixRecognitionConfig {
   validateAmount?: boolean;
   expectedAmount?: string; // supports {{variables.name}} syntax
   validateDate?: boolean; // If true, validates if receipt is from today
+  dateToleranceDays?: number; // legacy days-based tolerance
+  maxAgeHours?: number; // hour-based tolerance (anti-fraud)
+  validateReceiver?: boolean;
   expectedReceiverName?: string; // supports {{variables.name}} syntax
   acceptedValues?: string; // comma-separated values, e.g. "19.90, 29.90"
+  valueRules?: { id: string; label: string; value: number; tolerance?: number; operator?: 'equals' | 'greater_or_equal' | 'less_than' }[];
+  useInvalidOutput?: boolean;
   saveResponseAs?: string; // default 'pixResult'
 }
 

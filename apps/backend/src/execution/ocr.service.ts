@@ -45,20 +45,57 @@ export class OCRService {
     }
 
     private async processImage(buffer: Buffer, outputPath: string): Promise<string> {
-        console.log(`[OCR_SERVICE] Pre-processing image with sharp`);
+        console.log(`[OCR_SERVICE] Pre-processing image with multiple attempts`);
 
-        // Pre-process for better OCR accuracy:
-        // 1. Convert to grayscale (greyscale)
-        // 2. Increase contrast/normalize
-        // 3. Convert to PNG
-        await sharp(buffer)
-            .greyscale()
-            .normalize()
-            .sharpen()
-            .threshold(180) // Binarization
-            .toFile(outputPath);
+        const attempts = [
+            // Attempt 1: Classic Binarization
+            {
+                name: 'Classic Binarization',
+                pipeline: () => sharp(buffer).greyscale().normalize().sharpen().threshold(180)
+            },
+            // Attempt 2: High Contrast (No Threshold)
+            {
+                name: 'High Contrast',
+                pipeline: () => sharp(buffer).greyscale().normalize().sharpen().clahe({ width: 200, height: 200 })
+            },
+            // Attempt 3: Negate (Dark Mode Support)
+            {
+                name: 'Negate/Inverted',
+                pipeline: () => sharp(buffer).negate().greyscale().normalize()
+            },
+            // Attempt 4: Blurred/Resized (Noise reduction)
+            {
+                name: 'Resized Blur-reduction',
+                pipeline: () => sharp(buffer).resize(1500).greyscale().normalize().median(1).sharpen()
+            }
+        ];
 
-        return await this.runOCR(outputPath);
+        let bestText = "";
+        for (let i = 0; i < attempts.length; i++) {
+            try {
+                const attempt = attempts[i];
+                console.log(`[OCR_SERVICE] OCR Attempt ${i + 1}/${attempts.length}: ${attempt.name}`);
+                
+                await attempt.pipeline().toFile(outputPath);
+                const text = await this.runOCR(outputPath);
+                
+                const lowerText = text.toLowerCase();
+                const hasKeywords = lowerText.includes('pix') || lowerText.includes('pagamento') || lowerText.includes('comprovante');
+                const hasNumbers = /\d{1,3}(?:\.\d{3})*,\d{2}/.test(text);
+
+                if (hasKeywords && hasNumbers) {
+                    console.log(`[OCR_SERVICE] Attempt ${i + 1} (${attempt.name}) successful (keywords and amounts found)`);
+                    return text;
+                }
+                
+                if (text.length > bestText.length) bestText = text;
+            } catch (err) {
+                console.warn(`[OCR_SERVICE] Attempt ${i + 1} failed: ${err.message}`);
+            }
+        }
+
+        console.log(`[OCR_SERVICE] No attempt was perfect, returning best match (${bestText.length} chars)`);
+        return bestText;
     }
 
     private async processPdf(buffer: Buffer, outputPath: string): Promise<string> {
