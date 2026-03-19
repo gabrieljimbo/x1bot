@@ -413,6 +413,8 @@ export interface AiOcrPixConfig {
   fallbackModel?: string;
   fallbackApiKey?: string;
   useInvalidOutput?: boolean;
+  validateDate?: boolean;
+  maxAgeHours?: number;
 }
 
 export interface RmktConfig {

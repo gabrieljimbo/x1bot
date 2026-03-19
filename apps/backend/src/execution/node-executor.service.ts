@@ -2621,13 +2621,31 @@ export class NodeExecutorService {
       let valid = !!pixData.is_payment;
       let reason: string | null = valid ? null : 'Arquivo não identificado como comprovante válido pela IA.';
 
-      // 1. Receiver validation
-      if (valid && config.expectedReceiverName) {
-        const expected = this.contextService.interpolate(config.expectedReceiverName, context).toLowerCase().trim();
-        const found = (pixData.receiver_name || '').toLowerCase().trim();
-        if (found && expected && !found.includes(expected) && !expected.includes(found)) {
-          valid = false;
-          reason = `Recebedor inválido (IA): detectado "${pixData.receiver_name}", esperado "${config.expectedReceiverName}"`;
+      // 2. Date validation (Anti-fraud)
+      if (valid && config.validateDate !== false) {
+        const maxAge = config.maxAgeHours || 24;
+        const dateStr = pixData.date; // Expecting "DD/MM/YYYY HH:mm"
+        if (dateStr && dateStr.includes('/')) {
+          try {
+            const parts = dateStr.split(/[\/\s:]/);
+            if (parts.length >= 3) {
+              const [day, month, year, hour, minute] = parts;
+              const extractedDate = new Date(+year, +month - 1, +day, +(hour || 0), +(minute || 0));
+              const now = new Date();
+              const ageHours = (now.getTime() - extractedDate.getTime()) / (1000 * 60 * 60);
+
+              if (ageHours > maxAge) {
+                valid = false;
+                reason = `Comprovante antigo detectado (${Math.floor(ageHours)}h atrás). Limite máximo: ${maxAge}h.`;
+              } else if (ageHours < -2) {
+                // Future date (more than 2h ahead, considering timezone drifts)
+                valid = false;
+                reason = `Data do comprovante no futuro (${Math.floor(-ageHours)}h à frente). Possível fraude ou fuso horário incorreto.`;
+              }
+            }
+          } catch (e) {
+            console.warn(`[AI_OCR_PIX] Failed to parse date for validation: ${dateStr}`, e);
+          }
         }
       }
 

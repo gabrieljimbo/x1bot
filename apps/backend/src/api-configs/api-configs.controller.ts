@@ -56,4 +56,10 @@ export class ApiConfigsController {
     getPushcutDevices(@Request() req: any) {
         return this.service.getPushcutDevices(req.user.tenantId);
     }
+
+    /** Proxy to fetch OpenRouter vision models */
+    @Get('openrouter/models')
+    getOpenRouterModels(@Request() req: any) {
+        return this.service.getOpenRouterModels(req.user.tenantId);
+    }
 }

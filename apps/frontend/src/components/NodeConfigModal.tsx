@@ -918,6 +918,31 @@ function PixRecognitionConfig({ config, setConfig }: any) {
 function AiOcrPixConfig({ config, setConfig }: any) {
   const saveAs = config.saveResponseAs || 'pixResult'
   const valueRules: any[] = config.valueRules || []
+  const [availableModels, setAvailableModels] = useState<any[]>([])
+  const [loadingModels, setLoadingModels] = useState(false)
+
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        setLoadingModels(true)
+        const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
+        const response = await fetch(`${baseUrl}/api/api-configs/openrouter/models`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setAvailableModels(data)
+        }
+      } catch (err) {
+        console.error('Error loading AI models:', err)
+      } finally {
+        setLoadingModels(false)
+      }
+    }
+    loadModels()
+  }, [])
 
   const addRule = () => {
     const id = `rule-` + Date.now() + `-` + Math.random().toString(36).slice(2, 7)
@@ -968,15 +993,34 @@ function AiOcrPixConfig({ config, setConfig }: any) {
 
       {/* Modelo a utilizar */}
       <div>
-        <label className="block text-xs font-medium mb-1.5 text-gray-400">Modelo (Model ID do OpenRouter)</label>
-        <input
-          type="text"
-          value={config.model || 'openai/gpt-4o-mini'}
-          onChange={e => setConfig((prev: any) => ({ ...prev, model: e.target.value }))}
-          placeholder="openai/gpt-4o-mini"
-          className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
-        />
-        <p className="text-[10px] text-gray-500 mt-1">Recomendados: openai/gpt-4o-mini, anthropic/claude-3-haiku, google/gemini-2.5-flash</p>
+        <label className="block text-xs font-medium mb-1.5 text-gray-400">🧠 Escolha o Cérebro (IA de Visão)</label>
+        {loadingModels ? (
+          <div className="flex items-center gap-2 text-[10px] text-indigo-400 p-2 animate-pulse bg-indigo-500/5 rounded">
+            <span className="animate-spin">⏳</span> Buscando modelos compatíveis no OpenRouter...
+          </div>
+        ) : (
+          <select
+            value={config.model || 'google/gemini-2.0-flash-001'}
+            onChange={e => setConfig((prev: any) => ({ ...prev, model: e.target.value }))}
+            className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white"
+          >
+            {availableModels.length === 0 ? (
+               <option value={config.model || 'google/gemini-2.0-flash-001'}>
+                 {config.model || 'google/gemini-2.0-flash-001'}
+               </option>
+            ) : (
+              availableModels.map((m: any) => {
+                const promptPrice = m.pricing ? (Number(m.pricing.prompt) * 1000).toFixed(4) : '?';
+                return (
+                  <option key={m.id} value={m.id}>
+                    {m.name} (${promptPrice}/1k tokens)
+                  </option>
+                );
+              })
+            )}
+          </select>
+        )}
+        <p className="text-[10px] text-gray-500 mt-1">Exibindo apenas modelos com suporte a Imagens e PDF.</p>
       </div>
 
       {/* Salvar como */}
@@ -1072,6 +1116,38 @@ function AiOcrPixConfig({ config, setConfig }: any) {
         )}
       </div>
 
+      {/* Validar data do comprovante (Anti-Fraude) */}
+      <div className="border border-red-500/20 bg-red-500/5 rounded-lg p-3">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.validateDate ?? true}
+            onChange={e => setConfig((prev: any) => ({ ...prev, validateDate: e.target.checked }))}
+            className="rounded"
+          />
+          <span className="text-sm text-gray-200 font-semibold flex items-center gap-1.5">
+            🛡️ Bloqueio de Recibo Antigo
+          </span>
+        </label>
+        <p className="text-[10px] text-gray-500 mt-1 ml-6">Impede que usem o mesmo comprovante de dias atrás para aplicar golpes.</p>
+        
+        {config.validateDate !== false && (
+          <div className="mt-3 bg-black/30 p-2 rounded space-y-2">
+            <div>
+              <label className="block text-[10px] text-gray-400 mb-1">Janela de aceitação (horas)</label>
+              <input
+                type="number"
+                value={config.maxAgeHours ?? 24}
+                onChange={e => setConfig((prev: any) => ({ ...prev, maxAgeHours: Number(e.target.value) }))}
+                className="w-20 bg-[#1a1a1a] border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-primary"
+              />
+              <span className="text-[10px] text-gray-500 ml-2">horas (Padrão: 24h)</span>
+            </div>
+            <p className="text-[10px] text-red-300 italic">Dica: Deixe 24h para permitir Pix feitos à noite e enviados pela manhã.</p>
+          </div>
+        )}
+      </div>
+
       {/* Fallback com segundo modelo */}
       <div className="border border-white/10 rounded-lg p-3">
         <label className="flex items-center gap-2 cursor-pointer">
@@ -1087,14 +1163,27 @@ function AiOcrPixConfig({ config, setConfig }: any) {
         {config.useFallback && (
           <div className="mt-3 space-y-2 bg-black/20 p-3 rounded">
             <div>
-              <label className="block text-xs font-medium mb-1 text-gray-400">Modelo Fallback</label>
-              <input
-                type="text"
-                value={config.fallbackModel || ''}
+              <label className="block text-xs font-medium mb-1 text-gray-400">Modelo Fallback (Plano B)</label>
+              <select
+                value={config.fallbackModel || 'google/gemini-1.5-flash'}
                 onChange={e => setConfig((prev: any) => ({ ...prev, fallbackModel: e.target.value }))}
-                placeholder="google/gemini-2.0-flash-exp:free"
-                className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white placeholder-gray-500 font-mono"
-              />
+                className="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded focus:outline-none focus:border-primary text-sm text-white"
+              >
+                {availableModels.length === 0 ? (
+                  <option value={config.fallbackModel || 'google/gemini-1.5-flash'}>
+                    {config.fallbackModel || 'google/gemini-1.5-flash'}
+                  </option>
+                ) : (
+                  availableModels.map((m: any) => {
+                    const promptPrice = m.pricing ? (Number(m.pricing.prompt) * 1000).toFixed(4) : '?';
+                    return (
+                      <option key={m.id} value={m.id}>
+                        {m.name} (${promptPrice}/1k)
+                      </option>
+                    );
+                  })
+                )}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1 text-gray-400">API Key do Fallback (opcional)</label>
