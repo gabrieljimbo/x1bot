@@ -115,17 +115,11 @@ export class ApiConfigsService {
     }
 
     async getOpenRouterModels(tenantId: string) {
-        const config = await this.findByProviderFlexible(tenantId, 'openrouter');
-        const apiKey = (config?.isActive && config.secret) ? config.secret : process.env.OPENROUTER_API_KEY;
-        
-        if (!apiKey) {
-            throw new Error('OpenRouter API Key not configured and no global key available');
-        }
-
+        // Models list from OpenRouter doesn't require an API Key to fetch.
+        // We fetch public available list with price!
         try {
             const response = await fetch('https://openrouter.ai/api/v1/models', {
                 headers: { 
-                    'Authorization': `Bearer ${apiKey}`,
                     'HTTP-Referer': 'https://x1bot.cloud',
                     'X-Title': 'X1Bot PIX AI',
                 },
