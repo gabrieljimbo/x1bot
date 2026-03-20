@@ -132,25 +132,48 @@ export class ApiConfigsService {
 
             const data = await response.json();
             
-            // Filter models that support vision (images) or files (PDFs)
+            // Filter: only models that support BOTH images AND files (PDF) simultaneously.
+            // The OpenRouter API uses architecture.modality as a string like "text+image+file->text".
+            // We require BOTH "image" AND "file" to guarantee the model can handle either format.
+            // Keyword fallback whitelist is restricted to known models confirmed to support both.
+            const KNOWN_BOTH_MODALITIES = [
+                'google/gemini-2.0-flash-001',
+                'google/gemini-2.0-flash-lite-001',
+                'google/gemini-2.5-flash-preview',
+                'google/gemini-2.5-pro-preview',
+                'google/gemini-1.5-pro',
+                'google/gemini-1.5-flash',
+            ];
             return data.data
-                .filter((m: any) => 
-                    m.architecture?.modality?.includes('image') || 
-                    m.architecture?.modality?.includes('file') ||
-                    m.id.includes('vision') ||
-                    m.id.includes('gemini') || // Some gemini models don't have modality set correctly but all support vision
-                    m.id.includes('gpt-4o')
-                )
+                .filter((m: any) => {
+                    const modality: string = m.architecture?.modality || '';
+                    // Primary check: MUST support both image AND file in the same modality string
+                    if (modality.includes('image') && modality.includes('file')) {
+                        return true;
+                    }
+                    // Whitelist fallback for well-known models that may have incomplete metadata
+                    return KNOWN_BOTH_MODALITIES.some(knownId => m.id === knownId || m.id.startsWith(knownId));
+                })
                 .map((m: any) => ({
                     id: m.id,
                     name: m.name,
                     pricing: m.pricing,
-                    context_length: m.context_length,
-                    description: m.description
+                    context_length: m.context_length || m.top_provider?.context_length,
+                    description: m.description,
                 }))
                 .sort((a: any, b: any) => {
-                    // Feature specific popular models first
-                    const priority = ['google/gemini-2.0-flash-001', 'google/gemini-1.5-flash', 'openai/gpt-4o-mini'];
+                    // Priority order: cheapest + best known models first
+                    const priority = [
+                        'google/gemini-2.0-flash-001',
+                        'google/gemini-2.0-flash-lite-001',
+                        'google/gemini-2.5-flash-preview',
+                        'google/gemini-2.5-pro-preview',
+                        'openai/gpt-4o-mini',
+                        'openai/gpt-4o',
+                        'anthropic/claude-3-5-haiku',
+                        'anthropic/claude-3-5-sonnet',
+                        'openai/o4-mini',
+                    ];
                     const aIdx = priority.indexOf(a.id);
                     const bIdx = priority.indexOf(b.id);
                     if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;

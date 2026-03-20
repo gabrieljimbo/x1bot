@@ -1127,138 +1127,165 @@ export class CampaignsService {
         console.warn(`[CampaignsService] ${filteredByHealth} sessão(ões) filtradas por saúde <${MIN_HEALTH_SCORE_TO_SEND}: ${scoredSessions.filter(({ score }) => score < MIN_HEALTH_SCORE_TO_SEND).map(({ session: s, score }) => `${s.sessionId}(${score})`).join(', ')}`);
       }
 
-      let sessionsChecked = 0;
-      // Tracks whether every session was skipped exclusively due to daily limit
-      // (as opposed to being disconnected, circuit-broken, etc.)
-      let allSkippedDueToDailyLimit = healthySessions.length > 0;
-      while (sessionsChecked < healthySessions.length) {
-        const candidate = healthySessions[sessionIndex % healthySessions.length];
-        sessionIndex++;
-        sessionsChecked++;
-        if (!candidate) { allSkippedDueToDailyLimit = false; break; }
+      let sessionSearchWait = true;
+      let shouldStopCampaign = false;
 
-        // Skip sessions not in session manager
-        const sessionClient = this.whatsappSessionManager.resolveSessionClient(candidate.sessionId);
-        if (!sessionClient) {
-          console.warn(`[CampaignsService] Session ${candidate.sessionId} not found, skipping`);
-          allSkippedDueToDailyLimit = false;
-          continue;
-        }
+      while (sessionSearchWait) {
+        let sessionsChecked = 0;
+        let allSkippedDueToDailyLimit = healthySessions.length > 0;
+        let allSkippedDueToRateLimit = healthySessions.length > 0;
+        let shortestRateLimitWaitMs = Infinity;
 
-        if (sessionClient.status !== 'CONNECTED') {
-          console.warn(`[CampaignsService] Session ${candidate.sessionId} is ${sessionClient.status}, skipping`);
-          allSkippedDueToDailyLimit = false;
-          continue;
-        }
+        while (sessionsChecked < healthySessions.length) {
+          const candidate = healthySessions[sessionIndex % healthySessions.length];
+          sessionIndex++;
+          sessionsChecked++;
+          if (!candidate) { allSkippedDueToDailyLimit = false; allSkippedDueToRateLimit = false; break; }
 
-        // Circuit breaker check
-        const canSend = await this.healthMonitor.canSend(candidate.sessionId);
-        if (!canSend) {
-          console.warn(`[CampaignsService] Session ${candidate.sessionId} blocked by circuit breaker or DMS`);
-          allSkippedDueToDailyLimit = false;
-          continue;
-        }
-
-        // Per-session daily limit (with warmup + tourist mode applied)
-        const configuredDailyLimit = cfg.limitPerSession ?? 50;
-        const effectiveDailyLimit = await this.healthMonitor.getEffectiveDailyLimit(
-          candidate.sessionId,
-          Math.min(configuredDailyLimit, HARD_MAX_PER_DAY),
-          HARD_MAX_PER_DAY,
-        );
-
-        const countWhere: any = {
-          campaignId,
-          sessionId: candidate.sessionId,
-          status: 'sent',
-        };
-        if (cfg.limitType === 'DAILY') {
-          countWhere.sentAt = { gte: todayThreshold };
-        }
-
-        const sentCount = await this.prisma.campaignLog.count({ where: countWhere });
-        if (sentCount >= effectiveDailyLimit) {
-          console.log(`[CampaignsService] Session ${candidate.sessionId} atingiu limite (${sentCount}/${effectiveDailyLimit}), skipping`);
-          // allSkippedDueToDailyLimit stays true — this IS a daily limit skip
-          continue;
-        }
-
-        // Tourist mode: skip cold contacts (no conversation history)
-        const isTourist = await this.healthMonitor.isTouristMode(candidate.sessionId);
-        if (isTourist) {
-          const hasHistory = await this.hasConversationHistory(candidate.sessionId, recipient.phone);
-          if (!hasHistory) {
-            console.log(`[TOURIST] Session ${candidate.sessionId}: pulando contato frio ${recipient.phone}`);
+          // Skip sessions not in session manager
+          const sessionClient = this.whatsappSessionManager.resolveSessionClient(candidate.sessionId);
+          if (!sessionClient) {
+            console.warn(`[CampaignsService] Session ${candidate.sessionId} not found, skipping`);
             allSkippedDueToDailyLimit = false;
+            allSkippedDueToRateLimit = false;
             continue;
           }
+
+          if (sessionClient.status !== 'CONNECTED') {
+            console.warn(`[CampaignsService] Session ${candidate.sessionId} is ${sessionClient.status}, skipping`);
+            allSkippedDueToDailyLimit = false;
+            allSkippedDueToRateLimit = false;
+            continue;
+          }
+
+          // Circuit breaker check
+          const canSend = await this.healthMonitor.canSend(candidate.sessionId);
+          if (!canSend) {
+            console.warn(`[CampaignsService] Session ${candidate.sessionId} blocked by circuit breaker or DMS`);
+            allSkippedDueToDailyLimit = false;
+            allSkippedDueToRateLimit = false;
+            continue;
+          }
+
+          // Per-session daily limit (with warmup + tourist mode applied)
+          const configuredDailyLimit = cfg.limitPerSession ?? 50;
+          const effectiveDailyLimit = await this.healthMonitor.getEffectiveDailyLimit(
+            candidate.sessionId,
+            Math.min(configuredDailyLimit, HARD_MAX_PER_DAY),
+            HARD_MAX_PER_DAY,
+          );
+
+          const countWhere: any = {
+            campaignId,
+            sessionId: candidate.sessionId,
+            status: 'sent',
+          };
+          if (cfg.limitType === 'DAILY') {
+            countWhere.sentAt = { gte: todayThreshold };
+          }
+
+          const sentCount = await this.prisma.campaignLog.count({ where: countWhere });
+          if (sentCount >= effectiveDailyLimit) {
+            console.log(`[CampaignsService] Session ${candidate.sessionId} atingiu limite (${sentCount}/${effectiveDailyLimit}), skipping`);
+            // allSkippedDueToDailyLimit stays true — this IS a daily limit skip
+            continue;
+          }
+
+          // Tourist mode: skip cold contacts (no conversation history)
+          const isTourist = await this.healthMonitor.isTouristMode(candidate.sessionId);
+          if (isTourist) {
+            const hasHistory = await this.hasConversationHistory(candidate.sessionId, recipient.phone);
+            if (!hasHistory) {
+              console.log(`[TOURIST] Session ${candidate.sessionId}: pulando contato frio ${recipient.phone}`);
+              allSkippedDueToDailyLimit = false;
+              allSkippedDueToRateLimit = false;
+              continue;
+            }
+          }
+
+          // ── Per-session sliding-window rate limit (Redis sorted set) ─────────────
+          const sId = candidate.sessionId;
+          const keyMin  = `rl:${campaignId}:${sId}:min`;
+          const keyHour = `rl:${campaignId}:${sId}:hr`;
+          const pvFactor = await this.healthMonitor.getPressureValveFactor(sId);
+          const effectiveMaxPerMin  = Math.max(1, Math.floor(maxPerMinute  * pvFactor));
+          const effectiveMaxPerHour = Math.max(1, Math.floor(maxPerHour * pvFactor));
+          
+          await this.healthMonitor.updatePressureValve(sId, maxPerMinute);
+
+          const nowMs = Date.now();
+
+          // Minute Check
+          await rlClient.zremrangebyscore(keyMin, 0, nowMs - 60_000);
+          const countMin = await rlClient.zcount(keyMin, '-inf', '+inf');
+          if (countMin >= effectiveMaxPerMin) {
+            const oldest = await rlClient.zrangebyscore(keyMin, '-inf', '+inf', 'WITHSCORES', 'LIMIT', 0, 1);
+            const oldestScore = oldest.length >= 2 ? Number(oldest[1]) : nowMs - 60_000;
+            const waitMs = Math.max((oldestScore + 60_000) - nowMs + 100, 1_000);
+            shortestRateLimitWaitMs = Math.min(shortestRateLimitWaitMs, waitMs);
+            allSkippedDueToDailyLimit = false; // Valid, just rate limited
+            continue;
+          }
+
+          // Hour Check
+          await rlClient.zremrangebyscore(keyHour, 0, nowMs - 3_600_000);
+          const countHour = await rlClient.zcount(keyHour, '-inf', '+inf');
+          if (countHour >= effectiveMaxPerHour) {
+            const oldest = await rlClient.zrangebyscore(keyHour, '-inf', '+inf', 'WITHSCORES', 'LIMIT', 0, 1);
+            const oldestScore = oldest.length >= 2 ? Number(oldest[1]) : nowMs - 3_600_000;
+            const waitMs = Math.max((oldestScore + 3_600_000) - nowMs + 100, 60_000);
+            shortestRateLimitWaitMs = Math.min(shortestRateLimitWaitMs, waitMs);
+            allSkippedDueToDailyLimit = false; // Valid, just rate limited
+            continue;
+          }
+
+          allSkippedDueToRateLimit = false;
+          session = candidate;
+          break; // Found a valid session!
         }
 
-        session = candidate;
-        break;
-      }
+        if (session) {
+          break; // Valid session acquired
+        }
 
-      if (!session) {
+        // Handle exhausted sessions
         if (allSkippedDueToDailyLimit && healthySessions.length > 0) {
-          // All sessions hit their daily limit — wait until next reset on next allowed day
           const waitMs = this.msUntilNextAllowedReset(cfg.dailyResetTime ?? '09:00', allowedDays);
           console.log(`[CampaignsService] Todas as sessões atingiram o limite diário. Aguardando ${Math.round(waitMs / 60000)}min até próximo reset (${cfg.dailyResetTime ?? '09:00'}).`);
           await new Promise((r) => setTimeout(r, waitMs));
+          
           const statusAfterWait = await this.prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
-          if (!statusAfterWait || (statusAfterWait.status as string) !== CampaignStatus.RUNNING) break;
+          if (!statusAfterWait || (statusAfterWait.status as string) !== CampaignStatus.RUNNING) {
+            shouldStopCampaign = true;
+            break;
+          }
           todayThreshold = this.getResetThresholdInUTC(cfg.dailyResetTime ?? '09:00');
-          continue;
+          continue; // Try again!
+        } else if (allSkippedDueToRateLimit && healthySessions.length > 0 && shortestRateLimitWaitMs < Infinity) {
+          // All available sessions are maxed out on speed (min or hr)! Wait for the shortest TTL.
+          console.log(`[CampaignsService] Todas as sessões estão no limite de velocidade. Aguardando ${Math.ceil(shortestRateLimitWaitMs / 1000)}s.`);
+          await new Promise((r) => setTimeout(r, shortestRateLimitWaitMs));
+          
+          const statusAfterWait = await this.prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+          if (!statusAfterWait || (statusAfterWait.status as string) !== CampaignStatus.RUNNING) {
+            shouldStopCampaign = true;
+            break;
+          }
+          continue; // Try searching again
+        } else {
+          console.log(`[CampaignsService] All sessions exhausted or unavailable for campaign ${campaignId}`);
+          shouldStopCampaign = true;
+          break; // Cannot proceed
         }
-        console.log(`[CampaignsService] All sessions exhausted or unavailable for campaign ${campaignId}`);
-        break;
       }
 
-      // ── Per-session sliding-window rate limit (Redis sorted set) ─────────────
-      // Uses timestamps as scores; entries older than the window are removed so
-      // zcount always reflects the true count in the rolling window.
-      // waitMs is derived from the OLDEST entry in the window — guarantees the
-      // wait is exactly as long as needed, never a fixed/arbitrary value.
+      if (shouldStopCampaign || !session) {
+        break; // Stop processing any further recipients right now
+      }
+
       const sId = session.sessionId;
       const keyMin  = `rl:${campaignId}:${sId}:min`;
       const keyHour = `rl:${campaignId}:${sId}:hr`;
-
-      // Pressure valve: may lower effective limits per-session
-      const pvFactor = await this.healthMonitor.getPressureValveFactor(sId);
-      const effectiveMaxPerMin  = Math.max(1, Math.floor(maxPerMinute  * pvFactor));
-      const effectiveMaxPerHour = Math.max(1, Math.floor(maxPerHour * pvFactor));
-      if (pvFactor < 1.0) {
-        console.log(`[PRESSURE_VALVE] Fator ${pvFactor} na sessão ${sId}: limite/min ${maxPerMinute}→${effectiveMaxPerMin}, limite/hora ${maxPerHour}→${effectiveMaxPerHour}`);
-      }
-      await this.healthMonitor.updatePressureValve(sId, maxPerMinute);
-
-      // ── Per-minute window ──────────────────────────────────────────────────
-      {
-        const nowMs = Date.now();
-        await rlClient.zremrangebyscore(keyMin, 0, nowMs - 60_000);
-        const countMin = await rlClient.zcount(keyMin, '-inf', '+inf');
-        if (countMin >= effectiveMaxPerMin) {
-          // oldest entry still in window → wait until it expires
-          const oldest = await rlClient.zrangebyscore(keyMin, '-inf', '+inf', 'WITHSCORES', 'LIMIT', 0, 1);
-          const oldestScore = oldest.length >= 2 ? Number(oldest[1]) : nowMs - 60_000;
-          const waitMs = Math.max((oldestScore + 60_000) - nowMs + 100, 1_000);
-          console.log(`[CampaignsService] Session ${sId}: Per-minute limit (${effectiveMaxPerMin}) reached — aguardando ${Math.ceil(waitMs / 1000)}s até janela resetar`);
-          await new Promise((r) => setTimeout(r, waitMs));
-        }
-      }
-
-      // ── Per-hour window ────────────────────────────────────────────────────
-      {
-        const nowMs = Date.now();
-        await rlClient.zremrangebyscore(keyHour, 0, nowMs - 3_600_000);
-        const countHour = await rlClient.zcount(keyHour, '-inf', '+inf');
-        if (countHour >= effectiveMaxPerHour) {
-          const oldest = await rlClient.zrangebyscore(keyHour, '-inf', '+inf', 'WITHSCORES', 'LIMIT', 0, 1);
-          const oldestScore = oldest.length >= 2 ? Number(oldest[1]) : nowMs - 3_600_000;
-          const waitMs = Math.max((oldestScore + 3_600_000) - nowMs + 100, 60_000);
-          console.log(`[CampaignsService] Session ${sId}: Per-hour limit (${effectiveMaxPerHour}) reached — aguardando ${Math.ceil(waitMs / 60_000)}min até janela resetar`);
-          await new Promise((r) => setTimeout(r, waitMs));
-        }
-      }
 
       try {
         if (campaign.workflowId || campaign.type === 'WORKFLOW') {
