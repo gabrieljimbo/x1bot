@@ -1078,8 +1078,31 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
             receivedAt: new Date().toISOString(),
             sessionId,
           };
+
+          // ── CRITICAL FIX: Facebook Ads (Click-to-WhatsApp) ──────────────────
+          // When a user clicks a Facebook Ad, the greeting message arrives with
+          // msg.key.fromMe = true in Baileys, even though it's the LEAD's message.
+          // This causes the system to ignore it as a "self-message" (loop protection).
+          // Force fromMe=false so the trigger matcher processes it correctly.
+          if (payload.fromMe) {
+            console.log(`[AD_FIX] Session ${sessionId}: Message ${msg.key.id} arrived as fromMe=true but has ctwaClid/adReply — forcing fromMe=false to process as lead message`);
+            payload.fromMe = false;
+          }
+          // ── End Ad Fix ───────────────────────────────────────────────────────
         }
       }
+
+      // ── SAFETY NET: @lid + fromMe=true fallback (older WhatsApp versions) ───
+      // @lid is a Meta privacy identifier used EXCLUSIVELY for CTWA Ad contacts.
+      // Legitimate "fromMe" messages to an @lid JID don't exist in normal operation.
+      // So if a message is fromMe=true AND came from @lid, it's almost certainly
+      // a Facebook Ad greeting from an older WhatsApp client that doesn't include
+      // ctwaClid in contextInfo. Treat it as an incoming lead message.
+      if (payload.fromMe && contactPhone.includes('@lid')) {
+        console.log(`[AD_FIX_LID] Session ${sessionId}: Message ${msg.key.id} is fromMe=true but from @lid contact — likely CTWA Ad without ctwaClid (older client). Forcing fromMe=false.`);
+        payload.fromMe = false;
+      }
+      // ── End Safety Net ───────────────────────────────────────────────────────
 
       if (!skipTrigger) {
         await this.eventBus.emit({
