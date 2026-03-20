@@ -310,6 +310,12 @@ export class ExecutionEngineService implements OnModuleInit {
         baseContext.variables.pushName    = contactNameFromPayload;
       }
 
+      // Populate {{contact.name}} and {{contact.phoneNumber}} for use in templates
+      baseContext.variables.contact = {
+        name: contactNameFromPayload || '',
+        phoneNumber: contactPhone ? contactPhone.replace('@s.whatsapp.net', '').replace('@lid', '') : '',
+      };
+
       // Load isolated contact stage (new field)
       // @ts-ignore - DB is updated and method exists
       const dbStage = await this.contactTagsService.getStage(tenantId, sessionId, contactPhone);

@@ -1094,13 +1094,21 @@ export class WhatsappSessionManager implements OnModuleInit, OnModuleDestroy {
 
       // ── SAFETY NET: @lid + fromMe=true fallback (older WhatsApp versions) ───
       // @lid is a Meta privacy identifier used EXCLUSIVELY for CTWA Ad contacts.
-      // Legitimate "fromMe" messages to an @lid JID don't exist in normal operation.
-      // So if a message is fromMe=true AND came from @lid, it's almost certainly
-      // a Facebook Ad greeting from an older WhatsApp client that doesn't include
-      // ctwaClid in contextInfo. Treat it as an incoming lead message.
+      // The INITIAL greeting from a CTWA lead arrives with fromMe=true (Baileys bug).
+      // However, if a conversation already exists for this contact, subsequent
+      // fromMe=true messages are genuine outgoing messages from the operator —
+      // do NOT flip those, or the operator's manual messages will trigger workflows.
       if (payload.fromMe && contactPhone.includes('@lid')) {
-        console.log(`[AD_FIX_LID] Session ${sessionId}: Message ${msg.key.id} is fromMe=true but from @lid contact — likely CTWA Ad without ctwaClid (older client). Forcing fromMe=false.`);
-        payload.fromMe = false;
+        const existingConversation = await this.prisma.conversation.findFirst({
+          where: { sessionId, contactPhone },
+          select: { id: true },
+        });
+        if (!existingConversation) {
+          console.log(`[AD_FIX_LID] Session ${sessionId}: Message ${msg.key.id} is fromMe=true but from @lid contact with no prior conversation — likely CTWA Ad without ctwaClid (older client). Forcing fromMe=false.`);
+          payload.fromMe = false;
+        } else {
+          console.log(`[AD_FIX_LID] Session ${sessionId}: Message ${msg.key.id} is fromMe=true from @lid but conversation already exists — treating as operator outgoing message (not flipping).`);
+        }
       }
       // ── End Safety Net ───────────────────────────────────────────────────────
 
