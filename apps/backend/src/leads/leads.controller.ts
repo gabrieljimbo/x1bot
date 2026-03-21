@@ -10,7 +10,7 @@ export class LeadsController {
     @Get('origins')
     async getOrigins(
         @Request() req: any,
-        @Query('period') period?: 'today' | '7d' | '30d',
+        @Query('period') period?: 'today' | '24h' | '7d' | '30d' | 'all',
         @Query('sessionId') sessionId?: string,
         @Query('origin') origin?: 'all' | 'ad' | 'organic',
         @Query('state') state?: string,
@@ -18,7 +18,7 @@ export class LeadsController {
         @Query('endDate') endDate?: string,
     ) {
         return this.leadsService.getOrigins(req.user.tenantId, {
-            period: period || '30d',
+            period: (period || '30d') as any,
             sessionId,
             origin,
             state,

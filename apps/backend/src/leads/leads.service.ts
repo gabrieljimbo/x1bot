@@ -23,8 +23,14 @@ export class LeadsService {
                 case 'today':
                     startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                     break;
+                case '24h':
+                    startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                    break;
                 case '7d':
                     startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    break;
+                case 'all':
+                    startDate = new Date(0); // epoch — tudo
                     break;
                 case '30d':
                 default:
@@ -82,22 +88,31 @@ export class LeadsService {
         }
         const dailyTrend = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
 
-        // Mask phone for privacy
+        // Mask phone for privacy + normalize fields for frontend
         const recentLeads = leads.slice(0, 50).map((l: any) => ({
             ...l,
             contactPhone: l.contactPhone
                 ? l.contactPhone.replace(/(\d{4})\d+(\d{4})/, '$1****$2')
                 : null,
+            // Frontend uses lead.source and lead.createdAt
+            source: l.isFromAd ? 'META_ADS' : 'ORGANIC',
+            createdAt: l.receivedAt,
         }));
 
         return {
             stats: {
+                // Aliased to match frontend field names
                 total,
+                totalLeads: total,
                 fromAd,
+                adLeads: fromAd,
                 organic,
+                organicLeads: organic,
                 fromAdPercent: total > 0 ? Math.round(fromAd / total * 100) : 0,
                 organicPercent: total > 0 ? Math.round(organic / total * 100) : 0,
                 topStates: stateDistribution.slice(0, 3),
+                // adDistribution also inside stats so frontend can access via stats.adDistribution
+                adDistribution,
             },
             stateDistribution,
             adDistribution,
